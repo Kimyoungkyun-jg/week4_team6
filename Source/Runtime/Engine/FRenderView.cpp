@@ -20,6 +20,8 @@ FRenderView::FRenderView(FRenderer &Renderer) : Renderer(Renderer) {}
 
 void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& View, const AActor* SelectedActor)
 {
+    auto& ResLib = FRenderResourceLibrary::Get();
+
     for (auto& MeshComponent : Scene.GetRenderComponents())
     {
         if (!MeshComponent) continue;
@@ -39,11 +41,10 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
         FRenderData Data = MeshComponent->GetRenderData(View.Camera);
         Data.bSelected = bSelected;
 
-        // 인스턴싱 및 텍스트는 인스턴스 배열을 사용하므로 바로 푸시
-        if (Data.type == ERenderType::Text || Data.type == ERenderType::Instancing)
+        // 인스턴스 데이터가 있으면 인스턴싱 큐로 분류
+        if (!Data.Instances.empty())
         {
-
-            RenderQueue.Push(Data);
+            RenderQueue.PushInstancing(Data);
             continue;
         }
 
@@ -63,7 +64,17 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
             Data.Constants.ColorOverride = FVector{ 1.0f, 1.0f, 1.0f };
             Data.Constants.ColorOverrideAmount = 0.5f;
         }
-        RenderQueue.Push(Data);
+
+        // 머티리얼의 블렌드 모드에 따라 불투명 및 반투명 패스 자동 분기
+        auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
+        if (Material && (Material->GetBlendMode() == EBlendMode::Additive || Material->GetBlendMode() == EBlendMode::Translucent))
+        {
+            RenderQueue.PushTranslucent(Data);
+        }
+        else
+        {
+            RenderQueue.PushOpaque(Data);
+        }
     }
 }
 
@@ -325,16 +336,33 @@ void FRenderView::FlushQueue(const FCamera& Camera)
 {
     auto& ResLib = FRenderResourceLibrary::Get();
 
-    // Primitive 큐 처리
-    for (const FRenderData& Data : RenderQueue.GetPrimRenderQ())
-    {
-        auto Mesh     = ResLib.GetMesh(Data.MeshId);
-        auto Material = ResLib.GetMaterial(Data.MaterialId);
-        if (!Mesh || !Material) continue;
+    auto DrawData = [&](const FRenderData& Data) {
+        auto Mesh = ResLib.GetMesh(Data.MeshId);
+        auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
+        if (!Mesh || !Material) return;
+
+        // TextureId가 유효하고 머티리얼 텍스처와 다르면 텍스처 복제 적용
+        if (!Data.TextureId.IsNone() && Data.TextureId != FName("None"))
+        {
+            auto Tex = ResLib.GetTexture(Data.TextureId);
+            if (Tex && Material->GetTexture() != Tex)
+            {
+                auto MatInst = TSharedPtr<FMaterial>(new FMaterial(*Material));
+                MatInst->SetTexture(Tex);
+                Renderer.Draw(*Mesh, *MatInst, Data.Constants);
+                return;
+            }
+        }
         Renderer.Draw(*Mesh, *Material, Data.Constants);
+    };
+
+    // 불투명 패스
+    for (const FRenderData& Data : RenderQueue.GetOpaqueRenderQ())
+    {
+        DrawData(Data);
     }
 
-    // Instancing 큐
+    // 인스턴싱 패스
     if (!RenderQueue.IsInstancingRQEmpty())
     {
         for (const FRenderData& Data : RenderQueue.GetInstancingRenderQ())
@@ -345,47 +373,21 @@ void FRenderView::FlushQueue(const FCamera& Camera)
         Renderer.ClearTextInstances();
     }
 
-    // Texture 큐: Primitive와 동일하지만 TextureId로 머티리얼 텍스처 교체 후 드로우
-    for (const FRenderData& Data : RenderQueue.GetTextureRenderQ())
+    // 반투명 패스
+    for (const FRenderData& Data : RenderQueue.GetTranslucentRenderQ())
     {
-        auto Mesh     = ResLib.GetMesh(Data.MeshId);
-        auto Material = ResLib.GetMaterial(Data.MaterialId);
-        if (!Mesh || !Material) continue;
-
-        if (!Data.TextureId.IsNone())
-        {
-            auto Tex = ResLib.GetTexture(Data.TextureId);
-            if (Tex)
-            {
-                // 원본 머티리얼을 건드리지 않도록 인스턴스 복사
-                auto MatInst = TSharedPtr<FMaterial>(new FMaterial(*Material));
-                MatInst->SetTexture(Tex);
-                Renderer.Draw(*Mesh, *MatInst, Data.Constants);
-                continue;
-            }
-        }
-        Renderer.Draw(*Mesh, *Material, Data.Constants);
+        DrawData(Data);
     }
 
-    // Spotlight 큐: 불투명 렌더링 후 가산 블렌딩 수행
-    for (const FRenderData& Data : RenderQueue.GetSpotlightRenderQ())
-    {
-        auto Mesh     = ResLib.GetMesh(Data.MeshId);
-        auto Material = ResLib.GetMaterial(Data.MaterialId);
-        if (!Mesh || !Material) continue;
-        Renderer.Draw(*Mesh, *Material, Data.Constants);
-    }
-
-    // Text 큐: BuildRenderData()에서 이미 계산된 Instances 배열 사용
+    // 텍스트 패스
     if (!RenderQueue.IsTextRQEmpty())
     {
         const FRenderData& First = RenderQueue.GetTextRenderQ()[0];
-        FName     TextMeshId     = First.MeshId;
-        FName     TextMaterialId = First.MaterialId;
-        
+        FName TextMeshId = First.MeshId;
+        FName TextMaterialId = First.MaterialId;
+
         for (const FRenderData& Data : RenderQueue.GetTextRenderQ())
         {
-            // Font에서 미리 계산된 글자별 쿼드 데이터를 그대로 넘김
             Renderer.AddTextInstanceArray(Data.Instances, Data.MeshId, Data.MaterialId);
         }
         Renderer.DrawTextInstances(Camera, TextMeshId, TextMaterialId);

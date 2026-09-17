@@ -26,6 +26,7 @@ public:
 	// 버퍼 데이터 갱신
 	bool UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Context, const struct FMeshDesc& Desc);
 	FName MeshId{"None"};
+	FName DefaultTextureId{"None"};
 
 	FString PathFileName;
 
@@ -45,6 +46,9 @@ private:
 	TArray<FVector> Positions;
 	TArray<uint32> Indices;
 
+
+	FString MtlFileName;
+	TArray<FString> DiffuseTexturePaths;
 
 	D3D11_PRIMITIVE_TOPOLOGY Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	FAxisAlignedBoundingBox LocalBounds = {};

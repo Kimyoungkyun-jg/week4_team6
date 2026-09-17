@@ -30,6 +30,13 @@ public:
     // 접근자
     const FAxisAlignedBoundingBox& GetBounds() const { return LocalBounds; }
     
+    TSharedPtr<FStaticMesh> GetStaticMeshAsset() const { return StaticMeshAsset; }
+
+    FName GetDefaultTextureID() const {
+        return (StaticMeshAsset && !StaticMeshAsset->DefaultTextureId.IsNone()) 
+            ? StaticMeshAsset->DefaultTextureId : FName("None");
+    }
+
     const FName& GetDefaultMaterialID(int32 Slot = 0) const {
         static const FName SimpleMat("Simple");
         if (Slot >= 0 && Slot < static_cast<int32>(DefaultMaterialIds.size()) && !DefaultMaterialIds[Slot].IsNone())

@@ -161,6 +161,7 @@ TSharedPtr<FStaticMesh> FRenderer::CreateMesh(const FMeshDesc &Desc) {
   }
 
   auto Mesh = TSharedPtr<FStaticMesh>{new FStaticMesh()};
+  
   D3D11_BUFFER_DESC VertexBufferDesc = {
       .ByteWidth = Desc.VertexDataSize,
       .Usage = D3D11_USAGE_DEFAULT,

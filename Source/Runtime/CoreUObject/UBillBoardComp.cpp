@@ -18,8 +18,6 @@ void UBillBoardComp::Initialize() {
   Super::Initialize();
   SetMeshID(FName("Rect"));
   SetMaterialID(FName("Billboard"));
-
-  RenderData.type = ERenderType::Texture;
 }
 
 void UBillBoardComp::Serialize(FArchive& Archive) const
@@ -56,9 +54,8 @@ void UBillBoardComp::SetTexture(
     return;
   }
 
-  // TextureId를 RenderData에 기록 → FlushQueue의 Texture 큐에서 머티리얼 인스턴스 생성
+  // TextureId를 RenderData에 기록
   RenderData.TextureId = TextureId;
-  RenderData.type      = ERenderType::Texture;
 }
 
 FMatrix UBillBoardComp::GetRenderMatrix(const FCamera& Camera) const

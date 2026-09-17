@@ -8,18 +8,10 @@ IMPLEMENT_UCLASS(UMeshComponent, UPrimitiveComponent)
 void UMeshComponent::Initialize()
 {
     Super::Initialize();
-    RenderData.type = ERenderType::Primitive;
 }
 
 void UMeshComponent::Register(UScene& InScene)
 {
-    if (RenderData.type == ERenderType::None)
-    {
-        RenderData.type = (!RenderData.TextureId.IsNone() && RenderData.TextureId != FName("None"))
-            ? ERenderType::Texture
-            : ERenderType::Primitive;
-    }
-
     Super::Register(InScene);
     InScene.AddRenderComponent(this);
 }

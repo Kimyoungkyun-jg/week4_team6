@@ -12,6 +12,7 @@
 #include "Runtime/Actors/ATextRenderActor.h"
 #include "Runtime/Actors/AInstancingActor.h"
 #include "Runtime/Actors/AMasterYi.h"
+#include "Runtime/Actors/AStaticMeshActor.h"
 
 namespace EditorConstant
 {
@@ -30,6 +31,7 @@ namespace EditorConstant
 	   ATextRenderActor::StaticClass(),
 	   AInstancingActor::StaticClass(),
 	   AMasterYi::StaticClass(),
+	   AStaticMeshActor::StaticClass(),
 	};
 
 }

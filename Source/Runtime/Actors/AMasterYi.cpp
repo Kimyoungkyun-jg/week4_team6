@@ -15,7 +15,6 @@ AMasterYi::AMasterYi()
 	{
 		MeshComp->SetStaticMesh(NewObject<UStaticMesh>(FName("MasterYi"), FName("Textured")));
 		MeshComp->SetTextureID(FName("MasterYi_Head"));
-		MeshComp->SetRenderType(ERenderType::Texture);
 	}
 
 	FTransform DefaultTransform;

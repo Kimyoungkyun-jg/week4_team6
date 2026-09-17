@@ -13,6 +13,9 @@
 #include "FImguiDragDrop.h"
 #include "Runtime/Rendering/FMaterial.h"
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
+#include "Runtime/CoreUObject/UStaticMeshComponent.h"
+#include "Runtime/CoreUObject/UStaticMesh.h"
+#include <algorithm>
 
 void FImguiPropertyWindow::Process(FEditor& Editor)
 {
@@ -107,6 +110,11 @@ void FImguiPropertyWindow::ShowComponentDetails(FEditor& Editor, AActor& Actor,
 {
 	ShowTransform(Editor, Comp, bIsRoot);
 
+	if (Comp.IsA<UStaticMeshComponent>())
+	{
+		ShowStaticMeshSettings(static_cast<UStaticMeshComponent&>(Comp));
+	}
+
 	if (Comp.IsA<UTextInstanceComponent>())
 	{
 		ShowTextSettings(static_cast<UTextInstanceComponent&>(Comp));
@@ -119,6 +127,58 @@ void FImguiPropertyWindow::ShowComponentDetails(FEditor& Editor, AActor& Actor,
 	else if (Comp.IsA<UPrimitiveComponent>())
 	{
 		ShowPrimitiveSettings(Actor, static_cast<UPrimitiveComponent&>(Comp), bIsRoot);
+	}
+}
+
+void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const
+{
+	ImGui::Separator();
+	ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.6f, 1.0f), "Static Mesh Settings");
+
+	const auto& AllUStaticMeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
+	if (AllUStaticMeshMap.empty())
+	{
+		ImGui::TextDisabled("No Static Meshes available");
+		return;
+	}
+
+	// 현재 선택된 정적 메시 키값
+	UStaticMesh* CurrentStaticMesh = StaticMeshComp.GetStaticMesh();
+	std::string CurrentMeshName = CurrentStaticMesh ? CurrentStaticMesh->MeshId.ToString() : "None";
+
+	if (ImGui::BeginCombo("Static Mesh", CurrentMeshName.c_str()))
+	{
+		// 키 목록 정렬
+		TArray<FName> SortedKeys;
+		SortedKeys.reserve(AllUStaticMeshMap.size());
+		for (const auto& [MeshKey, _] : AllUStaticMeshMap)
+		{
+			SortedKeys.push_back(MeshKey);
+		}
+		std::sort(SortedKeys.begin(), SortedKeys.end(), [](const FName& A, const FName& B) {
+			return A.ToString() < B.ToString();
+		});
+
+		for (const FName& MeshKey : SortedKeys)
+		{
+			std::string ItemName = MeshKey.ToString();
+			bool bIsSelected = (CurrentStaticMesh && CurrentStaticMesh->MeshId == MeshKey);
+
+			if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+			{
+				auto it = AllUStaticMeshMap.find(MeshKey);
+				if (it != AllUStaticMeshMap.end())
+				{
+					StaticMeshComp.SetStaticMesh(it->second);
+				}
+			}
+
+			if (bIsSelected)
+			{
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
 	}
 }
 
