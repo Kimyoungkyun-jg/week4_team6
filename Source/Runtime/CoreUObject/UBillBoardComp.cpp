@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cctype>
 
-IMPLEMENT_UCLASS(UBillBoardComp, UPrimitiveComponent)
+IMPLEMENT_UCLASS(UBillBoardComp, UMeshComponent)
 UCLASS_META(UBillBoardComp, DisplayName, "BillBoard")
 UCLASS_META(UBillBoardComp, MeshName, "BillBoard")
 

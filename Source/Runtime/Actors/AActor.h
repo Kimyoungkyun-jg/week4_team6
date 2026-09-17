@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "Runtime/CoreUObject/UObject.h"
 #include "Runtime/CoreUObject/USceneComponent.h"
+#include "Runtime/CoreUObject/UPrimitiveComponent.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include <type_traits>
 #include <concepts>
@@ -34,8 +35,25 @@ public:
 	const TArray<USceneComponent*>& GetAttachedComponents() const { return AttachedComp; }
 
 
-	FTransform GetTransform() const { return RootComponent ? RootComponent->GetRelativeTransform() : FTransform{}; }
-	void SetTransform(const FTransform& NewTransform) { if (RootComponent) RootComponent->SetRelativeTransform(NewTransform); }
+	FTransform GetTransform() const {
+		if (RootComponent)
+		{
+			if (auto* Prim = RootComponent->Cast<UPrimitiveComponent>())
+			{
+				return Prim->GetRelativeTransform();
+			}
+		}
+		return FTransform{};
+	}
+	void SetTransform(const FTransform& NewTransform) {
+		if (RootComponent)
+		{
+			if (auto* Prim = RootComponent->Cast<UPrimitiveComponent>())
+			{
+				Prim->SetRelativeTransform(NewTransform);
+			}
+		}
+	}
 
 	void AddComponent(USceneComponent* Addcomp);
 	virtual void Register(UScene& Scene);

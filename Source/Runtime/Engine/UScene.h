@@ -52,7 +52,7 @@ public:
       FTransform Transform{};
       Transform.Location = Location;
       Transform.Scale3D = Scale;
-      Actor->GetRootComponent()->SetRelativeTransform(Transform);
+      Actor->SetTransform(Transform);
     }
 
     Actors.push_back(Actor);

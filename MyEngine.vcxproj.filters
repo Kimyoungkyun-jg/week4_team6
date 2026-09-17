@@ -211,6 +211,12 @@
     <ClCompile Include="Source\Runtime\CoreUObject\UPrimitiveComponent.cpp">
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\CoreUObject\UMeshComponent.cpp">
+      <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\CoreUObject\UStaticMeshComponent.cpp">
+      <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\Grid\FGrid.cpp">
       <Filter>Source\Editor\Grid</Filter>
     </ClCompile>
@@ -585,6 +591,12 @@
     <ClInclude Include="Source\Runtime\Actors\AMasterYi.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderQueue.h" />
     <ClInclude Include="Resources\MasterYi\MasterYi_HeadData.h" />
+    <ClInclude Include="Source\Runtime\CoreUObject\UMeshComponent.h">
+      <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\CoreUObject\UStaticMeshComponent.h">
+      <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">

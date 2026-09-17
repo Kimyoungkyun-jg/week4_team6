@@ -1,11 +1,11 @@
 #pragma once
 
-#include "UPrimitiveComponent.h"
+#include "UMeshComponent.h"
 #include "Runtime/Engine/UScene.h"
 
-class USpotLightComponent : public UPrimitiveComponent
+class USpotLightComponent : public UMeshComponent
 {
-	DECLARE_UCLASS(USpotLightComponent, UPrimitiveComponent)
+	DECLARE_UCLASS(USpotLightComponent, UMeshComponent)
 	GENERATED_BODY()
 
 protected:

@@ -2,7 +2,7 @@
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include "UClass.h"
 
-IMPLEMENT_UCLASS(USphereComp, UPrimitiveComponent)
+IMPLEMENT_UCLASS(USphereComp, UStaticMeshComponent)
 UCLASS_META(USphereComp, DisplayName, "Sphere")
 UCLASS_META(USphereComp, MeshName, "Sphere")
 

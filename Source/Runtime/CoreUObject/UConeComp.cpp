@@ -2,7 +2,7 @@
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include "UClass.h"
 
-IMPLEMENT_UCLASS(UConeComp, UPrimitiveComponent)
+IMPLEMENT_UCLASS(UConeComp, UStaticMeshComponent)
 UCLASS_META(UConeComp, DisplayName, "Cone")
 UCLASS_META(UConeComp, MeshName, "Cone")
 

@@ -41,15 +41,6 @@ public:
 protected:
 	USceneComponent() = default;
 
-	FTransform RelativeTransform;
-
-public:
-	FTransform& GetRelativeTransform() { return RelativeTransform; }
-	const FTransform& GetRelativeTransform() const { return RelativeTransform; }
-	virtual void SetRelativeTransform(const FTransform& RelativeTransform);
-	FTransform GetGlobalTransform() const;
-	//void SetRelativeTransformFromGlobal(const FTransform& GlobalTransform);
-
 protected:
     AActor* ActorOwner = nullptr;
     USceneComponent* SceneOwner = nullptr;

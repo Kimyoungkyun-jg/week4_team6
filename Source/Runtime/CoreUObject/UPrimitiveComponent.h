@@ -15,29 +15,25 @@ public:
     void Register(UScene& InScene) override;
     void Unregister() override;
 
+    // 트랜스폼 관리
+    FTransform& GetRelativeTransform() { return RelativeTransform; }
+    const FTransform& GetRelativeTransform() const { return RelativeTransform; }
+    virtual void SetRelativeTransform(const FTransform& InRelativeTransform);
+    FTransform GetGlobalTransform() const;
+
     virtual FMatrix GetRenderMatrix(const FCamera& Camera) const { return GetGlobalTransform().ToMatrix(); }
-    virtual void SetRelativeTransform(const FTransform& RelativeTransform) override;
+    FMatrix GetModelMatrix();
 
-    // FRenderData 조회 및 설정
-    virtual const FRenderData& GetRenderData(const FCamera& Camera){ return RenderData; }
-    const FRenderData& GetPureRenderData() const { return RenderData; }
+    // 직렬화
+    virtual void Serialize(FArchive& Archive) const override;
+    virtual void Deserialize(const FArchive& Archive) override;
 
-
-    // ID 접근자
-    void SetMeshID(const FName& InMeshId)         { RenderData.MeshId = InMeshId; }
-    void SetMaterialID(const FName& InMaterialId) { RenderData.MaterialId = InMaterialId; }
-    void SetTextureID(const FName& InTextureId)   { RenderData.TextureId = InTextureId; }
-    void SetRenderType(ERenderType InType)       { RenderData.type = InType; }
-    const FName& GetMeshID() const               { return RenderData.MeshId; }
-    const FName& GetMaterialID() const           { return RenderData.MaterialId; }
-    const FName& GetTextureID() const            { return RenderData.TextureId; }
-    ERenderType GetRenderType() const            { return RenderData.type; }
+    // FRenderData 가상 접근자
+    virtual const FRenderData& GetRenderData(const FCamera& Camera);
+    virtual const FRenderData& GetPureRenderData() const;
 
     // 충돌 판정용 바운드 계산
     virtual FAxisAlignedBoundingBox CalcLocalBounds();
-
-    // 텍스처 이름으로 머티리얼 텍스처 교체
-    bool SetTextureByName(const FName& InTextureName);
 
     // 색상 설정 및 조회
     const FVector& GetColor() const { return Color; }
@@ -50,19 +46,10 @@ public:
 
     virtual EEngineShowFlags GetShowFlag() const { return EEngineShowFlags::SF_Primitives; }
 
-    FMatrix GetModelMatrix();
-
 protected:
     UPrimitiveComponent() = default;
 
-    FRenderData RenderData = {
-       .MeshId = FName("None"),
-       .MaterialId = FName("None"),
-       .TextureId = FName("None"),
-       .type = ERenderType::None,
-       .bSelected = false,
-    };
-
+    FTransform RelativeTransform;
     FVector Color{1.0f, 1.0f, 1.0f};
     float ColorAmount = 0.0f;
 };

@@ -4,7 +4,7 @@
 #include "Runtime/Engine/FArchive.h"
 #include "UClass.h"
 
-IMPLEMENT_UCLASS(USpotLightComponent, UPrimitiveComponent)
+IMPLEMENT_UCLASS(USpotLightComponent, UMeshComponent)
 UCLASS_META(USpotLightComponent, DisplayName, "SpotLight")
 UCLASS_META(USpotLightComponent, MeshName, "SpotlightCone")
 

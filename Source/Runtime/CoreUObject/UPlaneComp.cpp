@@ -5,7 +5,7 @@
 #include "UClass.h"
 
 
-IMPLEMENT_UCLASS(UPlaneComp, UPrimitiveComponent)
+IMPLEMENT_UCLASS(UPlaneComp, UStaticMeshComponent)
 UCLASS_META(UPlaneComp, DisplayName, "Plane")
 UCLASS_META(UPlaneComp, MeshName, "Plane")
 

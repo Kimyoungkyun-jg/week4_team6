@@ -1,11 +1,11 @@
 #pragma once
 
-#include "UPrimitiveComponent.h"
+#include "UStaticMeshComponent.h"
 #include "Runtime/Engine/UScene.h"
 
-class UCylinderComp : public UPrimitiveComponent
+class UCylinderComp : public UStaticMeshComponent
 {
-	DECLARE_UCLASS(UCylinderComp, UPrimitiveComponent)
+	DECLARE_UCLASS(UCylinderComp, UStaticMeshComponent)
 	GENERATED_BODY()
 
 protected:

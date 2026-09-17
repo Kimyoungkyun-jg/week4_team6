@@ -4,13 +4,13 @@
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/Vertices.h"
 #include "Runtime/Rendering/FRenderQueue.h"
-#include "UPrimitiveComponent.h"
+#include "UMeshComponent.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 
-class UInstancePrimitiveComponent : public UPrimitiveComponent {
+class UInstancePrimitiveComponent : public UMeshComponent {
   GENERATED_BODY()
-  DECLARE_UCLASS(UInstancePrimitiveComponent, UPrimitiveComponent)
+  DECLARE_UCLASS(UInstancePrimitiveComponent, UMeshComponent)
 
 public:
     void Initialize() override;

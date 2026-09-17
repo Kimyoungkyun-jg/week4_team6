@@ -2,13 +2,13 @@
 #include "Runtime/Engine/FCamera.h"
 #include "Runtime/Math/FQuaternion.h"
 #include "Runtime/Rendering/ShaderConstants.h"
-#include "UPrimitiveComponent.h"
+#include "UMeshComponent.h"
 
 class UScene;
 class FArchive;
 
-class UBillBoardComp : public UPrimitiveComponent {
-  DECLARE_UCLASS(UBillBoardComp, UPrimitiveComponent)
+class UBillBoardComp : public UMeshComponent {
+  DECLARE_UCLASS(UBillBoardComp, UMeshComponent)
   GENERATED_BODY()
 
 protected:

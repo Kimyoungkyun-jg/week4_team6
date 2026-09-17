@@ -7,15 +7,15 @@ UCLASS_META(AMasterYi, DisplayName, "MasterYi Actor")
 
 AMasterYi::AMasterYi()
 {
-	// 프리미티브 컴포넌트 생성 및 루트 장착
-	CreateRootComponent(UPrimitiveComponent::StaticClass());
+	// 정적 메시 컴포넌트 생성 및 루트 장착
+	CreateRootComponent(UStaticMeshComponent::StaticClass());
 
-	if (auto* PrimComp = GetPrimitiveComponent())
+	if (auto* MeshComp = GetStaticMeshComponent())
 	{
-		PrimComp->SetMeshID(FName("MasterYi"));
-		PrimComp->SetMaterialID(FName("Textured"));
-		PrimComp->SetTextureID(FName("MasterYi_Head"));
-		PrimComp->SetRenderType(ERenderType::Texture);
+		MeshComp->SetMeshID(FName("MasterYi"));
+		MeshComp->SetMaterialID(FName("Textured"));
+		MeshComp->SetTextureID(FName("MasterYi_Head"));
+		MeshComp->SetRenderType(ERenderType::Texture);
 	}
 
 	FTransform DefaultTransform;
@@ -23,7 +23,7 @@ AMasterYi::AMasterYi()
 	SetTransform(DefaultTransform);
 }
 
-UPrimitiveComponent* AMasterYi::GetPrimitiveComponent() const
+UStaticMeshComponent* AMasterYi::GetStaticMeshComponent() const
 {
-	return RootComponent ? RootComponent->Cast<UPrimitiveComponent>() : nullptr;
+	return RootComponent ? RootComponent->Cast<UStaticMeshComponent>() : nullptr;
 }

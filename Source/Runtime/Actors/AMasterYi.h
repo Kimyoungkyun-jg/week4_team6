@@ -1,7 +1,7 @@
 #pragma once
 
 #include "AActor.h"
-#include "Runtime/CoreUObject/UPrimitiveComponent.h"
+#include "Runtime/CoreUObject/UStaticMeshComponent.h"
 
 // 마스터이 액터 정의
 class AMasterYi : public AActor
@@ -12,5 +12,5 @@ class AMasterYi : public AActor
 public:
 	explicit AMasterYi();
 
-	UPrimitiveComponent* GetPrimitiveComponent() const;
+	UStaticMeshComponent* GetStaticMeshComponent() const;
 };

@@ -1,26 +1,32 @@
 #include "UPrimitiveComponent.h"
+#include "Runtime/Actors/AActor.h"
+#include "Runtime/Engine/FArchive.h"
+#include "Runtime/Engine/UScene.h"
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include "Runtime/Rendering/ShaderConstants.h"
 #include "UClass.h"
-#include "Runtime/Engine/UScene.h"
+#include <numbers>
 
 IMPLEMENT_UCLASS(UPrimitiveComponent, USceneComponent)
+
+namespace
+{
+    static const FRenderData GEmptyRenderData = {
+        .MeshId = FName("None"),
+        .MaterialId = FName("None"),
+        .TextureId = FName("None"),
+        .type = ERenderType::None,
+        .bSelected = false,
+    };
+}
 
 void UPrimitiveComponent::Initialize()
 {
     Super::Initialize();
-    RenderData.type = ERenderType::Primitive;
 }
 
 void UPrimitiveComponent::Register(UScene& InScene)
 {
-    if (RenderData.type == ERenderType::None)
-    {
-        RenderData.type = (!RenderData.TextureId.IsNone() && RenderData.TextureId != FName("None"))
-            ? ERenderType::Texture
-            : ERenderType::Primitive;
-    }
-
     Super::Register(InScene);
     InScene.AddRenderComponent(this);
 }
@@ -34,23 +40,86 @@ void UPrimitiveComponent::Unregister()
     Super::Unregister();
 }
 
-void UPrimitiveComponent::SetRelativeTransform(const FTransform& RelativeTransform)
+void UPrimitiveComponent::SetRelativeTransform(const FTransform& InRelativeTransform)
 {
-    Super::SetRelativeTransform(RelativeTransform);
+    RelativeTransform = InRelativeTransform;
 }
 
-FAxisAlignedBoundingBox UPrimitiveComponent::CalcLocalBounds()
+FTransform UPrimitiveComponent::GetGlobalTransform() const
 {
-    return {};
-}
+    if (SceneOwner)
+    {
+        if (auto* ParentPrim = SceneOwner->Cast<UPrimitiveComponent>())
+        {
+            return ParentPrim->GetGlobalTransform() * RelativeTransform;
+        }
+    }
 
-bool UPrimitiveComponent::SetTextureByName(const FName& InTextureName)
-{
-    RenderData.TextureId = InTextureName;
-    return true;
+    if (!ActorOwner || ActorOwner->GetRootComponent() == this)
+    {
+        return RelativeTransform;
+    }
+
+    if (auto* RootPrim = ActorOwner->GetRootComponent()->Cast<UPrimitiveComponent>())
+    {
+        FTransform ParentWorld = RootPrim->GetGlobalTransform();
+        if (!bInheritRotation)
+        {
+            // 부모 회전 무시하고 위치와 스케일만 상속
+            FTransform Result;
+            Result.Scale3D = RelativeTransform.Scale3D;
+            Result.Rotation = RelativeTransform.Rotation;
+            Result.Location = ParentWorld.Location + RelativeTransform.Location;
+            return Result;
+        }
+        return ParentWorld * RelativeTransform;
+    }
+
+    return RelativeTransform;
 }
 
 FMatrix UPrimitiveComponent::GetModelMatrix()
 {
     return GetGlobalTransform().ToMatrix();
+}
+
+void UPrimitiveComponent::Serialize(FArchive& Archive) const
+{
+    Super::Serialize(Archive);
+
+    Archive.SetVector("Location", RelativeTransform.Location);
+    Archive.SetVector("Rotation", RelativeTransform.Rotation.GetEulerXYZ());
+    Archive.SetVector("Scale", RelativeTransform.Scale3D);
+}
+
+void UPrimitiveComponent::Deserialize(const FArchive& Archive)
+{
+    Super::Deserialize(Archive);
+
+    RelativeTransform.Location = Archive.GetVector("Location");
+
+    constexpr float RadToDeg = 180.0f / std::numbers::pi_v<float>;
+    FVector Rotation = Archive.GetVector("Rotation");
+    for (int i = 0; i < 3; ++i)
+    {
+        Rotation[i] *= RadToDeg;
+    }
+    RelativeTransform.Rotation = FQuaternion::FromEulerXYZDeg(Rotation);
+
+    RelativeTransform.Scale3D = Archive.GetVector("Scale");
+}
+
+const FRenderData& UPrimitiveComponent::GetRenderData(const FCamera& Camera)
+{
+    return GEmptyRenderData;
+}
+
+const FRenderData& UPrimitiveComponent::GetPureRenderData() const
+{
+    return GEmptyRenderData;
+}
+
+FAxisAlignedBoundingBox UPrimitiveComponent::CalcLocalBounds()
+{
+    return {};
 }
