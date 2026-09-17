@@ -26,11 +26,23 @@ namespace
 	}
 }
 
+TArray<TArray<FString>>& FNamePool::GetComparisonTable()
+{
+	static TArray<TArray<FString>> ComparisonTable{ BUCKET_COUNT };
+	return ComparisonTable;
+}
+
+TArray<TArray<FString>>& FNamePool::GetDisplayTable()
+{
+	static TArray<TArray<FString>> DisplayTable{ BUCKET_COUNT };
+	return DisplayTable;
+}
+
 FNameEntry FNamePool::AddEntry(const FString& Item)
 {
 	FString LowerItem{ Item };
 
-	for (int i = 0; i < LowerItem.size(); ++i)
+	for (size_t i = 0; i < LowerItem.size(); ++i)
 	{
 		if (LowerItem[i] >= 65 && LowerItem[i] <= 90)
 		{
@@ -47,16 +59,16 @@ FNameEntry FNamePool::AddEntry(const FString& Item)
 	Entry.ComparisonBucketIndex = ComparisonHash & (BUCKET_COUNT - 1);
 	Entry.DisplayBucketIndex = DisplayHash & (BUCKET_COUNT - 1);
 
-	TArray<FString>& ComparisonBucket = ComparisonTable[Entry.ComparisonBucketIndex];
-	TArray<FString>& DisplayBucket = DisplayTable[Entry.DisplayBucketIndex];
+	TArray<FString>& ComparisonBucket = GetComparisonTable()[Entry.ComparisonBucketIndex];
+	TArray<FString>& DisplayBucket = GetDisplayTable()[Entry.DisplayBucketIndex];
 
 	bool bFound = false;
-	for (int i = 0; i < ComparisonBucket.size(); ++i)
+	for (size_t i = 0; i < ComparisonBucket.size(); ++i)
 	{
 		if (LowerItem == ComparisonBucket[i])
 		{
 			bFound = true;
-			Entry.ComparisonIndex = i;
+			Entry.ComparisonIndex = static_cast<int32>(i);
 			break;
 		}
 	}
@@ -69,12 +81,12 @@ FNameEntry FNamePool::AddEntry(const FString& Item)
 
 
 	bFound = false;
-	for (int i = 0; i < DisplayBucket.size(); ++i)
+	for (size_t i = 0; i < DisplayBucket.size(); ++i)
 	{
 		if (Item == DisplayBucket[i])
 		{
 			bFound = true;
-			Entry.DisplayIndex = i;
+			Entry.DisplayIndex = static_cast<int32>(i);
 			break;
 		}
 	}
@@ -90,10 +102,30 @@ FNameEntry FNamePool::AddEntry(const FString& Item)
 
 const FString& FNamePool::GetComparisonString(const FNameEntry& Entry)
 {
-	return ComparisonTable[Entry.ComparisonBucketIndex][Entry.ComparisonIndex];
+	auto& Table = GetComparisonTable();
+	if (Entry.ComparisonBucketIndex < Table.size())
+	{
+		auto& Bucket = Table[Entry.ComparisonBucketIndex];
+		if (Entry.ComparisonIndex >= 0 && static_cast<size_t>(Entry.ComparisonIndex) < Bucket.size())
+		{
+			return Bucket[Entry.ComparisonIndex];
+		}
+	}
+	static const FString EmptyString{};
+	return EmptyString;
 }
 
 const FString& FNamePool::GetDisplayString(const FNameEntry& Entry)
 {
-	return DisplayTable[Entry.DisplayBucketIndex][Entry.DisplayIndex];
+	auto& Table = GetDisplayTable();
+	if (Entry.DisplayBucketIndex < Table.size())
+	{
+		auto& Bucket = Table[Entry.DisplayBucketIndex];
+		if (Entry.DisplayIndex >= 0 && static_cast<size_t>(Entry.DisplayIndex) < Bucket.size())
+		{
+			return Bucket[Entry.DisplayIndex];
+		}
+	}
+	static const FString EmptyString{};
+	return EmptyString;
 }

@@ -13,8 +13,8 @@ class FNamePool
 {
 	friend class FName;
 
-	static inline TArray<TArray<FString>> ComparisonTable{ BUCKET_COUNT };
-	static inline TArray<TArray<FString>> DisplayTable{ BUCKET_COUNT };
+	static TArray<TArray<FString>>& GetComparisonTable();
+	static TArray<TArray<FString>>& GetDisplayTable();
 
 	static FNameEntry AddEntry(const FString& Item);
 	static const FString& GetComparisonString(const FNameEntry& Entry);

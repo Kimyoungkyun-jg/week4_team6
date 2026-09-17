@@ -326,6 +326,7 @@
     <ClCompile Include="Source\Runtime\Rendering\FLineBatcher.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FMaterial.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FMesh.cpp" />
+    <ClCompile Include="Source\Runtime\Rendering\FObjDecoder.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FRenderer.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FRenderPipeline.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FRenderResourceLibrary.cpp" />
@@ -477,6 +478,7 @@
     <ClInclude Include="Source\Runtime\Rendering\FLineBatcher.h" />
     <ClInclude Include="Source\Runtime\Rendering\FMaterial.h" />
     <ClInclude Include="Source\Runtime\Rendering\FMesh.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h" />
     <ClInclude Include="Source\Runtime\Rendering\EBlendMode.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderPipeline.h" />

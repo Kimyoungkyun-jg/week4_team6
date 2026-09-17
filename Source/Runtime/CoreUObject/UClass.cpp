@@ -21,7 +21,7 @@ UClass* UClass::RegisterToFactory(const FString& typeName, const TFunction<UObje
 UClass* UClass::FindByName(const FString& Name)
 {
     auto it = nameToId.find(Name);
-    return (it != nameToId.end()) ? classList[it->second].get() : nullptr;
+    return (it != nameToId.end() && it->second < classList.size()) ? classList[it->second].get() : nullptr;
 }
 
 const FString& UClass::GetDisplayName() const
@@ -61,7 +61,7 @@ void UClass::ResolveTypeBitsets()
     {
         if (!_class->superClassTypeName.empty()) {
             auto it = nameToId.find(_class->superClassTypeName);
-            _class->superClass = (it != nameToId.end()) ? classList[it->second].get() : nullptr;
+            _class->superClass = (it != nameToId.end() && it->second < classList.size()) ? classList[it->second].get() : nullptr;
         }
     }
     for (const TUniquePtr<UClass>& _class : classList)

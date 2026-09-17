@@ -32,7 +32,11 @@ public:
     
     const FName& GetDefaultMaterialID(int32 Slot = 0) const {
         static const FName SimpleMat("Simple");
-        return DefaultMaterialIds.empty() ? SimpleMat : DefaultMaterialIds[Slot];
+        if (Slot >= 0 && Slot < static_cast<int32>(DefaultMaterialIds.size()) && !DefaultMaterialIds[Slot].IsNone())
+        {
+            return DefaultMaterialIds[Slot];
+        }
+        return SimpleMat;
     }
 
 
