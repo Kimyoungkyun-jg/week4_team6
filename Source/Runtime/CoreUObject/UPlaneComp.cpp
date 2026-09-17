@@ -1,0 +1,16 @@
+#include "UPlaneComp.h"
+
+#include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "Runtime/Engine/UScene.h"
+#include "UClass.h"
+
+
+IMPLEMENT_UCLASS(UPlaneComp, UPrimitiveComponent)
+UCLASS_META(UPlaneComp, DisplayName, "Plane")
+UCLASS_META(UPlaneComp, MeshName, "Plane")
+
+void UPlaneComp::Initialize() {
+  Super::Initialize();
+  SetMeshID(FName("Plane"));
+  SetMaterialID(FName("Simple"));
+}
