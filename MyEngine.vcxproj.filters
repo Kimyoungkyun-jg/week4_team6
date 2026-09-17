@@ -313,6 +313,9 @@
     <ClCompile Include="Source\Runtime\Actors\AMasterYi.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\Rendering\FObjDecoder.cpp">
+      <Filter>Source\Runtime\Rendering</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h">
@@ -602,6 +605,9 @@
     </ClInclude>
     <ClInclude Include="Source\Runtime\CoreUObject\UStaticMesh.h">
       <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h">
+      <Filter>Source\Runtime\Rendering</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

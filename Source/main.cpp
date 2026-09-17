@@ -15,6 +15,9 @@
 #include <windowsx.h>
 
 
+#include "Runtime/Rendering/FObjDecoder.h"
+
+
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg,
                                               WPARAM wParam, LPARAM lParam);
 
@@ -41,6 +44,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
   if (!Window) {
     return -1;
   }
+
+  
 
   ShowWindow(Window, nShowCmd);
 
@@ -71,6 +76,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     EditorApp.Initialize_ImguiWin32DX11(Window, Device, Context);
   }
   EditorApp.Initialize_Runtime(&SceneManager, &RenderView);
+
+
+  FObjDecoder::LoadObjStaticMeshAsset("cube.obj");
 
   bool bQuit = false;
   while (!bQuit) {
