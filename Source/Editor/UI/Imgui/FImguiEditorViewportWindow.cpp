@@ -12,32 +12,221 @@
 
 void FImguiEditorViewportWindow::Process(FEditor &Editor, float DeltaTime)
 {
-    FEditorViewport *Viewport = Editor.GetActiveViewport();
-    if (!Viewport)
-    {
-        return;
-    }
+    TArray<FEditorViewport>& Viewports = Editor.GetViewports();
+    if (Viewports.empty()) return;
 
-    const ImGuiViewport *MainViewport = ImGui::GetMainViewport();
-    const FVector2 ClientSize{MainViewport->Size.x, MainViewport->Size.y};
+    const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+    const FVector2 ClientSize{ MainViewport->Size.x, MainViewport->Size.y };
 
     BeginWindow();
 
-    // 창의 현재 사각형을 뷰포트에 반영한 뒤, 그 값으로 입력을 모은다.
-    SyncViewportRect(*Viewport, ClientSize);
+    const ImVec2 WinPos = ImGui::GetWindowPos();
+    const ImVec2 WinSize = ImGui::GetWindowSize();
+    const FVector2 MousePos = FInputManager::Get().GetMousePosition();
 
-    const FVector2 TopLeftPixels = Viewport->TopLeftUV * ClientSize;
-    const FVector2 SizePixels = Viewport->LengthUV * ClientSize;
+    // 구분선 조작
+    const bool bDragging = ProcessSplitterDrag(WinPos, WinSize, MousePos);
+
+    // 뷰포트 영역 동기화
+    SyncSplitViewports(Viewports, WinPos, WinSize, ClientSize);
+
+    // 분할선 및 라벨 표시
+    DrawSplitterOverlay(WinPos, WinSize);
+
+    // 드래그 중단 처리
+    if (bDragging)
+    {
+        EndWindow();
+        return;
+    }
+
+    // 뷰포트 인터랙션 처리
+    ProcessViewportInteraction(Editor, Viewports, WinPos, WinSize, ClientSize, MousePos, DeltaTime);
+
+    EndWindow();
+}
+
+bool FImguiEditorViewportWindow::ProcessSplitterDrag(const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos)
+{
+    const float CenterX = WinPos.x + WinSize.x * SplitX;
+    const float CenterY = WinPos.y + WinSize.y * SplitY;
+
+    // 마우스 거리 판정
+    const bool bNearV = std::abs(MousePos.X - CenterX) < 5.0f && (MousePos.Y >= WinPos.y && MousePos.Y <= WinPos.y + WinSize.y);
+    const bool bNearH = std::abs(MousePos.Y - CenterY) < 5.0f && (MousePos.X >= WinPos.x && MousePos.X <= WinPos.x + WinSize.x);
+
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    {
+        if (bNearV && bNearH)
+        {
+            bDraggingV = true;
+            bDraggingH = true;
+        }
+        else if (bNearV)
+        {
+            bDraggingV = true;
+        }
+        else if (bNearH)
+        {
+            bDraggingH = true;
+        }
+    }
+
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        bDraggingV = false;
+        bDraggingH = false;
+    }
+
+    if (bDraggingV && bDraggingH)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+        SplitX = std::clamp(SplitX + ImGui::GetIO().MouseDelta.x / WinSize.x, 0.15f, 0.85f);
+        SplitY = std::clamp(SplitY + ImGui::GetIO().MouseDelta.y / WinSize.y, 0.15f, 0.85f);
+    }
+    else if (bDraggingV)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        SplitX = std::clamp(SplitX + ImGui::GetIO().MouseDelta.x / WinSize.x, 0.15f, 0.85f);
+    }
+    else if (bDraggingH)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        SplitY = std::clamp(SplitY + ImGui::GetIO().MouseDelta.y / WinSize.y, 0.15f, 0.85f);
+    }
+    else if (bNearV && bNearH)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+    }
+    else if (bNearV)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    else if (bNearH)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+
+    return bDraggingV || bDraggingH;
+}
+
+void FImguiEditorViewportWindow::SyncSplitViewports(TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize)
+{
+    if (Viewports.size() < 4) return;
+
+    const float BaseU = WinPos.x / ClientSize.X;
+    const float BaseV = WinPos.y / ClientSize.Y;
+    const float SpanU = WinSize.x / ClientSize.X;
+    const float SpanV = WinSize.y / ClientSize.Y;
+
+    // Top 좌상단
+    Viewports[0].TopLeftUV = { BaseU, BaseV };
+    Viewports[0].LengthUV = { SpanU * SplitX, SpanV * SplitY };
+
+    // Perspective 우상단
+    Viewports[1].TopLeftUV = { BaseU + SpanU * SplitX, BaseV };
+    Viewports[1].LengthUV = { SpanU * (1.0f - SplitX), SpanV * SplitY };
+
+    // Front 좌하단
+    Viewports[2].TopLeftUV = { BaseU, BaseV + SpanV * SplitY };
+    Viewports[2].LengthUV = { SpanU * SplitX, SpanV * (1.0f - SplitY) };
+
+    // Side 우하단
+    Viewports[3].TopLeftUV = { BaseU + SpanU * SplitX, BaseV + SpanV * SplitY };
+    Viewports[3].LengthUV = { SpanU * (1.0f - SplitX), SpanV * (1.0f - SplitY) };
+
+    for (auto& VP : Viewports)
+    {
+        VP.ViewportCamera.Projection.Aspect = (VP.LengthUV.X * ClientSize.X) / (VP.LengthUV.Y * ClientSize.Y);
+    }
+}
+
+void FImguiEditorViewportWindow::DrawSplitterOverlay(const ImVec2& WinPos, const ImVec2& WinSize) const
+{
+    const float CenterX = WinPos.x + WinSize.x * SplitX;
+    const float CenterY = WinPos.y + WinSize.y * SplitY;
+
+    ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+    // 분할선
+    DrawList->AddLine(ImVec2(CenterX, WinPos.y), ImVec2(CenterX, WinPos.y + WinSize.y), IM_COL32(70, 70, 70, 255), 2.0f);
+    DrawList->AddLine(ImVec2(WinPos.x, CenterY), ImVec2(WinPos.x + WinSize.x, CenterY), IM_COL32(70, 70, 70, 255), 2.0f);
+
+    // 라벨 크기 계산
+    constexpr auto LabelColor = IM_COL32(200, 200, 200, 255);
+    const ImVec2 TopSize = ImGui::CalcTextSize("[Top]");
+    const ImVec2 PerspSize = ImGui::CalcTextSize("[Perspective]");
+    const ImVec2 FrontSize = ImGui::CalcTextSize("[Front]");
+    const ImVec2 SideSize = ImGui::CalcTextSize("[Side]");
+
+    constexpr float OffsetX = 8.0f;
+    constexpr float OffsetY = 6.0f;
+
+    // 사분면 우하단 라벨 표시
+    DrawList->AddText(ImVec2(CenterX - TopSize.x - OffsetX, CenterY - TopSize.y - OffsetY), LabelColor, "[Top]");
+    DrawList->AddText(ImVec2(WinPos.x + WinSize.x - PerspSize.x - OffsetX, CenterY - PerspSize.y - OffsetY), LabelColor, "[Perspective]");
+    DrawList->AddText(ImVec2(CenterX - FrontSize.x - OffsetX, WinPos.y + WinSize.y - FrontSize.y - OffsetY), LabelColor, "[Front]");
+    DrawList->AddText(ImVec2(WinPos.x + WinSize.x - SideSize.x - OffsetX, WinPos.y + WinSize.y - SideSize.y - OffsetY), LabelColor, "[Side]");
+}
+
+void FImguiEditorViewportWindow::ProcessViewportInteraction(FEditor& Editor, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize, const FVector2& MousePos, float DeltaTime)
+{
+    const float CenterX = WinPos.x + WinSize.x * SplitX;
+    const float CenterY = WinPos.y + WinSize.y * SplitY;
+
+    const bool bAnyMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+                               ImGui::IsMouseDown(ImGuiMouseButton_Right) ||
+                               ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+
+    // 마우스 위치 뷰포트 인덱스 계산
+    int HoveredIndex = 0;
+    if (MousePos.Y < CenterY)
+    {
+        HoveredIndex = (MousePos.X < CenterX) ? 0 : 1;
+    }
+    else
+    {
+        HoveredIndex = (MousePos.X < CenterX) ? 2 : 3;
+    }
+
+    // 마우스 클릭 시 활성 뷰포트 락
+    if (bAnyMouseDown)
+    {
+        if (LockedViewportIndex == -1)
+        {
+            LockedViewportIndex = HoveredIndex;
+        }
+        HoveredIndex = LockedViewportIndex;
+    }
+    else
+    {
+        LockedViewportIndex = -1;
+    }
+
+    // 비활성 뷰포트 상태 해제
+    for (int i = 0; i < static_cast<int>(Viewports.size()); ++i)
+    {
+        if (i != HoveredIndex)
+        {
+            Viewports[i].UpdateFocusedAndHovered(false, false);
+        }
+    }
+
+    // 활성 뷰포트 입력 및 업데이트
+    FEditorViewport& ActiveVP = Viewports[HoveredIndex];
+    const FVector2 TopLeftPixels = ActiveVP.TopLeftUV * ClientSize;
+    const FVector2 SizePixels = ActiveVP.LengthUV * ClientSize;
     const FViewportInput Input = GatherInput(TopLeftPixels, SizePixels);
 
-    Viewport->UpdateFocusedAndHovered(Input.bFocused, Input.bHovered);
+    ActiveVP.UpdateFocusedAndHovered(Input.bFocused, Input.bHovered);
 
-    UpdateSelection(Editor, *Viewport, Input);
-    UpdateGizmo(Editor, *Viewport, Input);
-    UpdateCamera(Editor, *Viewport, Input, DeltaTime);
-
-    ClampWindowToWorkArea();
-    EndWindow();
+    if (Input.bFocused || Input.bHovered)
+    {
+        Editor.SetActiveViewportIndex(HoveredIndex);
+        UpdateSelection(Editor, ActiveVP, Input);
+        UpdateGizmo(Editor, ActiveVP, Input);
+        UpdateCamera(Editor, ActiveVP, Input, DeltaTime);
+    }
 }
 
 void FImguiEditorViewportWindow::BeginWindow() const
@@ -90,6 +279,7 @@ FImguiEditorViewportWindow::GatherInput(const FVector2 &ViewportTopLeftPixels,
     // 뷰포트 영역 전체를 덮는 클릭 판정용 아이템.
     // 다른 ImGui 창이 위에 있으면 IsItemHovered()/IsItemClicked() 가 false 가
     // 되어 자연스럽게 focus 중재가 된다.
+    ImGui::SetCursorScreenPos(ImVec2(ViewportTopLeftPixels.X, ViewportTopLeftPixels.Y));
     ImGui::InvisibleButton(
         "##ViewportInput", ImVec2(ViewportSizePixels.X, ViewportSizePixels.Y),
         ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
@@ -162,10 +352,52 @@ void FImguiEditorViewportWindow::UpdateCamera(FEditor &Editor, FEditorViewport &
         return;
     }
 
+    FCamera &Camera = Viewport.ViewportCamera;
+
+    // 직교 투영 뷰포트 조작
+    if (Camera.Projection.ProjectionType == EProjectionType::Orthographic)
+    {
+        // 마우스 휠 확대 축소
+        if (Input.bHovered)
+        {
+            const float Wheel = ImGui::GetIO().MouseWheel;
+            if (Wheel != 0.0f)
+            {
+                const float ZoomFactor = (Wheel > 0.0f) ? 0.85f : 1.15f;
+                Camera.Projection.Height = std::clamp(Camera.Projection.Height * ZoomFactor, 0.5f, 500.0f);
+            }
+        }
+
+        // 우클릭 드래그 평면 이동
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && (Input.bHovered || Input.bFocused))
+        {
+            const ImVec2 MouseDelta = ImGui::GetIO().MouseDelta;
+            if (MouseDelta.x != 0.0f || MouseDelta.y != 0.0f)
+            {
+                const FMatrix Rotation = FMatrix::MakeRotation(FVector(0.0f, Camera.Pitch, Camera.Yaw));
+                const FVector Right{ Rotation.M[1][0], Rotation.M[1][1], Rotation.M[1][2] };
+                const FVector Up{ Rotation.M[2][0], Rotation.M[2][1], Rotation.M[2][2] };
+
+                const float PixelsY = Input.SizePixels.Y > 0.0f ? Input.SizePixels.Y : 500.0f;
+                const float WorldUnitsPerPixel = Camera.Projection.Height / PixelsY;
+
+                Camera.Position -= Right * (MouseDelta.x * WorldUnitsPerPixel);
+                Camera.Position += Up * (MouseDelta.y * WorldUnitsPerPixel);
+            }
+            return;
+        }
+
+        if (!Editor.GetGizmo().IsInteracting())
+        {
+            UpdateShortcuts(Editor);
+        }
+        return;
+    }
+
+    // 원근 투영 뷰포트 조작
     CameraController.CameraRotateSpeed = Editor.State.GetCameraSensitivity();
     CameraController.CameraMoveSpeed = Editor.State.GetCameraSpeed();
 
-    FCamera &Camera = Viewport.ViewportCamera;
     CameraController.UpdateMouseInput(Camera);
 
     // 우클릭 중에는 WASD 가 카메라 비행에 쓰이므로 단축키와 겹치지 않게 나눈다.
@@ -174,7 +406,6 @@ void FImguiEditorViewportWindow::UpdateCamera(FEditor &Editor, FEditorViewport &
         CameraController.UpdateKeyInput(Camera, DeltaTime);
         return;
     }
-
 
     // 기즈모를 드래그하는 중에는 모드가 바뀌면 안 된다.
     if (!Editor.GetGizmo().IsInteracting())

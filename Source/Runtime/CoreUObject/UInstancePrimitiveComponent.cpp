@@ -53,7 +53,7 @@ void UInstancePrimitiveComponent::BuildRenderData() {
     });
   } else {
     Built.reserve(InstanceTransforms.size());
-    for (const auto &Entry : InstanceTransforms) {
+    for (const auto &Entry : InstanceTransforms) { 
       FTransform InstTransform = BaseTransform;
       InstTransform.Location = Entry.Position;
       Built.push_back(FInstanceData{

@@ -37,7 +37,46 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
   this->CurrentScene = SceneManager->CurrentScene;
 
   Editor.Initialize(SceneManager);
-  Editor.AddViewport(FEditorViewport{});
+
+
+  FEditorViewport TopViewport;
+  TopViewport.TopLeftUV = { 0.0f, 0.0f };
+  TopViewport.LengthUV = { 0.5f, 0.5f };
+  TopViewport.ViewportCamera.Position = { 0.0f, 0.0f, 20.0f };
+  TopViewport.ViewportCamera.Pitch = -89.9f;
+  TopViewport.ViewportCamera.Yaw = 0.0f;
+  TopViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+  TopViewport.ViewportCamera.Projection.Height = 10.0f;
+  Editor.AddViewport(TopViewport);
+
+  FEditorViewport PerspViewport;
+  PerspViewport.TopLeftUV = { 0.5f, 0.0f };
+  PerspViewport.LengthUV = { 0.5f, 0.5f };
+  PerspViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Perspective;
+  Editor.AddViewport(PerspViewport);
+
+  FEditorViewport FrontViewport;
+  FrontViewport.TopLeftUV = { 0.0f, 0.5f };
+  FrontViewport.LengthUV = { 0.5f, 0.5f };
+  FrontViewport.ViewportCamera.Position = { -20.0f, 0.0f, 0.0f };
+  FrontViewport.ViewportCamera.Pitch = 0.0f;
+  FrontViewport.ViewportCamera.Yaw = 0.0f;
+  FrontViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+  FrontViewport.ViewportCamera.Projection.Height = 10.0f;
+  Editor.AddViewport(FrontViewport);
+
+  FEditorViewport SideViewport;
+  SideViewport.TopLeftUV = { 0.5f, 0.5f };
+  SideViewport.LengthUV = { 0.5f, 0.5f };
+  SideViewport.ViewportCamera.Position = { 0.0f, -20.0f, 0.0f };
+  SideViewport.ViewportCamera.Pitch = 0.0f;
+  SideViewport.ViewportCamera.Yaw = 90.0f;
+  SideViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+  SideViewport.ViewportCamera.Projection.Height = 10.0f;
+  Editor.AddViewport(SideViewport);
+
+  // 원근 뷰포트를 활성화하고 상태 복원
+  Editor.SetActiveViewportIndex(1);
   Editor.LoadState();
 }
 

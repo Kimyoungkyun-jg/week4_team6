@@ -115,7 +115,7 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
     FlushLinePass(View.Camera);
 
     // 후처리 외곽선 패스
-    RenderPostProcessPass(View.Camera, EditorCtx.SelectedActor);
+    RenderPostProcessPass(View.Camera, EditorCtx.SelectedActor, View.TopLeftUV, View.LengthUV);
 
     // 오버레이 패스
     if (EditorCtx.Gizmo && EditorCtx.SelectedActor)
@@ -129,6 +129,7 @@ void FRenderView::BeginView(FVector2 TopLeftUV, FVector2 LengthUV, EViewModeInde
     // 에디터 뷰포트 렌더타겟 바인딩
     Renderer.BindEditorViewportRenderTargets();
     Renderer.SetViewportUV(TopLeftUV, LengthUV);
+    Renderer.ClearDepth();
     Renderer.SetRenderMode(ViewMode);
     Renderer.UpdateLightConstants(LightConstants, ViewMode);
 }
@@ -155,9 +156,9 @@ void FRenderView::FlushLinePass(const FCamera& Camera)
     FlushLineBatch(Camera.CreateViewProjectionMatrix());
 }
 
-void FRenderView::RenderPostProcessPass(const FCamera& Camera, const AActor* SelectedActor)
+void FRenderView::RenderPostProcessPass(const FCamera& Camera, const AActor* SelectedActor, FVector2 TopLeftUV, FVector2 LengthUV)
 {
-    RenderOutline(Camera, SelectedActor);
+    RenderOutline(Camera, SelectedActor, TopLeftUV, LengthUV);
 }
 
 void FRenderView::RenderOverlayPass(const FCamera& Camera, const FSceneView& SceneView, const FTransform& SelectedTransform, const FGizmo& Gizmo, UTextInstanceComponent* TextComp)
@@ -260,9 +261,11 @@ void FRenderView::RenderUUIDText(const FCamera& Camera, FVector2 TopLeftUV,
 }
 
 void FRenderView::RenderOutline(const FCamera &Camera,
-                                const AActor *SelectedActor) {
+                                const AActor *SelectedActor,
+                                FVector2 TopLeftUV,
+                                FVector2 LengthUV) {
   DrawStencilMask(Camera, SelectedActor);
-  Renderer.RenderOutline();
+  Renderer.RenderOutline(TopLeftUV, LengthUV);
 }
 
 void FRenderView::DrawStencilMask(const FCamera& Camera,
@@ -297,7 +300,7 @@ void FRenderView::RenderPostProcess(const FCamera &Camera, FVector2 TopLeftUV,
                                     FVector2 LengthUV, AActor *SelectedActor) {
   // 에디터 뷰포트 설정 후 후처리 수행
   Renderer.SetViewportUV(TopLeftUV, LengthUV);
-  RenderOutline(Camera, SelectedActor);
+  RenderOutline(Camera, SelectedActor, TopLeftUV, LengthUV);
 }
 void FRenderView::SetViewportUV(FVector2 TopLeftUV, FVector2 LengthUV)
 {

@@ -136,6 +136,9 @@ FEditorViewport *FEditor::GetActiveViewport() {
   if (EditorViewports.empty()) {
     return nullptr;
   }
+  if (ActiveViewportIndex >= 0 && ActiveViewportIndex < static_cast<int32>(EditorViewports.size())) {
+    return &EditorViewports[ActiveViewportIndex];
+  }
   return &EditorViewports[0];
 }
 
