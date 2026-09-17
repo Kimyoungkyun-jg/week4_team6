@@ -5,7 +5,7 @@
 
 #include <limits>
 
-class FMesh;
+class FStaticMesh;
 struct FMatrix;
 
 struct FAxisAlignedBoundingBox
@@ -25,6 +25,6 @@ struct FAxisAlignedBoundingBox
 	};
 
 	FAxisAlignedBoundingBox() = default;
-	FAxisAlignedBoundingBox(const FMesh& Mesh);
-	FAxisAlignedBoundingBox(const FMesh& Mesh, const FMatrix& ModelMatrix);	
+	FAxisAlignedBoundingBox(const FStaticMesh& Mesh);
+	FAxisAlignedBoundingBox(const FStaticMesh& Mesh, const FMatrix& ModelMatrix);	
 };

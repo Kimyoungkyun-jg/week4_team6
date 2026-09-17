@@ -151,7 +151,7 @@ void FRenderer::OnWindowSize(UINT Width, UINT Height) {
   InitializeEditorViewportRenderTarget();
 }
 
-TSharedPtr<FMesh> FRenderer::CreateMesh(const FMeshDesc &Desc) {
+TSharedPtr<FStaticMesh> FRenderer::CreateMesh(const FMeshDesc &Desc) {
   if (!Desc.VertexData || Desc.VertexCount == 0 || Desc.VertexDataSize == 0 ||
       Desc.VertexStride == 0) {
     return nullptr;
@@ -160,7 +160,7 @@ TSharedPtr<FMesh> FRenderer::CreateMesh(const FMeshDesc &Desc) {
     return nullptr;
   }
 
-  auto Mesh = TSharedPtr<FMesh>{new FMesh()};
+  auto Mesh = TSharedPtr<FStaticMesh>{new FStaticMesh()};
   D3D11_BUFFER_DESC VertexBufferDesc = {
       .ByteWidth = Desc.VertexDataSize,
       .Usage = D3D11_USAGE_DEFAULT,
@@ -218,7 +218,7 @@ TSharedPtr<FMesh> FRenderer::CreateMesh(const FMeshDesc &Desc) {
   return Mesh;
 }
 
-TSharedPtr<FMesh> FRenderer::CreateDynamicMesh(const FMeshDesc &Desc) {
+TSharedPtr<FStaticMesh> FRenderer::CreateDynamicMesh(const FMeshDesc &Desc) {
   if (!Desc.VertexData || Desc.VertexCount == 0 || Desc.VertexDataSize == 0 ||
       Desc.VertexStride == 0) {
     return nullptr;
@@ -227,7 +227,7 @@ TSharedPtr<FMesh> FRenderer::CreateDynamicMesh(const FMeshDesc &Desc) {
     return nullptr;
   }
 
-  auto Mesh = TSharedPtr<FMesh>{new FMesh()};
+  auto Mesh = TSharedPtr<FStaticMesh>{new FStaticMesh()};
   D3D11_BUFFER_DESC VertexBufferDesc = {
       .ByteWidth = Desc.VertexDataSize,
       .Usage = D3D11_USAGE_DYNAMIC,

@@ -30,7 +30,7 @@ public:
   // 파이프라인 보관 맵
   TMap<FName, TSharedPtr<FRenderPipeline>> AllPipelineMap;
   // 메쉬 보관 맵
-  TMap<FName, TSharedPtr<FMesh>> AllMeshMap;
+  TMap<FName, TSharedPtr<FStaticMesh>> AllMeshMap;
   // 머티리얼 보관 맵 (FName 기반)
   TMap<FName, TSharedPtr<FMaterial>> AllMaterialMap;
   // 텍스쳐 보관 맵 (FName 기반)
@@ -74,7 +74,7 @@ public:
   }
 
   // 메쉬 조회
-  TSharedPtr<FMesh> GetMesh(const FName &ID) const {
+  TSharedPtr<FStaticMesh> GetMesh(const FName &ID) const {
     auto it = AllMeshMap.find(ID);
     if (it != AllMeshMap.end())
       return it->second;
@@ -82,59 +82,59 @@ public:
   }
 
   // 메쉬 등록
-  TSharedPtr<FMesh> RegisterMesh(const FName &ID, TSharedPtr<FMesh> inMesh) {
+  TSharedPtr<FStaticMesh> RegisterMesh(const FName &ID, TSharedPtr<FStaticMesh> inMesh) {
     inMesh->MeshId = ID;
     AllMeshMap[ID] = inMesh;
     return inMesh;
   }
 
   // 개별 메쉬 접근자
-  [[nodiscard]] TSharedPtr<FMesh> GetCubeMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetCubeMesh() const {
     return GetMesh(FName("Cube"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetCylinderMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetCylinderMesh() const {
     return GetMesh(FName("Cylinder"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetConeMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetConeMesh() const {
     return GetMesh(FName("Cone"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetSpotlightConeMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetSpotlightConeMesh() const {
     return GetMesh(FName("SpotlightCone"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetArrowMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetArrowMesh() const {
     return GetMesh(FName("Arrow"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetCircleMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetCircleMesh() const {
     return GetMesh(FName("Circle"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetRotationGizmoMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetRotationGizmoMesh() const {
     return GetMesh(FName("RotGizmo"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetSquareArrowMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetSquareArrowMesh() const {
     return GetMesh(FName("SquareArrow"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetGridMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetGridMesh() const {
     return GetMesh(FName("Grid"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetSphereMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetSphereMesh() const {
     return GetMesh(FName("Sphere"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetLineMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetLineMesh() const {
     return GetMesh(FName("Line"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetPlaneMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetPlaneMesh() const {
     return GetMesh(FName("Plane"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetRectMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetRectMesh() const {
     return GetMesh(FName("Rect"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetTextMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetTextMesh() const {
     return GetMesh(FName("TextMesh"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetMasterYiMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetMasterYiMesh() const {
     return GetMesh(FName("MasterYi"));
   }
-  [[nodiscard]] TSharedPtr<FMesh> GetMasteryMesh() const {
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetMasteryMesh() const {
     return GetMesh(FName("MasterYi"));
   }
 
@@ -184,7 +184,7 @@ public:
   FRenderer *GetRenderer() const { return RendererRef; }
 
   // 정점 배열 메쉬 캐싱 생성
-  TSharedPtr<FMesh> GetOrCreateMesh(const FName &ID,
+  TSharedPtr<FStaticMesh> GetOrCreateMesh(const FName &ID,
                                     const TArray<FVertexData> &vertices);
 
   

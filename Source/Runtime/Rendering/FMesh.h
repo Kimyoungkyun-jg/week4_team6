@@ -11,7 +11,7 @@
 
 class FRenderer;
 
-class FMesh final
+class FStaticMesh final
 {
 	friend class FRenderer;
 
@@ -26,7 +26,11 @@ public:
 	// 버퍼 데이터 갱신
 	bool UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Context, const struct FMeshDesc& Desc);
 	FName MeshId{"None"};
+
+	FString PathFileName;
+
 private:
+
 	void BindResources(ID3D11DeviceContext& Context) const;
 
 	Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
@@ -40,6 +44,7 @@ private:
 
 	TArray<FVector> Positions;
 	TArray<uint32> Indices;
+
 
 	D3D11_PRIMITIVE_TOPOLOGY Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	FAxisAlignedBoundingBox LocalBounds = {};

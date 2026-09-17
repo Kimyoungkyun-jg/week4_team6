@@ -20,8 +20,8 @@ public:
     void SetMaterialID(const FName& InMaterialId) { RenderData.MaterialId = InMaterialId; }
     void SetTextureID(const FName& InTextureId)   { RenderData.TextureId = InTextureId; }
     void SetRenderType(ERenderType InType)       { RenderData.type = InType; }
-    const FName& GetMeshID() const               { return RenderData.MeshId; }
-    const FName& GetMaterialID() const           { return RenderData.MaterialId; }
+    virtual const FName& GetMeshID() const       { return RenderData.MeshId; }
+    virtual const FName& GetMaterialID() const   { return RenderData.MaterialId; }
     const FName& GetTextureID() const            { return RenderData.TextureId; }
     ERenderType GetRenderType() const            { return RenderData.type; }
 

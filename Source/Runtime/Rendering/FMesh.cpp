@@ -3,7 +3,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 
-void FMesh::BindResources(ID3D11DeviceContext& Context) const
+void FStaticMesh::BindResources(ID3D11DeviceContext& Context) const
 {
 	constexpr UINT Offset = 0;
 
@@ -12,7 +12,7 @@ void FMesh::BindResources(ID3D11DeviceContext& Context) const
 	Context.IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 }
 
-bool FMesh::UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Context, const FMeshDesc& Desc)
+bool FStaticMesh::UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Context, const FMeshDesc& Desc)
 {
 	if (!Device || !Context || !Desc.VertexData || Desc.VertexCount == 0)
 	{

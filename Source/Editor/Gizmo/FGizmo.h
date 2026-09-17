@@ -61,10 +61,10 @@ private:
 	[[nodiscard]] FVector2 WorldToViewport(const FVector& WorldPosition, const FCamera& Camera, const FVector2& ViewportSize) const;
 
 private:
-	TSharedPtr<FMesh> ArrowMesh;
-	TSharedPtr<FMesh> CircleMesh;
-	TSharedPtr<FMesh> RotationGizmoMesh;
-	TSharedPtr<FMesh> SquareArrowMesh;
+	TSharedPtr<FStaticMesh> ArrowMesh;
+	TSharedPtr<FStaticMesh> CircleMesh;
+	TSharedPtr<FStaticMesh> RotationGizmoMesh;
+	TSharedPtr<FStaticMesh> SquareArrowMesh;
 	TSharedPtr<FMaterial> Material;
 	TSharedPtr<FMaterial> RotationGizmoMaterial;
 

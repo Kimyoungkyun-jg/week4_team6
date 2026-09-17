@@ -1,6 +1,7 @@
 #include "UPlaneComp.h"
 
 #include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Engine/UScene.h"
 #include "UClass.h"
 
@@ -11,6 +12,5 @@ UCLASS_META(UPlaneComp, MeshName, "Plane")
 
 void UPlaneComp::Initialize() {
   Super::Initialize();
-  SetMeshID(FName("Plane"));
-  SetMaterialID(FName("Simple"));
+  SetStaticMesh(NewObject<UStaticMesh>(FName("Plane"), FName("Simple")));
 }

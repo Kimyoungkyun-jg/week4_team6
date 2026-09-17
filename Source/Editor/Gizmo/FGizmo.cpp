@@ -51,7 +51,7 @@ EGizmoHandle FGizmo::HitTest(const FTransform& Transform, const FRay& Ray, const
 	FMatrix ObjectRotation = GetSpace() == EGizmoSpace::World ? FMatrix::GetIdentity() : Transform.Rotation.ToMatrixRow();
 	FMatrix Translation = FMatrix::MakeTranslation(Transform.Location);
 
-	TSharedPtr<FMesh> GizmoMesh;
+	TSharedPtr<FStaticMesh> GizmoMesh;
 	switch (Mode)
 	{
 	case EGizmoMode::Translate:
@@ -218,7 +218,7 @@ void FGizmo::DrawAxis(FRenderer& Renderer, EGizmoHandle Handle, const FMatrix& M
 	constexpr FVector ActiveColor = FVector{ 1.0f, 1.0f, 0.1f };
 	constexpr FVector HoverColor = FVector{ 0.7f, 0.7f, 0.0f };
 
-	TSharedPtr<FMesh> GizmoMesh;
+	TSharedPtr<FStaticMesh> GizmoMesh;
 	TSharedPtr<FMaterial> GizmoMaterial;
 	switch (Mode)
 	{

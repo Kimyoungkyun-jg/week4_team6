@@ -20,23 +20,23 @@ FRenderView::FRenderView(FRenderer &Renderer) : Renderer(Renderer) {}
 
 void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& View, const AActor* SelectedActor)
 {
-    for (auto& PrimitiveComponent : Scene.GetRenderComponents())
+    for (auto& MeshComponent : Scene.GetRenderComponents())
     {
-        if (!PrimitiveComponent) continue;
+        if (!MeshComponent) continue;
 
         // 쇼 플래그 확인
-        if ((static_cast<uint64>(View.ShowFlags) & static_cast<uint64>(PrimitiveComponent->GetShowFlag())) == 0)
+        if ((static_cast<uint64>(View.ShowFlags) & static_cast<uint64>(MeshComponent->GetShowFlag())) == 0)
         {
             continue;
         }
 
         bool bSelected = false;
-        if (PrimitiveComponent->GetActorOwner() && PrimitiveComponent->GetActorOwner() == SelectedActor)
+        if (MeshComponent->GetActorOwner() && MeshComponent->GetActorOwner() == SelectedActor)
         {
             bSelected = true;
         }
 
-        FRenderData Data = PrimitiveComponent->GetRenderData(View.Camera);
+        FRenderData Data = MeshComponent->GetRenderData(View.Camera);
         Data.bSelected = bSelected;
 
         // 인스턴싱 및 텍스트는 인스턴스 배열을 사용하므로 바로 푸시
@@ -47,11 +47,11 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
             continue;
         }
 
-        const FMatrix World = PrimitiveComponent->GetRenderMatrix(View.Camera);
+        const FMatrix World = MeshComponent->GetRenderMatrix(View.Camera);
         Data.Constants.MVP   = World * View.ViewProj;
         Data.Constants.World = World;
-        Data.Constants.ColorOverride       = PrimitiveComponent->GetColor();
-        Data.Constants.ColorOverrideAmount = PrimitiveComponent->GetColorAmount();
+        Data.Constants.ColorOverride       = MeshComponent->GetColor();
+        Data.Constants.ColorOverrideAmount = MeshComponent->GetColorAmount();
         Data.Constants.DisableShading      = View.ViewMode == EViewModeIndex::VMI_Unlit ? 1.0f : 0.0f;
 
         if (bSelected && Data.Constants.ColorOverrideAmount > 0.0f)

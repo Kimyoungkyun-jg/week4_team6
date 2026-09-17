@@ -6,6 +6,8 @@
 #include "Runtime/Geometry/FAxisAlignedBoundingBox.h"
 
 
+class FStaticMesh;
+
 class UStaticMesh : public UObject
 {
     GENERATED_BODY()
@@ -17,7 +19,7 @@ public:
 
     // 렌더 메시
     FName MeshId{"None"};
-    TSharedPtr<FMesh> RenderMesh = nullptr;
+    TSharedPtr<FStaticMesh> StaticMeshAsset = nullptr;
 
     // 기본 머티리얼 슬롯
     TArray<FName> DefaultMaterialIds;
@@ -28,7 +30,21 @@ public:
     // 접근자
     const FAxisAlignedBoundingBox& GetBounds() const { return LocalBounds; }
     
-    FName GetDefaultMaterialID(int32 Slot = 0) const {
-        return DefaultMaterialIds.empty() ? FName("Simple") : DefaultMaterialIds[Slot];
+    const FName& GetDefaultMaterialID(int32 Slot = 0) const {
+        static const FName SimpleMat("Simple");
+        return DefaultMaterialIds.empty() ? SimpleMat : DefaultMaterialIds[Slot];
+    }
+
+
+    const FString& GetAssetPathFileName() {
+        return StaticMeshAsset->PathFileName;
+    }
+
+    void SetStaticMeshAsset(TSharedPtr<FStaticMesh> InStaticMesh) {
+        StaticMeshAsset = InStaticMesh;
+    }
+
+    void SetStaticMeshAsset(FStaticMesh* InStaticMesh) {
+        StaticMeshAsset = TSharedPtr<FStaticMesh>(InStaticMesh);
     }
 };

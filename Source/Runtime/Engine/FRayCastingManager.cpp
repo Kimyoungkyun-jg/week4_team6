@@ -120,7 +120,7 @@ bool FRayCastingManager::RayIntersectsAABB(const FRay& Ray, const FAxisAlignedBo
 	return TNear <= TFar;
 }
 
-bool FRayCastingManager::RayIntersectsMesh(const FRay& Ray, const FMesh& Mesh, const FMatrix& ModelMatrix, float& OutDistance, FVector& OutImpactPoint)
+bool FRayCastingManager::RayIntersectsMesh(const FRay& Ray, const FStaticMesh& Mesh, const FMatrix& ModelMatrix, float& OutDistance, FVector& OutImpactPoint)
 {
 	const auto& Positions = Mesh.GetPositions();
 	const auto& Indices = Mesh.GetIndices();

@@ -1,6 +1,7 @@
 #include "AMasterYi.h"
 #include "Runtime/CoreUObject/UClass.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "Runtime/CoreUObject/UStaticMesh.h"
 
 IMPLEMENT_UCLASS(AMasterYi, AActor)
 UCLASS_META(AMasterYi, DisplayName, "MasterYi Actor")
@@ -12,8 +13,7 @@ AMasterYi::AMasterYi()
 
 	if (auto* MeshComp = GetStaticMeshComponent())
 	{
-		MeshComp->SetMeshID(FName("MasterYi"));
-		MeshComp->SetMaterialID(FName("Textured"));
+		MeshComp->SetStaticMesh(NewObject<UStaticMesh>(FName("MasterYi"), FName("Textured")));
 		MeshComp->SetTextureID(FName("MasterYi_Head"));
 		MeshComp->SetRenderType(ERenderType::Texture);
 	}

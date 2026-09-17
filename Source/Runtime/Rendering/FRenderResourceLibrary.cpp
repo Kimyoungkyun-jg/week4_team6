@@ -1333,7 +1333,7 @@ bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer)
   return true;
 }
 
-TSharedPtr<FMesh>
+TSharedPtr<FStaticMesh>
 FRenderResourceLibrary::GetOrCreateMesh(const FName &ID,
                                         const TArray<FVertexData> &vertices) {
   auto it = AllMeshMap.find(ID);
@@ -1345,7 +1345,7 @@ FRenderResourceLibrary::GetOrCreateMesh(const FName &ID,
                      static_cast<uint32>(sizeof(FVertexData) * vertices.size()),
                  .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
                  .VertexCount = static_cast<uint32>(vertices.size())};
-  TSharedPtr<FMesh> newMesh =
+  TSharedPtr<FStaticMesh> newMesh =
       RendererRef ? RendererRef->CreateMesh(Desc) : nullptr;
   if (newMesh) {
     AllMeshMap[ID] = newMesh;

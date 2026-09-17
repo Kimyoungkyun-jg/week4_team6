@@ -8,11 +8,5 @@ UCLASS_META(UCubeComp, MeshName, "Cube")
 
 void UCubeComp::Initialize() {
   Super::Initialize();
-  SetMeshID(FName("Cube"));
-  SetMaterialID(FName("Textured"));
-}
-
-void UCubeComp::Initialize()
-{
-	staticMesh = NewObject<UStaticMesh>("Cube", "Simple");
+  SetStaticMesh(NewObject<UStaticMesh>(FName("Cube"), FName("Textured")));
 }

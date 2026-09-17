@@ -8,10 +8,10 @@ IMPLEMENT_UCLASS(UStaticMesh, UObject)
 UStaticMesh::UStaticMesh(const FName& InMeshId, const FName& InMaterialId)
     : MeshId(InMeshId)
 {
-    RenderMesh = FRenderResourceLibrary::Get().GetMesh(InMeshId);
-    if (RenderMesh)
+    StaticMeshAsset = FRenderResourceLibrary::Get().GetMesh(InMeshId);
+    if (StaticMeshAsset)
     {
-        LocalBounds = RenderMesh->GetLocalBounds();
+        LocalBounds = StaticMeshAsset->GetLocalBounds();
     }
 
     if (!InMaterialId.IsNone() && InMaterialId != FName("None"))

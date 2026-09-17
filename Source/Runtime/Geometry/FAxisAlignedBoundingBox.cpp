@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-FAxisAlignedBoundingBox::FAxisAlignedBoundingBox(const FMesh& Mesh)
+FAxisAlignedBoundingBox::FAxisAlignedBoundingBox(const FStaticMesh& Mesh)
 {	
 	for (auto& Item : Mesh.GetPositions())
 	{
@@ -17,7 +17,7 @@ FAxisAlignedBoundingBox::FAxisAlignedBoundingBox(const FMesh& Mesh)
 	}
 }
 
-FAxisAlignedBoundingBox::FAxisAlignedBoundingBox(const FMesh& Mesh, const FMatrix& ModelMatrix)
+FAxisAlignedBoundingBox::FAxisAlignedBoundingBox(const FStaticMesh& Mesh, const FMatrix& ModelMatrix)
 {
 	for (auto& Item : Mesh.GetPositions())
 	{

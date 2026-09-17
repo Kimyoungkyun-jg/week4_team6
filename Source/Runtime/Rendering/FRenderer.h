@@ -47,9 +47,9 @@ public:
   void SetRenderMode(EViewModeIndex InMode) { CurrentRenderMode = InMode; }
 
   [[nodiscard]]
-  TSharedPtr<FMesh> CreateMesh(const FMeshDesc &Desc);
+  TSharedPtr<FStaticMesh> CreateMesh(const FMeshDesc &Desc);
   [[nodiscard]]
-  TSharedPtr<FMesh> CreateDynamicMesh(const FMeshDesc &Desc); // 텍스트 렌더링용
+  TSharedPtr<FStaticMesh> CreateDynamicMesh(const FMeshDesc &Desc); // 텍스트 렌더링용
   [[nodiscard]]
   TSharedPtr<FMaterial> CreateMaterial(const FMaterialDesc &Desc);
 
@@ -139,7 +139,7 @@ public:
   // bApplyViewMode=false면 뷰모드(와이어프레임) 오버라이드를 건너뛴다
   template <typename TConstants>
   void Draw(
-      const FMesh &Mesh,
+      const FStaticMesh &Mesh,
       const FMaterial &Material,
       const TConstants &Constants,
       uint32 Slot = 0,
