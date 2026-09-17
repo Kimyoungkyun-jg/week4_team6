@@ -18,6 +18,9 @@ class FRenderView final {
 	FRenderer& Renderer;
 	FRenderQueue RenderQueue;
 
+	// 개별 렌더 데이터 드로우
+	void DrawRenderData(const FRenderData& Data);
+
 public:
 	FRenderView(FRenderer& Renderer);
 	FRenderer& GetRenderer() { return Renderer; }
