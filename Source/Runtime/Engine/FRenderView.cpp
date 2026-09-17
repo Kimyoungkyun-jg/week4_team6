@@ -42,6 +42,7 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
         // 인스턴싱 및 텍스트는 인스턴스 배열을 사용하므로 바로 푸시
         if (Data.type == ERenderType::Text || Data.type == ERenderType::Instancing)
         {
+
             RenderQueue.Push(Data);
             continue;
         }

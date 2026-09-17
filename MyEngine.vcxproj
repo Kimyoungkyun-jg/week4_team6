@@ -305,6 +305,7 @@
     <ClCompile Include="Source\Runtime\CoreUObject\UPrimitiveComponent.cpp" />
     <ClCompile Include="Source\Runtime\CoreUObject\UMeshComponent.cpp" />
     <ClCompile Include="Source\Runtime\CoreUObject\UStaticMeshComponent.cpp" />
+    <ClCompile Include="Source\Runtime\CoreUObject\UStaticMesh.cpp" />
     <ClCompile Include="Source\Runtime\CoreUObject\USceneComponent.cpp" />
     <ClCompile Include="Source\Editor\Grid\FGrid.cpp" />
     <ClCompile Include="Source\Runtime\CoreUObject\USphereComp.cpp" />
@@ -505,6 +506,7 @@
     <ClInclude Include="Source\Runtime\CoreUObject\UTextInstanceComponent.h" />
     <ClInclude Include="Source\Runtime\CoreUObject\UMeshComponent.h" />
     <ClInclude Include="Source\Runtime\CoreUObject\UStaticMeshComponent.h" />
+    <ClInclude Include="Source\Runtime\CoreUObject\UStaticMesh.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">

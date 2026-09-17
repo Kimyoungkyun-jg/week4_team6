@@ -11,3 +11,8 @@ void UCubeComp::Initialize() {
   SetMeshID(FName("Cube"));
   SetMaterialID(FName("Textured"));
 }
+
+void UCubeComp::Initialize()
+{
+	staticMesh = NewObject<UStaticMesh>("Cube", "Simple");
+}

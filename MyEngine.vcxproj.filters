@@ -217,6 +217,9 @@
     <ClCompile Include="Source\Runtime\CoreUObject\UStaticMeshComponent.cpp">
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\CoreUObject\UStaticMesh.cpp">
+      <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\Grid\FGrid.cpp">
       <Filter>Source\Editor\Grid</Filter>
     </ClCompile>
@@ -595,6 +598,9 @@
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClInclude>
     <ClInclude Include="Source\Runtime\CoreUObject\UStaticMeshComponent.h">
+      <Filter>Source\Runtime\CoreUObject</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\CoreUObject\UStaticMesh.h">
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClInclude>
   </ItemGroup>

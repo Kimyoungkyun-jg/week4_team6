@@ -28,15 +28,10 @@ void UPrimitiveComponent::Initialize()
 void UPrimitiveComponent::Register(UScene& InScene)
 {
     Super::Register(InScene);
-    InScene.AddRenderComponent(this);
 }
 
 void UPrimitiveComponent::Unregister()
 {
-    if (Scene)
-    {
-        Scene->RemoveRenderComponent(this);
-    }
     Super::Unregister();
 }
 

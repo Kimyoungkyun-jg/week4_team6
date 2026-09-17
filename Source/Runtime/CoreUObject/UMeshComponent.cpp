@@ -21,6 +21,16 @@ void UMeshComponent::Register(UScene& InScene)
     }
 
     Super::Register(InScene);
+    InScene.AddRenderComponent(this);
+}
+
+void UMeshComponent::Unregister()
+{
+    if (Scene)
+    {
+        Scene->RemoveRenderComponent(this);
+    }
+    Super::Unregister();
 }
 
 bool UMeshComponent::SetTextureByName(const FName& InTextureName)

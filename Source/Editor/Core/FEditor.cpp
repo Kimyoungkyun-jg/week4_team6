@@ -178,7 +178,13 @@ TArray<UPrimitiveComponent *> FEditor::GetPrimitiveComponents() const {
   if (!SceneManager || !SceneManager->CurrentScene) {
     return {};
   }
-  return SceneManager->CurrentScene->GetRenderComponents();
+  const auto& Meshes = SceneManager->CurrentScene->GetRenderComponents();
+  TArray<UPrimitiveComponent*> Result;
+  Result.reserve(Meshes.size());
+  for (auto* Mesh : Meshes) {
+    Result.push_back(Mesh);
+  }
+  return Result;
 }
 
 void FEditor::ClearSelectionForGC() {

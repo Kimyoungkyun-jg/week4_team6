@@ -5,6 +5,7 @@
 #include "Runtime/Core/TArray.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include "Runtime/CoreUObject/UPrimitiveComponent.h"
+#include "Runtime/CoreUObject/UMeshComponent.h"
 #include "Runtime/CoreUObject/USceneComponent.h"
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include <concepts>
@@ -31,7 +32,7 @@ public:
   [[nodiscard]] bool HasBegunPlay() const { return bHasBegunPlay; }
 
   // 렌더링 컴포넌트 목록 반환
-  [[nodiscard]] const TArray<UPrimitiveComponent*>& GetRenderComponents() const;
+  [[nodiscard]] const TArray<UMeshComponent*>& GetRenderComponents() const;
   [[nodiscard]] FRenderResourceLibrary* GetRenderResourceLibrary() const {
     return RenderResourceLibrary;
   }
@@ -89,8 +90,8 @@ public:
 
   void AddReferencedObjects(FReferenceCollector &Collector) override;
 
-  void AddRenderComponent(UPrimitiveComponent *prim);
-  void RemoveRenderComponent(UPrimitiveComponent *prim);
+  void AddRenderComponent(UMeshComponent *mesh);
+  void RemoveRenderComponent(UMeshComponent *mesh);
   void RemoveActor(AActor* Actor);
 
   void DestroyActor(AActor* Actor);
@@ -99,8 +100,8 @@ public:
 
 private:
   TArray<AActor*> Actors;                        // 액터 목록 (Update용)
-  TArray<UPrimitiveComponent*> RenderComponents; // 렌더링큐 (Draw용)
-  TMap<UPrimitiveComponent*, size_t> RenderIndices;
+  TArray<UMeshComponent*> RenderComponents;      // 렌더링큐 (Draw용)
+  TMap<UMeshComponent*, size_t> RenderIndices;
 
   FRenderResourceLibrary* RenderResourceLibrary = nullptr;
   bool bInitialized = false;

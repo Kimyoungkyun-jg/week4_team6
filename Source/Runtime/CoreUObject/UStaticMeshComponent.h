@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UMeshComponent.h"
+#include "UStaticMesh.h"
 
 class UStaticMeshComponent : public UMeshComponent {
     GENERATED_BODY()
@@ -11,4 +12,5 @@ public:
 
 protected:
     UStaticMeshComponent() = default;
+    UStaticMesh* staticMesh = nullptr;
 };

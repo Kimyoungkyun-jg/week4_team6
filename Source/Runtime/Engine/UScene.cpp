@@ -12,7 +12,7 @@
 IMPLEMENT_UCLASS(UScene, UObject)
 UCLASS_META(UScene, SerializeName, "Scene")
 
-const TArray<UPrimitiveComponent *> & UScene::GetRenderComponents() const {
+const TArray<UMeshComponent *> & UScene::GetRenderComponents() const {
   return RenderComponents;
 }
 
@@ -177,18 +177,18 @@ void UScene::AddReferencedObjects(FReferenceCollector &Collector) {
     Collector.AddReferencedObject(Component);
 }
 
-void UScene::AddRenderComponent(UPrimitiveComponent *prim) {
-  if (prim == nullptr)
+void UScene::AddRenderComponent(UMeshComponent *mesh) {
+  if (mesh == nullptr)
     return;
 
-  if (std::find(RenderComponents.begin(), RenderComponents.end(), prim) ==
+  if (std::find(RenderComponents.begin(), RenderComponents.end(), mesh) ==
       RenderComponents.end()) {
-    RenderComponents.push_back(prim);
+    RenderComponents.push_back(mesh);
   }
 }
 
-void UScene::RemoveRenderComponent(UPrimitiveComponent *prim) {
-  std::erase(RenderComponents, prim);
+void UScene::RemoveRenderComponent(UMeshComponent *mesh) {
+  std::erase(RenderComponents, mesh);
 }
 
 void UScene::RemoveActor(AActor *Actor) { std::erase(Actors, Actor); }

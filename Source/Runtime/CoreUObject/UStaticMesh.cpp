@@ -1,0 +1,21 @@
+#include "UStaticMesh.h"
+#include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "Runtime/Rendering/FRenderResourceLibrary.h"
+#include "UClass.h"
+
+IMPLEMENT_UCLASS(UStaticMesh, UObject)
+
+UStaticMesh::UStaticMesh(const FName& InMeshId, const FName& InMaterialId)
+    : MeshId(InMeshId)
+{
+    RenderMesh = FRenderResourceLibrary::Get().GetMesh(InMeshId);
+    if (RenderMesh)
+    {
+        LocalBounds = RenderMesh->GetLocalBounds();
+    }
+
+    if (!InMaterialId.IsNone() && InMaterialId != FName("None"))
+    {
+        DefaultMaterialIds.push_back(InMaterialId);
+    }
+}

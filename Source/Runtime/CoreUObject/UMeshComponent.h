@@ -9,6 +9,7 @@ class UMeshComponent : public UPrimitiveComponent {
 public:
     void Initialize() override;
     void Register(UScene& InScene) override;
+    void Unregister() override;
 
     // FRenderData 조회
     virtual const FRenderData& GetRenderData(const FCamera& Camera) override { return RenderData; }
