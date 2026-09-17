@@ -4,7 +4,7 @@
 #include "Runtime/Engine/UScene.h"
 #include "UClass.h"
 
-IMPLEMENT_UCLASS(UInstancePrimitiveComponent, UMeshComponent)
+IMPLEMENT_UCLASS(UInstancePrimitiveComponent, UStaticMeshComponent)
 
 void UInstancePrimitiveComponent::Initialize()
 {

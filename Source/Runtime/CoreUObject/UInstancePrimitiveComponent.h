@@ -3,14 +3,13 @@
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/Vertices.h"
-#include "Runtime/Rendering/FRenderQueue.h"
-#include "UMeshComponent.h"
+#include "UStaticMeshComponent.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 
-class UInstancePrimitiveComponent : public UMeshComponent {
+class UInstancePrimitiveComponent : public UStaticMeshComponent {
   GENERATED_BODY()
-  DECLARE_UCLASS(UInstancePrimitiveComponent, UMeshComponent)
+  DECLARE_UCLASS(UInstancePrimitiveComponent, UStaticMeshComponent)
 
 public:
     void Initialize() override;
