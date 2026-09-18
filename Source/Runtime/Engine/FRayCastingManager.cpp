@@ -83,41 +83,41 @@ bool FRayCastingManager::RayIntersectsMeshes(
 
 bool FRayCastingManager::RayIntersectsAABB(const FRay& Ray, const FAxisAlignedBoundingBox& AABB)
 {
-	// AABB 판별
-	// Source: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes//ray-box-intersection.html
-	// Source: https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
+	float TNear = 0.0f;
+	float TFar = (std::numeric_limits<float>::max)();
 
-	FVector TMin;
-	FVector TMax;
 	for (int i = 0; i < 3; ++i)
 	{
+		// 광선이 축과 평행한 경우
 		if (std::abs(Ray.Direction[i]) < Epsilon)
 		{
+			// 시작점이 상자 범위 밖이면 제외
 			if (Ray.Origin[i] < AABB.Min[i] || Ray.Origin[i] > AABB.Max[i])
 			{
 				return false;
 			}
-			else
-			{
-				continue;
-			}
+			continue;
 		}
-		else
+
+		// 교점 거리 계산
+		float T0 = (AABB.Min[i] - Ray.Origin[i]) / Ray.Direction[i];
+		float T1 = (AABB.Max[i] - Ray.Origin[i]) / Ray.Direction[i];
+
+		if (T0 > T1)
 		{
-			TMin[i] = (AABB.Min[i] - Ray.Origin[i]) / Ray.Direction[i];
-			TMax[i] = (AABB.Max[i] - Ray.Origin[i]) / Ray.Direction[i];
+			std::swap(T0, T1);
+		}
+
+		TNear = std::max(TNear, T0);
+		TFar = std::min(TFar, T1);
+
+		if (TNear > TFar)
+		{
+			return false;
 		}
 	}
 
-	float TNear = 0.0f;
-	float TFar = std::numeric_limits<float>::max();
-	for (int i = 0; i < 3; ++i)
-	{
-		TNear = std::max(TNear, std::min(TMin[i], TMax[i]));
-		TFar = std::min(TFar, std::max(TMin[i], TMax[i]));
-	}
-
-	return TNear <= TFar;
+	return true;
 }
 
 bool FRayCastingManager::RayIntersectsMesh(const FRay& Ray, const FStaticMesh& Mesh, const FMatrix& ModelMatrix, float& OutDistance, FVector& OutImpactPoint)

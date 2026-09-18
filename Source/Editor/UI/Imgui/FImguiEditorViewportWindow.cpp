@@ -10,7 +10,7 @@
 #include "ThirdParty/Imgui/imgui.h"
 #include "ThirdParty/Imgui/imgui_internal.h"
 
-void FImguiEditorViewportWindow::Process(FEditor &Editor, float DeltaTime)
+void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
 {
     TArray<FEditorViewport>& Viewports = Editor.GetViewports();
     if (Viewports.empty()) return;
@@ -24,27 +24,92 @@ void FImguiEditorViewportWindow::Process(FEditor &Editor, float DeltaTime)
     const ImVec2 WinSize = ImGui::GetWindowSize();
     const FVector2 MousePos = FInputManager::Get().GetMousePosition();
 
-    // 구분선 조작
-    const bool bDragging = ProcessSplitterDrag(WinPos, WinSize, MousePos);
+    // 뷰포트 모드 전환 버튼
+    constexpr float ButtonWidth = 60.0f;
+    constexpr float ButtonHeight = 18.0f;
+    const ImVec2 BtnMin{ WinPos.x + WinSize.x - ButtonWidth - 12.0f, WinPos.y + 3.0f };
+    const ImVec2 BtnMax{ BtnMin.x + ButtonWidth, BtnMin.y + ButtonHeight };
 
-    // 뷰포트 영역 동기화
-    SyncSplitViewports(Viewports, WinPos, WinSize, ClientSize);
+    const bool bBtnHovered = (MousePos.X >= BtnMin.x && MousePos.X <= BtnMax.x && MousePos.Y >= BtnMin.y && MousePos.Y <= BtnMax.y);
+    const bool bBtnClicked = bBtnHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
-    // 분할선 및 라벨 표시
-    DrawSplitterOverlay(WinPos, WinSize);
-
-    // 드래그 중단 처리
-    if (bDragging)
+    if (bBtnHovered)
     {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    
+    ImDrawList* FG = ImGui::GetForegroundDrawList();
+    const ImU32 BgColor = bBtnClicked ? IM_COL32(35, 55, 85, 255) : (bBtnHovered ? IM_COL32(65, 85, 120, 240) : IM_COL32(45, 55, 75, 220));
+    
+    FG->AddRectFilled(BtnMin, BtnMax, BgColor, 3.0f);
+    FG->AddRect(BtnMin, BtnMax, IM_COL32(110, 130, 160, 255), 3.0f);
+    
+    const char* BtnLabel = Editor.bIsViewportSplit ? "Single" : "4-Split";
+    const ImVec2 LabelSize = ImGui::CalcTextSize(BtnLabel);
+    
+    FG->AddText(ImVec2(BtnMin.x + (ButtonWidth - LabelSize.x) * 0.5f, BtnMin.y + (ButtonHeight - LabelSize.y) * 0.5f), IM_COL32(235, 235, 235, 255), BtnLabel);
+    
+    if (bBtnClicked)
+    {
+        Editor.bIsViewportSplit = !Editor.bIsViewportSplit;
         EndWindow();
         return;
     }
 
-    // 뷰포트 인터랙션 처리
-    ProcessViewportInteraction(Editor, Viewports, WinPos, WinSize, ClientSize, MousePos, DeltaTime);
+
+
+
+    if (Editor.bIsViewportSplit)
+    {
+        // 구분선 조작
+        const bool bDragging = ProcessSplitterDrag(WinPos, WinSize, MousePos);
+
+        // 뷰포트 영역 동기화
+        SyncSplitViewports(Viewports, WinPos, WinSize, ClientSize);
+
+        // 분할선 및 라벨 표시
+        DrawSplitterOverlay(WinPos, WinSize);
+
+        if (bDragging)
+        {
+            EndWindow();
+            return;
+        }
+
+        // 뷰포트 인터랙션
+        ProcessViewportInteraction(Editor, Viewports, WinPos, WinSize, ClientSize, MousePos, DeltaTime);
+    }
+    else
+    {
+        // 단일 뷰포트 모드: 항상 0번 Perspective 뷰포트를 전체 창으로 동기화
+        Editor.SetActiveViewportIndex(0);
+        FEditorViewport& ActiveVP = Viewports[0];
+
+        SyncViewportRect(ActiveVP, ClientSize);
+
+        for (size_t i = 1; i < Viewports.size(); ++i)
+        {
+            Viewports[i].UpdateFocusedAndHovered(false, false);
+        }
+
+        const FVector2 TopLeftPixels = ActiveVP.TopLeftUV * ClientSize;
+        const FVector2 SizePixels = ActiveVP.LengthUV * ClientSize;
+        const FViewportInput Input = GatherInput(TopLeftPixels, SizePixels);
+
+        ActiveVP.UpdateFocusedAndHovered(Input.bFocused, Input.bHovered);
+
+        if (Input.bFocused || Input.bHovered)
+        {
+            UpdateSelection(Editor, ActiveVP, Input);
+            UpdateGizmo(Editor, ActiveVP, Input);
+            UpdateCamera(Editor, ActiveVP, Input, DeltaTime);
+        }
+    }
 
     EndWindow();
 }
+
+
 
 bool FImguiEditorViewportWindow::ProcessSplitterDrag(const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos)
 {
@@ -154,8 +219,8 @@ void FImguiEditorViewportWindow::DrawSplitterOverlay(const ImVec2& WinPos, const
 
     // 라벨 크기 계산
     constexpr auto LabelColor = IM_COL32(200, 200, 200, 255);
-    const ImVec2 TopSize = ImGui::CalcTextSize("[Top]");
-    const ImVec2 PerspSize = ImGui::CalcTextSize("[Perspective]");
+    const ImVec2 TopSize = ImGui::CalcTextSize("[Perspective]");
+    const ImVec2 PerspSize = ImGui::CalcTextSize("[Top]");
     const ImVec2 FrontSize = ImGui::CalcTextSize("[Front]");
     const ImVec2 SideSize = ImGui::CalcTextSize("[Side]");
 
@@ -163,8 +228,8 @@ void FImguiEditorViewportWindow::DrawSplitterOverlay(const ImVec2& WinPos, const
     constexpr float OffsetY = 6.0f;
 
     // 사분면 우하단 라벨 표시
-    DrawList->AddText(ImVec2(CenterX - TopSize.x - OffsetX, CenterY - TopSize.y - OffsetY), LabelColor, "[Top]");
-    DrawList->AddText(ImVec2(WinPos.x + WinSize.x - PerspSize.x - OffsetX, CenterY - PerspSize.y - OffsetY), LabelColor, "[Perspective]");
+    DrawList->AddText(ImVec2(CenterX - TopSize.x - OffsetX, CenterY - TopSize.y - OffsetY), LabelColor, "[Perspective]");
+    DrawList->AddText(ImVec2(WinPos.x + WinSize.x - PerspSize.x - OffsetX, CenterY - PerspSize.y - OffsetY), LabelColor, "[Top]");
     DrawList->AddText(ImVec2(CenterX - FrontSize.x - OffsetX, WinPos.y + WinSize.y - FrontSize.y - OffsetY), LabelColor, "[Front]");
     DrawList->AddText(ImVec2(WinPos.x + WinSize.x - SideSize.x - OffsetX, WinPos.y + WinSize.y - SideSize.y - OffsetY), LabelColor, "[Side]");
 }

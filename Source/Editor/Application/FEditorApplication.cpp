@@ -38,45 +38,48 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
 
   Editor.Initialize(SceneManager);
 
+  FEditorViewport PerspViewport;
+  PerspViewport.TopLeftUV = {0.5f, 0.0f};
+  PerspViewport.LengthUV = {0.5f, 0.5f};
+  PerspViewport.ViewportCamera.Projection.ProjectionType =
+      EProjectionType::Perspective;
+  Editor.AddViewport(PerspViewport);
 
   FEditorViewport TopViewport;
-  TopViewport.TopLeftUV = { 0.0f, 0.0f };
-  TopViewport.LengthUV = { 0.5f, 0.5f };
-  TopViewport.ViewportCamera.Position = { 0.0f, 0.0f, 20.0f };
+  TopViewport.TopLeftUV = {0.0f, 0.0f};
+  TopViewport.LengthUV = {0.5f, 0.5f};
+  TopViewport.ViewportCamera.Position = {0.0f, 0.0f, 20.0f};
   TopViewport.ViewportCamera.Pitch = -89.9f;
   TopViewport.ViewportCamera.Yaw = 0.0f;
-  TopViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+  TopViewport.ViewportCamera.Projection.ProjectionType =
+      EProjectionType::Orthographic;
   TopViewport.ViewportCamera.Projection.Height = 10.0f;
   Editor.AddViewport(TopViewport);
 
-  FEditorViewport PerspViewport;
-  PerspViewport.TopLeftUV = { 0.5f, 0.0f };
-  PerspViewport.LengthUV = { 0.5f, 0.5f };
-  PerspViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Perspective;
-  Editor.AddViewport(PerspViewport);
-
   FEditorViewport FrontViewport;
-  FrontViewport.TopLeftUV = { 0.0f, 0.5f };
-  FrontViewport.LengthUV = { 0.5f, 0.5f };
-  FrontViewport.ViewportCamera.Position = { -20.0f, 0.0f, 0.0f };
+  FrontViewport.TopLeftUV = {0.0f, 0.5f};
+  FrontViewport.LengthUV = {0.5f, 0.5f};
+  FrontViewport.ViewportCamera.Position = {-20.0f, 0.0f, 0.0f};
   FrontViewport.ViewportCamera.Pitch = 0.0f;
   FrontViewport.ViewportCamera.Yaw = 0.0f;
-  FrontViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+  FrontViewport.ViewportCamera.Projection.ProjectionType =
+      EProjectionType::Orthographic;
   FrontViewport.ViewportCamera.Projection.Height = 10.0f;
   Editor.AddViewport(FrontViewport);
 
   FEditorViewport SideViewport;
-  SideViewport.TopLeftUV = { 0.5f, 0.5f };
-  SideViewport.LengthUV = { 0.5f, 0.5f };
-  SideViewport.ViewportCamera.Position = { 0.0f, -20.0f, 0.0f };
+  SideViewport.TopLeftUV = {0.5f, 0.5f};
+  SideViewport.LengthUV = {0.5f, 0.5f};
+  SideViewport.ViewportCamera.Position = {0.0f, -20.0f, 0.0f};
   SideViewport.ViewportCamera.Pitch = 0.0f;
   SideViewport.ViewportCamera.Yaw = 90.0f;
-  SideViewport.ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+  SideViewport.ViewportCamera.Projection.ProjectionType =
+      EProjectionType::Orthographic;
   SideViewport.ViewportCamera.Projection.Height = 10.0f;
   Editor.AddViewport(SideViewport);
 
   // 원근 뷰포트를 활성화하고 상태 복원
-  Editor.SetActiveViewportIndex(1);
+  Editor.SetActiveViewportIndex(0);
   Editor.LoadState();
 }
 
@@ -102,8 +105,15 @@ void FEditorApplication::Tick(float DeltaTime) {
 
 void FEditorApplication::Render() {
   const TArray<FEditorViewport> &EditorViewports = Editor.GetViewports();
+  if (EditorViewports.empty())
+    return;
 
-  for (auto &EditorViewport : EditorViewports) {
+  const int StartIdx = 0;
+  const int EndIdx =
+      Editor.bIsViewportSplit ? static_cast<int>(EditorViewports.size()) : 1;
+
+  for (int i = StartIdx; i < EndIdx; ++i) {
+    const auto &EditorViewport = EditorViewports[i];
     // 뷰포트 렌더링 명세 구성
     FSceneView sceneview{
         .Camera = EditorViewport.ViewportCamera,
@@ -112,27 +122,29 @@ void FEditorApplication::Render() {
         .LengthUV = EditorViewport.LengthUV,
         .ViewMode = EditorViewport.ViewMode,
         .ShowFlags = EditorViewport.ShowFlags,
-        .LightConstants = Editor.GlobalLight
-    };
+        .LightConstants = Editor.GlobalLight};
 
     // 에디터 렌더링 컨텍스트 구성
     FEditorRenderContext EditorCtx;
-    EditorCtx.SelectedActor     = Editor.GetSelectedActor();
+    EditorCtx.SelectedActor = Editor.GetSelectedActor();
     EditorCtx.SelectedTransform = Editor.SelectedTransform;
-    EditorCtx.Gizmo             = Editor.ObjectSelected() ? &Editor.GetGizmo() : nullptr;
-    EditorCtx.TextComp          = Editor.ObjectSelected() ? Editor.GetTextcomp() : nullptr;
-    EditorCtx.Grid               = &Editor.GetGrid();
+    EditorCtx.Gizmo = Editor.ObjectSelected() ? &Editor.GetGizmo() : nullptr;
+    EditorCtx.TextComp =
+        Editor.ObjectSelected() ? Editor.GetTextcomp() : nullptr;
+    EditorCtx.Grid = &Editor.GetGrid();
     EditorCtx.VisualizerRegistry = &VisualizerRegistry;
 
     if (EditorCtx.SelectedActor) {
-        if (USceneComponent* RootComp = EditorCtx.SelectedActor->GetRootComponent()) {
-            EditorCtx.SelectedPrimitive = RootComp->Cast<UPrimitiveComponent>();
-        }
+      if (USceneComponent *RootComp =
+              EditorCtx.SelectedActor->GetRootComponent()) {
+        EditorCtx.SelectedPrimitive = RootComp->Cast<UPrimitiveComponent>();
+      }
     }
 
     // 뷰포트 렌더링 일괄 수행
     RenderView->RenderView(sceneview, *SceneManager->CurrentScene, EditorCtx);
   }
+
   ImguiManager.RenderUI();
 }
 

@@ -77,6 +77,8 @@ public:
   void LoadState();
   UTextInstanceComponent* GetTextcomp() { return SelectedActorTextComp; }
 
+  bool bIsViewportSplit = false;
+
 private:
   USceneManager *SceneManager =
       nullptr; // 씬을 다중으로 가질 수 있도록 구조개선 가능-이경우 에디터쪽에
