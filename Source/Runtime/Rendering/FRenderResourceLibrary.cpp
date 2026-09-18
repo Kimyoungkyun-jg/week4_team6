@@ -1414,11 +1414,14 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
       }
       */
 
+      // Todo: Use static 
+      FObjDecoder Decoder;
+
       FObjModelData ModelData;
-      
-      FObjDecoder decoder;
       //decoder.LoadObjStaticMeshAsset("Resources/Assets/cube-tex.obj", &ModelData);
-      decoder.LoadObjStaticMeshAsset("Resources/Assets/FinalBaseMesh.obj", &ModelData);
+      //decoder.LoadObjStaticMeshAsset("Resources/Assets/FinalBaseMesh.obj", &ModelData);
+
+      Decoder.LoadObjStaticMeshAsset(Entry.path().string(), &ModelData);
 
       FMeshDesc Desc{
           .VertexData = ModelData.Vertices.data(),

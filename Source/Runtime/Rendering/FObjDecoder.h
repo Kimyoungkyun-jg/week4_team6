@@ -23,11 +23,16 @@ class FObjDecoder
 {
 public:
 	FObjDecoder() = default;
+	// Todo: Need to delete in FObjDecoder class
 	~FObjDecoder() = default;
 
 	void LoadObjStaticMeshAsset(const std::string& PathFileName, FObjModelData* OutModelData);
 
 private:
+	void LoadMaterialAssets(const FString& FullPathMaterialName, TArray<FName>* OutMaterialNames);
+
+private:
+	// Todo: Who has ownership of FObjModelData
 	TMap<FString, FObjModelData*> StringModelDataMap;
 	
 	//static bool DecodeFromFile(const FString& FilePath, FObjModelData& OutData);

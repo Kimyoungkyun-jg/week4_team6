@@ -6,20 +6,25 @@
 #include "FObjDecoder.h"
 #include "Source/Runtime/CoreUObject/UStaticMesh.h"
 
-void FObjDecoder::LoadObjStaticMeshAsset(const std::string& PathFileName, FObjModelData* OutModelData)
-{
-	// Todo: Temp, works on y-forward, z-up, x-right obj file
-	/*
-	TMap<FString, FStaticMesh*>::iterator FoundIter = ObjStaticMeshMap.find(PathFileName);
-	if (FoundIter != ObjStaticMeshMap.end())
-	{
-		return FoundIter->second;
-	}
-	*/
 
-	// OBJ Parsing and create a new FStaticMesh
-	std::ifstream FileInput(PathFileName);
-	assert(FileInput.is_open());
+void FObjDecoder::LoadObjStaticMeshAsset(const std::string& FullPathFileName, FObjModelData* OutModelData)
+{
+	assert(OutModelData != nullptr);
+
+	// Todo: Temp, works on y-forward, z-up, x-right obj file
+	TMap<FString, FObjModelData*>::iterator FoundModelIter = StringModelDataMap.find(FullPathFileName);
+	if (FoundModelIter != StringModelDataMap.end())
+	{
+		OutModelData = FoundModelIter->second;
+
+		return;
+	}
+
+	std::string BaseDirectory = std::filesystem::path(FullPathFileName).parent_path().string();
+	//assert(BaseDirectory.empty() == false);
+
+	std::ifstream FileInputStream(FullPathFileName);
+	assert(FileInputStream.is_open());
 
 	TArray<FVector> Positions;
 	TArray<FVector2> UVs;
@@ -30,8 +35,8 @@ void FObjDecoder::LoadObjStaticMeshAsset(const std::string& PathFileName, FObjMo
 	FString Line;
 	while (true)
 	{
-		getline(FileInput, Line);
-		if (FileInput.eof())
+		getline(FileInputStream, Line);
+		if (FileInputStream.eof())
 		{
 			break;
 		}
@@ -51,7 +56,25 @@ void FObjDecoder::LoadObjStaticMeshAsset(const std::string& PathFileName, FObjMo
 			continue;
 		}
 
-		if (Type == "v")
+		if (Type == "mtllib")
+		{
+			std::string MaterialFileName;
+			InputLineStream >> MaterialFileName;
+			assert(MaterialFileName.empty() == false);
+			
+			const FString FullPathMaterialFileName = (std::filesystem::path(BaseDirectory) / MaterialFileName).generic_string();
+			
+			TArray<FName> MaterialNames;
+			LoadMaterialAssets(FullPathMaterialFileName, &MaterialNames);
+
+			assert(MaterialNames.empty() == false);
+			for (const FName& MaterialName : MaterialNames)
+			{
+				// Todo: Change TextureName -> TextureNames (TArray)
+				OutModelData->TextureName = MaterialName;
+			}
+		}
+		else if (Type == "v")
 		{
 			float x;
 			float y;
@@ -172,15 +195,60 @@ void FObjDecoder::LoadObjStaticMeshAsset(const std::string& PathFileName, FObjMo
 		}
 	}
 
-	FileInput.close();
+	FileInputStream.close();
 
-	/*
-	FStaticMesh* NewStaticMesh = nullptr;
-	FStaticMesh* NewStaticMesh = new FStaticMesh(ModelData);
-	ObjStaticMeshMap[PathFileName] = NewStaticMesh;
-	
-	return NewStaticMesh;
-	*/
+	StringModelDataMap[FullPathFileName] = OutModelData;
+}
+
+void FObjDecoder::LoadMaterialAssets(const FString& FullPathMaterialName, TArray<FName>* OutMaterialNames)
+{
+	std::ifstream MaterialFileStream(FullPathMaterialName);
+	assert(MaterialFileStream.is_open());
+
+	FString MaterialLine = "";
+
+	while (true)
+	{
+		std::getline(MaterialFileStream, MaterialLine);
+		if (MaterialFileStream.eof())
+		{
+			break;
+		}
+
+		if (MaterialLine.empty())
+		{
+			continue;
+		}
+
+		std::istringstream InputLineStream(MaterialLine);
+
+		std::string MaterialType = "";
+		InputLineStream >> MaterialType;
+
+		if (MaterialType == "#")
+		{
+			continue;
+		}
+
+		if (MaterialType == "map_Kd")
+		{
+			std::string TextureFileName;
+			InputLineStream >> TextureFileName;
+			assert(TextureFileName.empty() == false);
+
+			// 경로가 포함되어 있어도 순수 파일명(stem)만 추출
+			// 예: "textures/MasterYi_Head.png" -> "MasterYi_Head"
+			const std::string& StemedMaterialName = std::filesystem::path(TextureFileName).stem().generic_string();
+			OutMaterialNames->push_back(StemedMaterialName);
+		}
+		else
+		{
+			// Todo: Add material types
+		}
+
+	}
+
+	MaterialFileStream.close();
 }
 
 /*
@@ -201,9 +269,8 @@ static UStaticMesh* LoadObjStaticMesh(const std::string& PathFileName)
 
 */
 
-
-
 /*
+
 #include "FObjDecoder.h"
 #include "Runtime/Core/Log.h"
 #include <fstream>
@@ -328,7 +395,7 @@ namespace
 	}
 }
 
-bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelData& OutData)
+bool DecodeFromFile(const FString& FilePath, FObjModelData& OutData)
 {
 	std::ifstream File(FilePath);
 	if (!File.is_open())
@@ -347,8 +414,7 @@ bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelData& OutData
 	return DecodeFromString(Buffer.str(), OutData, BaseDir);
 }
 
-
-bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory)
+bool DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory)
 {
 	OutData.Vertices.clear();
 	OutData.Indices.clear();
@@ -511,5 +577,5 @@ bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& Ou
 	return true;
 }
 
-*/
 
+*/
