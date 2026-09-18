@@ -27,6 +27,10 @@ void FEditorState::WriteToFile(FStringView FilePath) const
 	Archive.SetUInt32("Gizmo", "Space", GizmoSpace);
 	Archive.SetUInt32("Gizmo", "SelectedActor", SelectedActor);
 
+	// Viewport
+	Archive.SetBool("Viewport", "IsSplit", bIsviewportSplit);
+	Archive.SetVector2("Viewport", "CenterUV", CenterUV);
+
 	mINI::INIFile File{ FilePath };
 	mINI::INIStructure Structure = Archive.GetConfig();
 
@@ -122,6 +126,17 @@ void FEditorState::ReadFromFile(FStringView FilePath)
 	if (!Archive.IsEmpty("Gizmo", "SelectedActor"))
 	{
 		SelectedActor = Archive.GetUInt32("Gizmo", "SelectedActor");
+	}
+
+	// Viewport
+	if (!Archive.IsEmpty("Viewport", "IsSplit"))
+	{
+		bIsviewportSplit = Archive.GetBool("Viewport", "IsSplit");
+	}
+
+	if (!Archive.IsEmpty("Viewport", "CenterUV.0"))
+	{
+		CenterUV = Archive.GetVector2("Viewport", "CenterUV");
 	}
 
 	bDirty = false;
@@ -238,5 +253,19 @@ void FEditorState::SetSelectedActor(uint32 Value)
 {
 	if (SelectedActor == Value) { return; }
 	SelectedActor = Value;
+	bDirty = true;
+}
+
+void FEditorState::SetIsViewportSplit(bool Value)
+{
+	if (bIsviewportSplit == Value) { return; }
+	bIsviewportSplit = Value;
+	bDirty = true;
+}
+
+void FEditorState::SetCenterUV(FVector2 Value)
+{
+	if (CenterUV == Value) { return; }
+	CenterUV = Value;
 	bDirty = true;
 }

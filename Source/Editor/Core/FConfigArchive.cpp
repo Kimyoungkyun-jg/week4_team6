@@ -79,8 +79,11 @@ void FConfigArchive::SetDouble(const FString& Section, const FString& Key, doubl
 bool FConfigArchive::GetBool(const FString& Section, const FString& Key) const
 {
 	const FString Value = GetValue(Object, Section, Key);
-	if (Value == "0" || Value == "") { return false; }
-	else { return true; }
+	if (Value == "1" || Value == "true" || Value == "True" || Value == "TRUE")
+	{
+		return true;
+	}
+	return false;
 }
 
 void FConfigArchive::SetBool(const FString& Section, const FString& Key, bool Value)

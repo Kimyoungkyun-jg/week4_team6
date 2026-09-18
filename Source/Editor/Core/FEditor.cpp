@@ -71,10 +71,12 @@ void FEditor::Process() {
 }
 
 void FEditor::SaveState() {
-  const FEditorViewport* Viewport = GetActiveViewport();
-  if (!Viewport) { return; }
+  if (EditorViewports.empty()) { return; }
 
-  const FCamera& Camera = Viewport->ViewportCamera;
+  // 항상 메인 원근 뷰포트 카메라를 저장
+  const FEditorViewport& Viewport = EditorViewports[0];
+  const FCamera& Camera = Viewport.ViewportCamera;
+
   State.SetCameraLocation(Camera.Position);
   State.SetCameraPitch(Camera.Pitch);
   State.SetCameraYaw(Camera.Yaw);
@@ -83,14 +85,17 @@ void FEditor::SaveState() {
   State.SetGizmoMode(static_cast<uint8>(Gizmo.Mode));
   State.SetGizmoSpace(static_cast<uint8>(Gizmo.GetSpace()));
   State.SetSelectedActor(SelectedActor ? SelectedActor->GetUUID() : static_cast<uint32>(-1));
+  State.SetIsViewportSplit(bIsViewportSplit);
+  State.SetCenterUV(CenterUV);
 }
 
 void FEditor::LoadState()
 {
-    FEditorViewport* Viewport = GetActiveViewport();
-    if (!Viewport) { return; }
+    if (EditorViewports.empty()) { return; }
 
-    FCamera& Camera = Viewport->ViewportCamera;
+    // 항상 메인 원근 뷰포트 카메라에 복원
+    FEditorViewport& Viewport = EditorViewports[0];
+    FCamera& Camera = Viewport.ViewportCamera;
 
     Camera.Position = State.GetCameraLocation();
     Camera.Pitch = State.GetCameraPitch();
@@ -99,6 +104,8 @@ void FEditor::LoadState()
     Grid.SetCellSize(State.GetGridCellSize());
     Gizmo.Mode = static_cast<EGizmoMode>(State.GetGizmoMode());
     Gizmo.SetGizmoSpace(static_cast<EGizmoSpace>(State.GetGizmoSpace()));
+    bIsViewportSplit = State.GetIsViewportSplit();
+    CenterUV = State.GetCenterUV();
 }
 
 void FEditor::NewScene() {

@@ -70,13 +70,11 @@ private:
 		const FVector2& LocalMousePixels, const FVector2& ViewportSizePixels);
 
 	// 분할 뷰포트 헬퍼 함수
-	bool ProcessSplitterDrag(const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos);
-	void SyncSplitViewports(TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize);
-	void DrawSplitterOverlay(const ImVec2& WinPos, const ImVec2& WinSize) const;
+	bool ProcessSplitterDrag(FVector2& CenterUV, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos);
+	void SyncSplitViewports(const FVector2& CenterUV, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize);
+	void DrawSplitterOverlay(const FVector2& CenterUV, const ImVec2& WinPos, const ImVec2& WinSize) const;
 	void ProcessViewportInteraction(FEditor& Editor, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize, const FVector2& MousePos, float DeltaTime);
 
-	float SplitX = 0.5f;
-	float SplitY = 0.5f;
 	bool bDraggingV = false;
 	bool bDraggingH = false;
 	int LockedViewportIndex = -1;

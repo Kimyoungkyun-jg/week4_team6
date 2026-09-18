@@ -62,13 +62,13 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
     if (Editor.bIsViewportSplit)
     {
         // 구분선 조작
-        const bool bDragging = ProcessSplitterDrag(WinPos, WinSize, MousePos);
+        const bool bDragging = ProcessSplitterDrag(Editor.CenterUV, WinPos, WinSize, MousePos);
 
         // 뷰포트 영역 동기화
-        SyncSplitViewports(Viewports, WinPos, WinSize, ClientSize);
+        SyncSplitViewports(Editor.CenterUV, Viewports, WinPos, WinSize, ClientSize);
 
         // 분할선 및 라벨 표시
-        DrawSplitterOverlay(WinPos, WinSize);
+        DrawSplitterOverlay(Editor.CenterUV, WinPos, WinSize);
 
         if (bDragging)
         {
@@ -111,10 +111,10 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
 
 
 
-bool FImguiEditorViewportWindow::ProcessSplitterDrag(const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos)
+bool FImguiEditorViewportWindow::ProcessSplitterDrag(FVector2& CenterUV, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos)
 {
-    const float CenterX = WinPos.x + WinSize.x * SplitX;
-    const float CenterY = WinPos.y + WinSize.y * SplitY;
+    const float CenterX = WinPos.x + WinSize.x * CenterUV.X;
+    const float CenterY = WinPos.y + WinSize.y * CenterUV.Y;
 
     // 마우스 거리 판정
     const bool bNearV = std::abs(MousePos.X - CenterX) < 5.0f && (MousePos.Y >= WinPos.y && MousePos.Y <= WinPos.y + WinSize.y);
@@ -146,18 +146,18 @@ bool FImguiEditorViewportWindow::ProcessSplitterDrag(const ImVec2& WinPos, const
     if (bDraggingV && bDraggingH)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-        SplitX = std::clamp(SplitX + ImGui::GetIO().MouseDelta.x / WinSize.x, 0.15f, 0.85f);
-        SplitY = std::clamp(SplitY + ImGui::GetIO().MouseDelta.y / WinSize.y, 0.15f, 0.85f);
+        CenterUV.X = std::clamp(CenterUV.X + ImGui::GetIO().MouseDelta.x / WinSize.x, 0.15f, 0.85f);
+        CenterUV.Y = std::clamp(CenterUV.Y + ImGui::GetIO().MouseDelta.y / WinSize.y, 0.15f, 0.85f);
     }
     else if (bDraggingV)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        SplitX = std::clamp(SplitX + ImGui::GetIO().MouseDelta.x / WinSize.x, 0.15f, 0.85f);
+        CenterUV.X = std::clamp(CenterUV.X + ImGui::GetIO().MouseDelta.x / WinSize.x, 0.15f, 0.85f);
     }
     else if (bDraggingH)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        SplitY = std::clamp(SplitY + ImGui::GetIO().MouseDelta.y / WinSize.y, 0.15f, 0.85f);
+        CenterUV.Y = std::clamp(CenterUV.Y + ImGui::GetIO().MouseDelta.y / WinSize.y, 0.15f, 0.85f);
     }
     else if (bNearV && bNearH)
     {
@@ -175,7 +175,7 @@ bool FImguiEditorViewportWindow::ProcessSplitterDrag(const ImVec2& WinPos, const
     return bDraggingV || bDraggingH;
 }
 
-void FImguiEditorViewportWindow::SyncSplitViewports(TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize)
+void FImguiEditorViewportWindow::SyncSplitViewports(const FVector2& CenterUV, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize)
 {
     if (Viewports.size() < 4) return;
 
@@ -186,19 +186,19 @@ void FImguiEditorViewportWindow::SyncSplitViewports(TArray<FEditorViewport>& Vie
 
     // Top 좌상단
     Viewports[0].TopLeftUV = { BaseU, BaseV };
-    Viewports[0].LengthUV = { SpanU * SplitX, SpanV * SplitY };
+    Viewports[0].LengthUV = { SpanU * CenterUV.X, SpanV * CenterUV.Y };
 
     // Perspective 우상단
-    Viewports[1].TopLeftUV = { BaseU + SpanU * SplitX, BaseV };
-    Viewports[1].LengthUV = { SpanU * (1.0f - SplitX), SpanV * SplitY };
+    Viewports[1].TopLeftUV = { BaseU + SpanU * CenterUV.X, BaseV };
+    Viewports[1].LengthUV = { SpanU * (1.0f - CenterUV.X), SpanV * CenterUV.Y };
 
     // Front 좌하단
-    Viewports[2].TopLeftUV = { BaseU, BaseV + SpanV * SplitY };
-    Viewports[2].LengthUV = { SpanU * SplitX, SpanV * (1.0f - SplitY) };
+    Viewports[2].TopLeftUV = { BaseU, BaseV + SpanV * CenterUV.Y };
+    Viewports[2].LengthUV = { SpanU * CenterUV.X, SpanV * (1.0f - CenterUV.Y) };
 
     // Side 우하단
-    Viewports[3].TopLeftUV = { BaseU + SpanU * SplitX, BaseV + SpanV * SplitY };
-    Viewports[3].LengthUV = { SpanU * (1.0f - SplitX), SpanV * (1.0f - SplitY) };
+    Viewports[3].TopLeftUV = { BaseU + SpanU * CenterUV.X, BaseV + SpanV * CenterUV.Y };
+    Viewports[3].LengthUV = { SpanU * (1.0f - CenterUV.X), SpanV * (1.0f - CenterUV.Y) };
 
     for (auto& VP : Viewports)
     {
@@ -206,10 +206,10 @@ void FImguiEditorViewportWindow::SyncSplitViewports(TArray<FEditorViewport>& Vie
     }
 }
 
-void FImguiEditorViewportWindow::DrawSplitterOverlay(const ImVec2& WinPos, const ImVec2& WinSize) const
+void FImguiEditorViewportWindow::DrawSplitterOverlay(const FVector2& CenterUV, const ImVec2& WinPos, const ImVec2& WinSize) const
 {
-    const float CenterX = WinPos.x + WinSize.x * SplitX;
-    const float CenterY = WinPos.y + WinSize.y * SplitY;
+    const float CenterX = WinPos.x + WinSize.x * CenterUV.X;
+    const float CenterY = WinPos.y + WinSize.y * CenterUV.Y;
 
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
@@ -236,8 +236,8 @@ void FImguiEditorViewportWindow::DrawSplitterOverlay(const ImVec2& WinPos, const
 
 void FImguiEditorViewportWindow::ProcessViewportInteraction(FEditor& Editor, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize, const FVector2& MousePos, float DeltaTime)
 {
-    const float CenterX = WinPos.x + WinSize.x * SplitX;
-    const float CenterY = WinPos.y + WinSize.y * SplitY;
+    const float CenterX = WinPos.x + WinSize.x * Editor.CenterUV.X;
+    const float CenterY = WinPos.y + WinSize.y * Editor.CenterUV.Y;
 
     const bool bAnyMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
                                ImGui::IsMouseDown(ImGuiMouseButton_Right) ||
