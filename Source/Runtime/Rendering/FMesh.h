@@ -26,9 +26,6 @@ struct FMeshSection
 	FName NormalTextureName{ "None" };
 	FName SpecularTextureName{ "None" };
 
-	// 기본 디퓨즈 텍스처 호환용
-	FName TextureName{ "None" };
-
 	FAxisAlignedBoundingBox LocalBounds;
 };
 

@@ -779,7 +779,6 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 			{
 				FString Stem = std::filesystem::path(Mat.DiffuseTexture).stem().string();
 				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
-				CurrentSection.TextureName = FName(Stem);
 				CurrentSection.DiffuseTextureName = FName(Stem);
 			}
 			if (!Mat.NormalTexture.empty())

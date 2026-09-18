@@ -180,7 +180,7 @@ public:
         for (const auto& Section : Mesh.GetSections())
         {
             FMaterial SectionMat = Material;
-            FName DiffuseName = !Section.DiffuseTextureName.IsNone() ? Section.DiffuseTextureName : Section.TextureName;
+            const FName& DiffuseName = Section.DiffuseTextureName;
             if (!DiffuseName.IsNone() && DiffuseName != FName("None"))
             {
                 SectionMat.SetDiffuseMapByName(DiffuseName);

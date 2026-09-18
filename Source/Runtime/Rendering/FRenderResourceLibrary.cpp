@@ -546,7 +546,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
 
       if (!bHasTexture) {
         for (const auto& Section : Mesh->GetSections()) {
-          FName DiffuseName = !Section.DiffuseTextureName.IsNone() ? Section.DiffuseTextureName : Section.TextureName;
+          const FName& DiffuseName = Section.DiffuseTextureName;
           if ((!DiffuseName.IsNone() && DiffuseName != FName("None")) ||
               (!Section.NormalTextureName.IsNone() && Section.NormalTextureName != FName("None")) ||
               (!Section.SpecularTextureName.IsNone() && Section.SpecularTextureName != FName("None"))) {
@@ -597,7 +597,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
       if (Mesh && !Mesh->GetSections().empty()) {
         int32 SecIdx = 0;
         for (const auto& Sec : Mesh->GetSections()) {
-          FName SDiff = !Sec.DiffuseTextureName.IsNone() ? Sec.DiffuseTextureName : Sec.TextureName;
+          const FName& SDiff = Sec.DiffuseTextureName;
           bool bSDiffLoaded = !SDiff.IsNone() && SDiff != FName("None") && GetTexture(SDiff) != nullptr;
           bool bSNormLoaded = !Sec.NormalTextureName.IsNone() && Sec.NormalTextureName != FName("None") && GetTexture(Sec.NormalTextureName) != nullptr;
           bool bSSpecLoaded = !Sec.SpecularTextureName.IsNone() && Sec.SpecularTextureName != FName("None") && GetTexture(Sec.SpecularTextureName) != nullptr;

@@ -35,7 +35,7 @@ void UStaticMesh::InitializeFromAsset(const FName& InMaterialId)
     {
         for (const auto& Section : Sections)
         {
-            FName Diffuse = !Section.DiffuseTextureName.IsNone() ? Section.DiffuseTextureName : Section.TextureName;
+            const FName& Diffuse = Section.DiffuseTextureName;
             FName Normal = Section.NormalTextureName;
             FName Specular = Section.SpecularTextureName;
             FName MatId = DetermineMaterialId(InMaterialId, Diffuse, Normal, Specular);
