@@ -4,6 +4,7 @@
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Utility/EngineUtil.h"
 
+#include <algorithm>
 #include <charconv>
 #include <filesystem>
 #include <fstream>
@@ -11,7 +12,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-TSortedMap<FString, FStaticMeshDecoder*> FObjDecoder::ObjStaticMeshMap;
+TSortedMap<FString, FObjModelData*> FObjDecoder::ObjStaticMeshMap;
 
 namespace
 {
@@ -19,7 +20,7 @@ namespace
 	std::filesystem::path GetAssetDir()
 	{
 		const std::filesystem::path ExeDir(GetExecutableDirectory());
-		return ExeDir.parent_path().parent_path().parent_path() / "Resources" / "Asset";
+		return ExeDir.parent_path().parent_path().parent_path() / "Resources" / "Assets";
 	}
 
 	bool IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath)
@@ -34,12 +35,18 @@ namespace
 
 	FString ReadFileToString(std::string_view FileName)
 	{
-		const std::filesystem::path AssetDir = GetAssetDir();
-		const std::filesystem::path FilePath = AssetDir / FileName;
+		
+		std::filesystem::path FilePath(FileName);
 
-		if (!IsUnder(FilePath, AssetDir))
+		if (!FilePath.is_absolute())
 		{
-			throw std::runtime_error("Attempted to read outside of the asset directory: " + FilePath.string());
+			const std::filesystem::path AssetDir = GetAssetDir();
+			FilePath = AssetDir / FileName;
+
+			if (!IsUnder(FilePath, AssetDir))
+			{
+				throw std::runtime_error("Attempted to read outside of the asset directory: " + FilePath.string());
+			}
 		}
 
 		std::ifstream FileStream(FilePath, std::ios::in);
@@ -324,6 +331,16 @@ void FObjDecoder::ParseFace(std::string_view Line)
 		ObjInfo.NormalIndexList.push_back(FVector(
 			static_cast<float>(A.VN), static_cast<float>(B.VN), static_cast<float>(C.VN)));
 		ObjInfo.MaterialList.push_back(CurrentMaterial);
+		ObjInfo.GroupList.push_back(CurrentGroup);
+	}
+}
+
+void FObjDecoder::AddGroup(std::string_view Line)
+{
+	int32 Temp;
+	if (!Line.empty() && StringToInt(Line, Temp))
+	{
+		CurrentGroup = Temp;
 	}
 }
 
@@ -517,6 +534,8 @@ void FObjDecoder::ParseLine(std::string_view Line)
 		AddNormalList(Line);
 	else if (Keyword == "f")
 		ParseFace(Line);
+	else if (Keyword == "g")
+		AddGroup(Line);
 	else if (Keyword == "mtllib")
 		AddMaterialLib(Line);
 	else if (Keyword == "usemtl")
@@ -605,9 +624,10 @@ namespace
 
 		if (Key.VT >= 0)
 		{
+			// OBJ 의 UV 원점은 좌하단, D3D 는 좌상단이라 V 를 뒤집는다.
 			const FVector& UV = Info.UVList[Key.VT];
 			Vertex.u = UV.X;
-			Vertex.v = UV.Y;
+			Vertex.v = 1.0f - UV.Y;
 		}
 
 		if (Key.VN >= 0)
@@ -625,7 +645,7 @@ namespace
 		const FObjInfo& Info,
 		const FCornerKey& Key,
 		FUniqueVertexMap& UniqueVertices,
-		FStaticMeshDecoder& Out)
+		FObjModelData& Out)
 	{
 		if (auto It = UniqueVertices.find(Key); It != UniqueVertices.end())
 		{
@@ -639,7 +659,7 @@ namespace
 	}
 }
 
-bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FStaticMeshDecoder& Out)
+bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 {
 	Out.Vertices.clear();
 	Out.Indices.clear();
@@ -666,8 +686,8 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FStaticMeshDecoder& Out)
 	for (size_t Triangle = 0; Triangle < TriangleCount; ++Triangle)
 	{
 		const FVector& V  = Info.VertexIndexList[Triangle];
-		const FVector&  VT = Info.UVIndexList[Triangle];
-		const FVector&  VN = Info.NormalIndexList[Triangle];
+		const FVector& VT = Info.UVIndexList[Triangle];
+		const FVector& VN = Info.NormalIndexList[Triangle];
 
 		const FCornerKey Corners[3] = {
 			{ static_cast<int32>(V.X), static_cast<int32>(VT.X), static_cast<int32>(VN.X) },
@@ -697,43 +717,47 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FStaticMeshDecoder& Out)
 			Out.Indices.push_back(GetOrAddVertex(Info, Corner, UniqueVertices, Out));
 		}
 
-		// 살아남은 삼각형에만 머티리얼을 붙인다 (Indices 와 짝이 맞아야 하므로)
-		const int32 MaterialIndex =
-			Triangle < Info.MaterialList.size() ? Info.MaterialList[Triangle] : -1;
-		Out.TriangleMaterials.push_back(MaterialIndex);
+		Out.TriangleMaterials.push_back(Info.MaterialList[Triangle]);
+		Out.TriangleGroups.push_back(Info.GroupList[Triangle]);
 	}
 
 	return (!Out.Indices.empty());
 }
 
-FStaticMeshDecoder* FObjDecoder::LoadObjStaticMeshAsset(const FString& PathFileName)
+bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out)
 {
-	if (auto It = ObjStaticMeshMap.find(PathFileName); It != ObjStaticMeshMap.end())
-	{
-		return It->second;
-	}
+	//if (auto It = ObjStaticMeshMap.find(AbsolutePath); It != ObjStaticMeshMap.end())
+	//{
+	//	return It->second;
+	//}
 
 	FObjDecoder Decoder;
-	const FObjInfo Info = Decoder.StartObjFileParser(PathFileName);
+	const FObjInfo Info = Decoder.StartObjFileParser(AbsolutePath);
 
 	UE_LOG("FObjDecoder : %s  v=%zu vt=%zu vn=%zu tri=%zu",
-		PathFileName.c_str(),
+		AbsolutePath.c_str(),
 		Info.VertexList.size(), Info.UVList.size(),
 		Info.NormalList.size(), Info.VertexIndexList.size());
 
-	auto* Cooked = new FStaticMeshDecoder{};
-	Cooked->PathFileName = PathFileName;
+	Out.PathFileName = AbsolutePath;
 
-	if (!CookStaticMesh(Info, *Cooked))
+	if (!CookStaticMesh(Info, Out))
 	{
-		delete Cooked;
-		return nullptr;
+		return false;
+	}
+	
+	Out.TextureName = FName("None");
+	if (!Out.Materials.empty() && !Out.Materials.front().DiffuseTexture.empty())
+	{
+		FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTexture).stem().string();
+		std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+		Out.TextureName = FName(TextureKey);
 	}
 
 	UE_LOG("FObjDecoder : %s  cooked  vertices=%zu indices=%zu materials=%zu",
-		PathFileName.c_str(), Cooked->Vertices.size(), Cooked->Indices.size(), Cooked->Materials.size());
+		AbsolutePath.c_str(), Out.Vertices.size(), Out.Indices.size(), Out.Materials.size());
 
-	for (const FObjMaterialInfo& Material : Cooked->Materials)
+	for (const FObjMaterialInfo& Material : Out.Materials)
 	{
 		UE_LOG("FObjDecoder :   material '%s'  Kd=(%.2f %.2f %.2f)  map_Kd='%s'",
 			Material.Name.c_str(),
@@ -741,6 +765,6 @@ FStaticMeshDecoder* FObjDecoder::LoadObjStaticMeshAsset(const FString& PathFileN
 			Material.DiffuseTexture.c_str());
 	}
 
-	ObjStaticMeshMap.emplace(PathFileName, Cooked);
-	return Cooked;
+	// ObjStaticMeshMap.emplace(AbsolutePath, Out);
+	return true;
 }

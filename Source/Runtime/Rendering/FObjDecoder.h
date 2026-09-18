@@ -37,16 +37,33 @@ struct FObjMaterialInfo
     FString NormalTexture;    // map_bump / bump / norm
 };
 
+struct FObjGroupInfo
+{
+    FString Name;
+
+    uint32 FirstIndex = 0;                // Indices 배열에서 이 그룹이 시작하는 위치
+    uint32 IndexCount = 0;                // 이 그룹의 인덱스 개수 (삼각형 수 × 3)
+    FAxisAlignedBoundingBox LocalBounds;  // 이 그룹만의 바운딩 박스 (파츠 피킹용)
+    int32 MaterialIndex = -1;             // 이 그룹이 주로 쓰는 머티리얼 (있으면)
+};
+
+
 // Cooked Data
-struct FStaticMeshDecoder // 이름바꿔야됨
+struct FObjModelData // 이름바꿔야됨
 {
     std::string PathFileName;
 
     TArray<FVertexData> Vertices;
     TArray<uint32> Indices;
+    FAxisAlignedBoundingBox LocalBounds;
 
+
+    FName TextureName{ "None" };
+    bool bIsValid = false;
     TArray<FObjMaterialInfo> Materials;
+    TArray<FObjGroupInfo> Groups;
     TArray<int32> TriangleMaterials;
+    TArray<int32> TriangleGroups;
 };
 
 // Raw Data
@@ -64,10 +81,13 @@ struct FObjInfo
     TArray<FVector> NormalIndexList;
 
     TArray<int32> MaterialList;
+    TArray<int32> GroupList;
     TArray<int32> TextureList;
 
     TArray<FString> MaterialLibs;
     TArray<FObjMaterialInfo> Materials;
+
+    TArray<FObjGroupInfo> Groups;
 };
 
 struct FObjImporter
@@ -80,12 +100,14 @@ struct FObjImporter
 class FObjDecoder
 {
 private:
-    static TSortedMap<FString, FStaticMeshDecoder*> ObjStaticMeshMap;
+    static TSortedMap<FString, FObjModelData*> ObjStaticMeshMap;
     FObjInfo ObjInfo;
 
     FString ObjDirectory;
-    int32 CurrentMaterial = -1;
+    int32 CurrentMaterial = -1;    
     int32 DefiningMaterial = -1;
+
+    int32 CurrentGroup = -1;
 
     // obj
     void AddVertexList(std::string_view Line);
@@ -95,6 +117,7 @@ private:
     void ParseFace(std::string_view Line);
     void AddMaterialLib(std::string_view Line);
     void UseMaterial(std::string_view Line);
+    void AddGroup(std::string_view Line);
     FObjInfo ParseObjFile(const FString& File);
     FObjInfo StartObjFileParser(const FString& PathFileName);
 
@@ -103,23 +126,13 @@ private:
     void ParseMtlLine(std::string_view Line);
     int32 FindOrAddMaterial(std::string_view Name);
 
-    static bool CookStaticMesh(const FObjInfo& Info, FStaticMeshDecoder& Out);
+    static bool CookStaticMesh(const FObjInfo& Info, FObjModelData& Out);
 
 public:
-    static FStaticMeshDecoder* LoadObjStaticMeshAsset(const FString& PathFileName);
+    static bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
 
-    //static UStaticMesh* LoadObjStaticMesh(const std::string& PathFileName) {
-    //    for (TObjectIterator<UStaticMesh> It; It; ++It)
-    //    {
-    //        UStaticMesh* StaticMesh = *It;
-    //        if (StaticMesh->GetAssetPathFileName() == PathFileName)
-    //            return It;
-    //    }
+    static FObjModelData* LoadObjStaticMeshAsset(const FString& PathFileName);
 
-    //    FStaticMeshDecoder* Asset = FObjManager::LoadObjStaticMeshAsset(PathFileName);
-    //    UStaticMesh* StaticMesh = ConstructObject<UStaticMesh>();
-    //    StaticMesh->SetStaticMeshAsset(StaticMeshAsset);
-    //}
 };
 
 // Preload
