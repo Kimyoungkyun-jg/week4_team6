@@ -78,7 +78,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
   EditorApp.Initialize_Runtime(&SceneManager, &RenderView);
 
 
-  FObjDecoder::LoadObjStaticMeshAsset("cube.obj");
+  FObjDecoder::LoadObjStaticMeshAsset("cube-tex.obj");
 
   bool bQuit = false;
   while (!bQuit) {
