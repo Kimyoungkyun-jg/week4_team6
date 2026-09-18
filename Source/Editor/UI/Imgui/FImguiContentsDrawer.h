@@ -1,5 +1,6 @@
 #pragma once
 #include "Editor/Core/FEditor.h"
+#include "Runtime/Rendering/FPreviewRenderTarget.h"
 
 class FImguiContentsDrawer final
 {
@@ -18,13 +19,13 @@ public:
 	std::filesystem::path CurrentPath;
 	float LeftPanelWidth;
 
+
 private:
 	//폴더 트리 렌더
 	void RenderFolderTree();
 	void RenderFolderTreeNode(const std::filesystem::path& FolderPath);
 	// 우측 파일 목록
 	void RenderContentView();
-
 
 	// 폴더 안의 항목 하나.
 	// 이름은 표시용으로 미리 UTF-8로 변환해 둔다. ImGui는 UTF-8만 받는다.

@@ -44,6 +44,22 @@ public:
   // 에디터용 아이콘 텍스쳐 보관 맵
   TMap<FString, TSharedPtr<FTexture>> AllEditorTextureMap;
 
+  // 스태틱 메시 썸네일 텍스처 보관 맵
+  TMap<FName, TSharedPtr<FTexture>> AllMeshThumbnailMap;
+
+  // 전체 썸네일 맵 조회
+  [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
+    return AllMeshThumbnailMap;
+  }
+
+  // 스태틱 메시 썸네일 조회
+  [[nodiscard]] TSharedPtr<FTexture> GetMeshThumbnail(const FName& Id) const {
+    auto it = AllMeshThumbnailMap.find(Id);
+    if (it != AllMeshThumbnailMap.end())
+      return it->second;
+    return nullptr;
+  }
+
   // 인스턴싱 배치 배열 맵
   TMap<FInstanceBatchKey, TArray<FInstanceData>> AllInstancingArrayMap;
 
@@ -227,44 +243,44 @@ public:
       const TArray<uint32>& Indices
   );
 
-private:
-  bool InitializePipelines(FRenderer &Renderer);
-  bool CreateSolidWireframePipeline(FRenderer &Renderer);
-  bool CreateOutlinePipeline(FRenderer &Renderer);
-  bool CreatePostProcessPipeline(FRenderer &Renderer);
+  // 스태틱 메시 썸네일 일괄 생성
+  bool CreateMeshThumbnails();
 
-  bool CreateCubeMesh(FRenderer &Renderer);
-  bool CreateCylinderMesh(FRenderer &Renderer, float Height, uint32 SliceCount,
+private:
+  bool InitializePipelines();
+  bool CreateSolidWireframePipeline();
+  bool CreateOutlinePipeline();
+  bool CreatePostProcessPipeline();
+
+  bool CreateCubeMesh();
+  bool CreateCylinderMesh(float Height, uint32 SliceCount,
                           float TopRadius, float BottomRadius);
-  bool CreateConeMesh(FRenderer &Renderer);
-  bool CreateSpotlightConeMesh(FRenderer &Renderer);
-  bool CreateArrowMesh(FRenderer &Renderer);
-  bool CreateCircleMesh(FRenderer &Renderer);
-  bool CreateRotationGizmoMesh(FRenderer &Renderer);
-  bool CreateSquareArrowMesh(FRenderer &Renderer);
-  bool CreateGridMesh(FRenderer &Renderer);
-  bool CreateSphereMesh(FRenderer &Renderer);
-  bool CreateLineMesh(FRenderer &Renderer);
-  bool CreatePlaneMesh(FRenderer &Renderer);
-  bool CreateRectMesh(FRenderer &Renderer);
-  bool CreateMasterYiMesh(FRenderer &Renderer);
-  bool CreateMasteryMesh(FRenderer &Renderer) { return CreateMasterYiMesh(Renderer); }
+  bool CreateConeMesh();
+  bool CreateSpotlightConeMesh();
+  bool CreateArrowMesh();
+  bool CreateCircleMesh();
+  bool CreateRotationGizmoMesh();
+  bool CreateSquareArrowMesh();
+  bool CreateGridMesh();
+  bool CreateSphereMesh();
+  bool CreateLineMesh();
+  bool CreatePlaneMesh();
+  bool CreateRectMesh();
+  bool CreateMasterYiMesh();
+  bool CreateMasteryMesh() { return CreateMasterYiMesh(); }
 
   bool CreateInstancingArrayMap();
-  bool CreateOutlinePipeline(); //아웃라인용
 
   // 텍스처 및 머티리얼 일괄 초기화
-  bool CreateTextures(FRenderer &Renderer);
-  bool InitializeMaterials(FRenderer &Renderer);
-  bool CreateEditTextures(FRenderer &Renderer);
+  bool CreateTextures();
+  bool InitializeMaterials();
+  bool CreateEditTextures();
 
-  //모든 obj 만드는 용도
-  bool CreateObjMeshes(FRenderer& Renderer);
-
-
+  // 모든 obj 만드는 용도
+  bool CreateObjMeshes();
 
   // 폰트 일괄 초기화
-  bool CreateFonts(FRenderer& Renderer);
+  bool CreateFonts();
 
   FRenderer *RendererRef = nullptr;
 };

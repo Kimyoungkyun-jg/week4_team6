@@ -28,6 +28,9 @@
 void FEditorApplication::Initialize_ImguiWin32DX11(
     HWND &Window, ID3D11Device *Device, ID3D11DeviceContext *Context) {
   ImguiManager.Initialize_ImplWin32DX11(Window, Device, Context);
+
+
+
 }
 
 void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
@@ -37,6 +40,7 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
   this->CurrentScene = SceneManager->CurrentScene;
 
   Editor.Initialize(SceneManager);
+
 
   FEditorViewport PerspViewport;
   PerspViewport.TopLeftUV = {0.5f, 0.0f};
@@ -93,6 +97,8 @@ void FEditorApplication::Update(float DeltaTime) {
 void FEditorApplication::BeginFrame() { ImguiManager.NewFrame(); }
 
 void FEditorApplication::Tick(float DeltaTime) {
+
+
   ToolBar.Process(Editor, ConsoleWindow, ControlPanelWindow, PropertyWindow);
   EditorViewportWindow.Process(Editor, DeltaTime);
   WorldOutliner.Process(Editor);
@@ -100,8 +106,78 @@ void FEditorApplication::Tick(float DeltaTime) {
   PropertyWindow.Process(Editor);
   ConsoleWindow.Process(Editor);
   ContentsDrawer.Process(Editor);
+
+  // 다중 프리뷰 창 UI 실행
+  for (const auto& Window : PreviewWindows)
+  {
+    if (Window && Window->IsOpen())
+    {
+      Window->Process(Editor, DeltaTime);
+    }
+  }
+
   Editor.Process();
 }
+
+#include "ThirdParty/Imgui/imgui.h"
+#include "ThirdParty/Imgui/imgui_internal.h"
+
+void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh) {
+  if (!InMesh)
+  {
+    return;
+  }
+
+  // 이미 열려있는 창이면 최상단으로 포커스
+  for (const auto& Window : PreviewWindows)
+  {
+    if (Window && Window->GetTargetMesh() == InMesh)
+    {
+      Window->BringToFront();
+      return;
+    }
+  }
+
+  ImGuiID TargetDockID = 0;
+  // 기존에 열려 있는 프리뷰 창의 도크 노드 탐색
+  for (const auto& Window : PreviewWindows)
+  {
+    if (Window && Window->IsOpen())
+    {
+      if (ImGuiWindow* Win = ImGui::FindWindowByName(Window->GetTitleString().c_str()))
+      {
+        if (Win->DockId != 0)
+        {
+          TargetDockID = Win->DockId;
+          break;
+        }
+      }
+      if (TargetDockID == 0 && Window->GetInitialDockID() != 0)
+      {
+        TargetDockID = Window->GetInitialDockID();
+        break;
+      }
+    }
+  }
+
+  // 첫 번째 프리뷰 창일 경우 메인 뷰포트와 분리된 독립 플로팅 도크 노드 생성
+  if (TargetDockID == 0)
+  {
+    TargetDockID = ImGui::DockBuilderAddNode(0, 0);
+    const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+    const ImVec2 DefaultPos = MainViewport ? ImVec2(MainViewport->WorkPos.x + 150.0f, MainViewport->WorkPos.y + 80.0f) : ImVec2(200.0f, 100.0f);
+    ImGui::DockBuilderSetNodePos(TargetDockID, DefaultPos);
+    ImGui::DockBuilderSetNodeSize(TargetDockID, ImVec2(900.0f, 650.0f));
+    ImGui::DockBuilderFinish(TargetDockID);
+  }
+
+  // 새 프리뷰 창 생성 및 프리뷰 전용 도크 노드로 연결
+  auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
+  NewWindow->Open(InMesh, TargetDockID);
+  PreviewWindows.push_back(NewWindow);
+}
+
+
 
 void FEditorApplication::Render() {
   const TArray<FEditorViewport> &EditorViewports = Editor.GetViewports();
@@ -145,6 +221,18 @@ void FEditorApplication::Render() {
     RenderView->RenderView(sceneview, *SceneManager->CurrentScene, EditorCtx);
   }
 
+  // 스태틱 메시 프리뷰 렌더링
+  for (const auto& Window : PreviewWindows)
+  {
+      if (Window && Window->IsOpen())
+      {
+          RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
+              Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
+      }
+  }
+
+  RenderView->GetRenderer().BindBackBufferWithDepth();
+  
   ImguiManager.RenderUI();
 }
 

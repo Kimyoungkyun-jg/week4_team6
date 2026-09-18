@@ -22,6 +22,8 @@ class FTexture;
 struct FTextureDesc;
 struct FCamera;
 class UTextInstanceComponent;
+struct FPreviewRenderTarget;
+class UStaticMesh;
 
 inline FWString GetExecutableDirectory() {
   wchar_t Buffer[256];
@@ -84,6 +86,8 @@ public:
   void BindBackBufferWithDepth();
   ID3D11RenderTargetView* GetBackBuffer() { return BackBufferRTV.Get(); }
 
+  // 프리뷰 씬 렌더링
+  void RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid = false);
 
 private:
   bool InitializeDeviceAndSwapChain(HWND Window);

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Runtime/Rendering/FRenderer.h"
 #include "ThirdParty/Imgui/imgui.h"
@@ -18,5 +18,5 @@ public:
 	bool Initialize_ImplWin32DX11(HWND& Window, ID3D11Device* Device, ID3D11DeviceContext* Context);
 	void NewFrame();
 	void RenderUI();
-	[[nodiscard]] ImGuiID GetEditorViewportID() const { return EditorViewportID; }
+	[[nodiscard]] ImGuiID GetEditorViewportID() const;
 };

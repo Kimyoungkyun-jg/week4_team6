@@ -12,6 +12,9 @@
 #include "ShaderConstants.h"
 #include "ThirdParty/DirectXTK/Inc/DDSTextureLoader.h"
 #include "Vertices.h"
+#include "FPreviewRenderTarget.h"
+#include "Runtime/CoreUObject/UStaticMesh.h"
+#include "Editor/Grid/FGrid.h"
 #include <Windows.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
@@ -886,4 +889,106 @@ void FRenderer::RenderOutline(FVector2 TopLeftUV, FVector2 LengthUV) {
 
   // 깊이버퍼 복구
   BindBackBufferWithDepth();
+}
+
+void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid)
+{
+  if (!TargetMesh)
+  {
+    return;
+  }
+
+  const TSharedPtr<FStaticMesh> MeshAsset = TargetMesh->GetStaticMeshAsset();
+  if (!MeshAsset)
+  {
+    return;
+  }
+
+  if (!Device || !Context)
+  {
+    return;
+  }
+
+  // 렌더타겟 크기 맞춤
+  if (Width > 0 && Height > 0)
+  {
+    RenderTarget.Resize(Device.Get(), Width, Height);
+  }
+  if (!RenderTarget.IsValid() || RenderTarget.Width == 0 || RenderTarget.Height == 0)
+  {
+    return;
+  }
+
+  // 프리뷰 렌더타겟 바인딩
+  ID3D11RenderTargetView* RTV = RenderTarget.RenderTargetView.Get();
+  ID3D11DepthStencilView* DSV = RenderTarget.DepthStencilView.Get();
+  Context->OMSetRenderTargets(1, &RTV, DSV);
+
+  // 배경 및 깊이 버퍼 클리어
+  const float ClearColor[4] = { 0.12f, 0.13f, 0.16f, 1.0f };
+  Context->ClearRenderTargetView(RTV, ClearColor);
+  Context->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+  // 뷰포트 설정
+  D3D11_VIEWPORT D3DVP = {};
+  D3DVP.TopLeftX = 0.0f;
+  D3DVP.TopLeftY = 0.0f;
+  D3DVP.Width = static_cast<float>(RenderTarget.Width);
+  D3DVP.Height = static_cast<float>(RenderTarget.Height);
+  D3DVP.MinDepth = 0.0f;
+  D3DVP.MaxDepth = 1.0f;
+  Context->RSSetViewports(1, &D3DVP);
+
+  // 조명 상수 버퍼 설정 및 바인딩
+  FLightConstants LightConstants;
+  LightConstants.LightDirection = FVector(-0.577f, -0.577f, -0.577f);
+  LightConstants.Intensity = 1.2f;
+  LightConstants.LightColor = FVector(1.0f, 1.0f, 1.0f);
+  LightConstants.AmbientIntensity = 0.4f;
+  SetRenderMode(EViewModeIndex::VMI_Lit);
+  UpdateLightConstants(LightConstants, EViewModeIndex::VMI_Lit);
+
+  // 머티리얼 조회 및 메시 드로우
+  TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->GetDefaultMaterialID(0));
+  if (!Material)
+  {
+    Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+  }
+
+  if (Material)
+  {
+    // 텍스처 머티리얼인 경우 기본 텍스처 바인딩 보정
+    if (!MeshAsset->DefaultTextureId.IsNone() && MeshAsset->DefaultTextureId != FName("None"))
+    {
+      if (auto DefaultTex = FRenderResourceLibrary::Get().GetTexture(MeshAsset->DefaultTextureId))
+      {
+        Material->SetTexture(DefaultTex);
+      }
+    }
+
+    // 상수 버퍼 구성
+    FObjectConstants ObjConstants = {};
+    ObjConstants.World = FMatrix::GetIdentity();
+    ObjConstants.MVP = ObjConstants.World * Camera.CreateViewProjectionMatrix();
+    ObjConstants.UVScale = FVector2(1.0f, 1.0f);
+    ObjConstants.ColorOverride = FVector(1.0f, 1.0f, 1.0f);
+    ObjConstants.ColorOverrideAmount = 0.0f;
+
+    Draw(*MeshAsset, *Material, ObjConstants, 0, false);
+  }
+
+  // 그리드 렌더링
+  if (bDrawGrid)
+  {
+    FGrid Grid;
+    Grid.DrawLine(*this, Camera);
+
+    const float Extent = (TargetMesh->GetBounds().Max - TargetMesh->GetBounds().Min).Size();
+    FGridLineConstants GridConstants = {};
+    GridConstants.MVP = Camera.CreateViewProjectionMatrix();
+    GridConstants.CameraPosition = Camera.Position;
+    GridConstants.FadeStartDistance = std::max(5.0f, Extent * 0.5f);
+    GridConstants.FadeEndDistance = std::max(100.0f, Extent * 10.0f);
+    FlushLineBatch(GridConstants, FName("Grid"));
+  }
 }

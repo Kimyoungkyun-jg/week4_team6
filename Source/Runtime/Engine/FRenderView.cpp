@@ -13,6 +13,8 @@
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Rendering/ShaderConstants.h"
+#include "Runtime/Rendering/FPreviewRenderTarget.h"
+#include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Engine/UScene.h"
 #include <fstream>
 
@@ -399,4 +401,16 @@ void FRenderView::FlushQueue(const FCamera& Camera)
 
     RenderQueue.Clear();
 }
+
+void FRenderView::RenderPreviewScene(
+    FPreviewRenderTarget& RenderTarget,
+    const FCamera& Camera,
+    UStaticMesh* TargetMesh,
+    uint32 Width,
+    uint32 Height,
+    bool bDrawGrid)
+{
+    Renderer.RenderPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+}
+
 

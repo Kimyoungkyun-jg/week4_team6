@@ -19,6 +19,7 @@ bool FImguiManager::Initialize_ImplWin32DX11(HWND& Window, ID3D11Device* Device,
 	);
 
 	IO.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	// IO.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	ImFontConfig Config;
 	Config.SizePixels = 16.0f;
 	IO.Fonts->AddFontDefault(&Config);
@@ -82,4 +83,24 @@ void FImguiManager::RenderUI()
 {
 	ImGui::Render();
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+	// 독립 플랫폼 윈도우 렌더링
+	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+	}
+}
+
+ImGuiID FImguiManager::GetEditorViewportID() const
+{
+	// 뷰포트 창이 실제로 도킹된 노드 ID 우선 반환
+	if (ImGuiWindow* ViewportWindow = ImGui::FindWindowByName("Viewport"))
+	{
+		if (ViewportWindow->DockId != 0)
+		{
+			return ViewportWindow->DockId;
+		}
+	}
+	return EditorViewportID;
 }

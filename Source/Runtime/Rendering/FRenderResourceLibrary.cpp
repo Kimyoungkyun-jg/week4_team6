@@ -9,6 +9,9 @@
 #include "Runtime/Core/TArray.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
+#include "Runtime/Engine/FRenderView.h"
+#include "Runtime/Engine/FCamera.h"
+#include "Runtime/Rendering/FPreviewRenderTarget.h"
 #include "Runtime/Geometry/Sphere.h"
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/FRenderer.h"
@@ -206,7 +209,10 @@ const FMaterialEntry materialTable[] = {
     },
 };
 
-bool FRenderResourceLibrary::CreateSolidWireframePipeline(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateSolidWireframePipeline() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   const FWString Path = GetExecutableDirectory();
   const FWString VsPath = Path + L"/Shader/ExampleVS.cso";
   const FWString PsPath = Path + L"/Shader/ExamplePS.cso";
@@ -238,7 +244,10 @@ bool FRenderResourceLibrary::CreateSolidWireframePipeline(FRenderer &Renderer) {
   return SolidPipeline != nullptr && WireframePipeline != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateOutlinePipeline(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateOutlinePipeline() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   ID3D11Device *Device = Renderer.GetDevice();
   if (!Device) {
     return false;
@@ -347,7 +356,10 @@ bool FRenderResourceLibrary::CreateOutlinePipeline(FRenderer &Renderer) {
   return true;
 }
 
-bool FRenderResourceLibrary::CreatePostProcessPipeline(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreatePostProcessPipeline() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   ID3D11Device *Device = Renderer.GetDevice();
   if (!Device) {
     return false;
@@ -443,11 +455,14 @@ bool FRenderResourceLibrary::CreatePostProcessPipeline(FRenderer &Renderer) {
   return true;
 }
 
-bool FRenderResourceLibrary::InitializePipelines(FRenderer &Renderer) {
+bool FRenderResourceLibrary::InitializePipelines() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   // 솔리드 및 와이어프레임 파이프라인 개별 생성
-  CreateSolidWireframePipeline(Renderer);
-  CreateOutlinePipeline(Renderer);
-  CreatePostProcessPipeline(Renderer);
+  CreateSolidWireframePipeline();
+  CreateOutlinePipeline();
+  CreatePostProcessPipeline();
 
   const FWString Path = GetExecutableDirectory();
 
@@ -486,22 +501,23 @@ bool FRenderResourceLibrary::InitializePipelines(FRenderer &Renderer) {
 
 bool FRenderResourceLibrary::Initialize(FRenderer &Renderer) {
   RendererRef = &Renderer;
-  if (!InitializePipelines(Renderer) // 파이프라인 먼저 생성
-      || !CreateCubeMesh(Renderer) ||
-      !CreateCylinderMesh(Renderer, 1.0f, 24u, 1.0f, 1.0f) ||
-      !CreateConeMesh(Renderer) || !CreateSpotlightConeMesh(Renderer) ||
-      !CreateArrowMesh(Renderer) || !CreateCircleMesh(Renderer) ||
-      !CreateRotationGizmoMesh(Renderer) || !CreateSquareArrowMesh(Renderer) ||
-      !CreateGridMesh(Renderer) || !CreateSphereMesh(Renderer) ||
-      !CreateLineMesh(Renderer) || !CreatePlaneMesh(Renderer) ||
-      !CreateRectMesh(Renderer) || !CreateMasterYiMesh(Renderer) ||
-      !CreateTextures(Renderer) || !InitializeMaterials(Renderer) ||
-      !CreateInstancingArrayMap() || !CreateEditTextures(Renderer) ||
-      !CreateFonts(Renderer) || !CreateObjMeshes(Renderer)) {
+  if (!InitializePipelines() // 파이프라인 먼저 생성
+      || !CreateCubeMesh() ||
+      !CreateCylinderMesh(1.0f, 24u, 1.0f, 1.0f) ||
+      !CreateConeMesh() || !CreateSpotlightConeMesh() ||
+      !CreateArrowMesh() || !CreateCircleMesh() ||
+      !CreateRotationGizmoMesh() || !CreateSquareArrowMesh() ||
+      !CreateGridMesh() || !CreateSphereMesh() ||
+      !CreateLineMesh() || !CreatePlaneMesh() ||
+      !CreateRectMesh() || !CreateMasterYiMesh() ||
+      !CreateTextures() || !InitializeMaterials() ||
+      !CreateInstancingArrayMap() || !CreateEditTextures() ||
+      !CreateFonts() || !CreateObjMeshes()) {
     return false;
   }
 
   CreateUStaticMeshMap();
+  CreateMeshThumbnails(); // 썸네일 일괄 생성
 
   return true;
 }
@@ -531,7 +547,10 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
   return true;
 }
 
-bool FRenderResourceLibrary::CreateCubeMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateCubeMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   FMeshDesc MeshDesc{
       .VertexData = CubeVertices,
       .VertexDataSize = static_cast<uint32>(sizeof(CubeVertices)),
@@ -546,10 +565,12 @@ bool FRenderResourceLibrary::CreateCubeMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Cube")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateCylinderMesh(FRenderer &Renderer,
-                                                float Height, uint32 SliceCount,
+bool FRenderResourceLibrary::CreateCylinderMesh(float Height, uint32 SliceCount,
                                                 float TopRadius,
                                                 float BottomRadius) {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr float TAU = std::numbers::pi_v<float> * 2.0f;
   const float DTheta = TAU / static_cast<float>(SliceCount);
 
@@ -653,7 +674,10 @@ bool FRenderResourceLibrary::CreateCylinderMesh(FRenderer &Renderer,
   return AllFStaticMeshMap[FName("Cylinder")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateConeMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateConeMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr float BottomRadius = 0.5f;
   constexpr float Height = 1.0f;
   constexpr uint32 SliceCount = 48;
@@ -742,7 +766,10 @@ bool FRenderResourceLibrary::CreateConeMesh(FRenderer &Renderer) {
 }
 
 // 스포트라이트 전용 열린 원뿔 메쉬 생성
-bool FRenderResourceLibrary::CreateSpotlightConeMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateSpotlightConeMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr float BottomRadius = 0.5f;
   constexpr float Height = 1.0f;
   constexpr uint32 SliceCount = 48;
@@ -809,7 +836,10 @@ bool FRenderResourceLibrary::CreateSpotlightConeMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("SpotlightCone")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateArrowMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateArrowMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr uint32 SliceCount = 16u;
   constexpr float ShaftLength = 0.75f;
   constexpr float ShaftRadius = 0.025f;
@@ -928,7 +958,10 @@ bool FRenderResourceLibrary::CreateArrowMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Arrow")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateCircleMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateCircleMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr uint32 SliceCount = 32u;
   constexpr float Radius = 1.0f;
   constexpr float Width = 0.07f;
@@ -989,7 +1022,10 @@ bool FRenderResourceLibrary::CreateCircleMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Circle")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateRotationGizmoMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateRotationGizmoMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr uint32 SliceCount = 32u;
   constexpr float Radius = 1.0f;
 
@@ -1059,7 +1095,10 @@ bool FRenderResourceLibrary::CreateRotationGizmoMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("RotGizmo")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateSquareArrowMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateSquareArrowMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr float ShaftLength = 0.85f;
   constexpr float ShaftRadius = 0.025f;
   constexpr float ArrowLength = 1.0f;
@@ -1111,7 +1150,10 @@ bool FRenderResourceLibrary::CreateSquareArrowMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("SquareArrow")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateGridMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateGridMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   constexpr float HalfW = 10.0f;
   constexpr float HalfH = 10.0f;
 
@@ -1142,7 +1184,10 @@ bool FRenderResourceLibrary::CreateGridMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Grid")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateSphereMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateSphereMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   auto Vertices = CreateSphereVertices(0.5f, 20, 20, false);
 
   FMeshDesc MeshDesc{
@@ -1157,7 +1202,10 @@ bool FRenderResourceLibrary::CreateSphereMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Sphere")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateLineMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateLineMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   FMeshDesc Desc{.VertexData = LineVertices,
                  .VertexDataSize = static_cast<uint32>(sizeof(LineVertices)),
                  .VertexStride = sizeof(FVertexData),
@@ -1168,7 +1216,10 @@ bool FRenderResourceLibrary::CreateLineMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Line")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreatePlaneMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreatePlaneMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   FMeshDesc Desc{
       .VertexData = PlaneVertices,
       .VertexDataSize = static_cast<uint32>(sizeof(PlaneVertices)),
@@ -1180,7 +1231,10 @@ bool FRenderResourceLibrary::CreatePlaneMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Plane")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateRectMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateRectMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   // 사각형 정점 배열
   const TArray<FVertexData> Vertices = {
       {0.0f, -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},
@@ -1208,7 +1262,9 @@ bool FRenderResourceLibrary::CreateRectMesh(FRenderer &Renderer) {
   return AllFStaticMeshMap[FName("Rect")] != nullptr;
 }
 
-bool FRenderResourceLibrary::CreateMasterYiMesh(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateMasterYiMesh() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
   FMeshDesc MeshDesc{
       .VertexData = MasterYiHeadVertices,
       .VertexDataSize = static_cast<uint32>(sizeof(MasterYiHeadVertices)),
@@ -1239,7 +1295,7 @@ bool FRenderResourceLibrary::CreateInstancingArrayMap() {
   return true;
 }
 
-bool FRenderResourceLibrary::InitializeMaterials(FRenderer &Renderer) {
+bool FRenderResourceLibrary::InitializeMaterials() {
   for (const auto &Entry : materialTable) {
     TSharedPtr<FMaterial> Material = std::make_shared<FMaterial>();
 
@@ -1257,7 +1313,10 @@ bool FRenderResourceLibrary::InitializeMaterials(FRenderer &Renderer) {
   return true;
 }
 
-bool FRenderResourceLibrary::CreateEditTextures(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateEditTextures() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   const std::filesystem::path ExeDir(GetExecutableDirectory());
   const std::filesystem::path ProjectRoot =
       ExeDir.parent_path().parent_path().parent_path();
@@ -1319,7 +1378,10 @@ FRenderResourceLibrary::RegisterMaterial(const FName &Id,
   return inMaterial;
 }
 
-bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateTextures() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
+
   const std::filesystem::path ExeDir(GetExecutableDirectory());
   const std::filesystem::path ProjectRoot =
       ExeDir.parent_path().parent_path().parent_path();
@@ -1372,7 +1434,9 @@ bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer) {
   return true;
 }
 
-bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateObjMeshes() {
+  if (!RendererRef) return false;
+  FRenderer &Renderer = *RendererRef;
   const std::filesystem::path ExeDir(GetExecutableDirectory());
   const std::filesystem::path ProjectRoot =
       ExeDir.parent_path().parent_path().parent_path();
@@ -1461,7 +1525,7 @@ FRenderResourceLibrary::GetOrCreateMesh(const FName &ID,
   return newMesh;
 }
 
-bool FRenderResourceLibrary::CreateFonts(FRenderer &Renderer) {
+bool FRenderResourceLibrary::CreateFonts() {
   const std::filesystem::path ExeDir(GetExecutableDirectory());
   const std::filesystem::path ProjectRoot =
       ExeDir.parent_path().parent_path().parent_path();
@@ -1512,5 +1576,79 @@ bool FRenderResourceLibrary::CreateFonts(FRenderer &Renderer) {
     }
   }
 
+  return true;
+}
+
+bool FRenderResourceLibrary::CreateMeshThumbnails() {
+  if (!RendererRef) {
+    return false;
+  }
+  FRenderer& Renderer = *RendererRef;
+
+  FPreviewRenderTarget ThumbnailRT;
+  ID3D11Device* Device = Renderer.GetDevice();
+  ID3D11DeviceContext* Context = Renderer.GetContext();
+  if (!Device || !Context) {
+    return false;
+  }
+
+  ThumbnailRT.Resize(Device, 128, 128);
+
+  for (const auto& [Key, Mesh] : AllUStaticMeshMap) {
+    if (!Mesh) continue;
+
+    auto MeshAsset = Mesh->GetStaticMeshAsset();
+    if (!MeshAsset) continue;
+
+    const FAxisAlignedBoundingBox& Bounds = Mesh->GetBounds();
+    const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+    const float Extent = (Bounds.Max - Bounds.Min).Size();
+    const float Distance = (Extent > 0.1f) ? Extent * 1.5f : 5.0f;
+
+    FCamera Cam;
+    Cam.Projection.ProjectionType = EProjectionType::Perspective;
+    Cam.Projection.FOV = 45.0f;
+    Cam.Projection.Aspect = 1.0f;
+    Cam.Pitch = -20.0f;
+    Cam.Yaw = 45.0f;
+
+    const FMatrix Rot = FMatrix::MakeRotation(FVector(0.0f, Cam.Pitch, Cam.Yaw));
+    const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
+    Cam.Position = Center - Forward * Distance;
+
+    Renderer.RenderPreviewScene(ThumbnailRT, Cam, Mesh, 128, 128, false);
+
+    D3D11_TEXTURE2D_DESC TexDesc = {};
+    TexDesc.Width = 128;
+    TexDesc.Height = 128;
+    TexDesc.MipLevels = 1;
+    TexDesc.ArraySize = 1;
+    TexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    TexDesc.SampleDesc.Count = 1;
+    TexDesc.Usage = D3D11_USAGE_DEFAULT;
+    TexDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> SnapshotTex;
+    if (SUCCEEDED(Device->CreateTexture2D(&TexDesc, nullptr, &SnapshotTex))) {
+      Context->CopyResource(SnapshotTex.Get(), ThumbnailRT.ColorTexture.Get());
+
+      D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+      SRVDesc.Format = TexDesc.Format;
+      SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+      SRVDesc.Texture2D.MipLevels = 1;
+
+      Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SnapshotSRV;
+      if (SUCCEEDED(Device->CreateShaderResourceView(SnapshotTex.Get(), &SRVDesc, &SnapshotSRV))) {
+        auto ThumbTexture = std::shared_ptr<FTexture>(new FTexture());
+        ThumbTexture->Width = 128;
+        ThumbTexture->Height = 128;
+        ThumbTexture->Texture2D = SnapshotTex;
+        ThumbTexture->TextureSRV = SnapshotSRV;
+        AllMeshThumbnailMap[Key] = ThumbTexture;
+      }
+    }
+  }
+
+  Renderer.BindBackBufferWithDepth();
   return true;
 }

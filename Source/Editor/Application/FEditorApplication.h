@@ -8,6 +8,7 @@
 #include "Editor/UI/Imgui/FImguiConsoleWindow.h"
 #include "Editor/UI/Imgui/FImguiWorldOutliner.h"
 #include "Editor/UI/Imgui/FImguiContentsDrawer.h"
+#include "Editor/UI/Imgui/FImguiPreviewEditorWindow.h"
 #include "Runtime/Engine/FRenderView.h"
 #include "Runtime/Input/FCameraInputController.h"
 
@@ -28,6 +29,7 @@ class FEditorApplication final {
 	FImguiConsoleWindow ConsoleWindow;
 	FImguiWorldOutliner WorldOutliner;
 	FImguiContentsDrawer ContentsDrawer;
+	TArray<TSharedPtr<FImguiPreviewEditorWindow>> PreviewWindows;
 
 	FVisualizerRegistry VisualizerRegistry;
 
@@ -55,6 +57,9 @@ public:
 	void OnWindowSize(UINT Width, UINT Height);
 	
 	void CollectGarbage();
+	void OpenPreviewWindow(UStaticMesh* InMesh);
+
+	[[nodiscard]] const TArray<TSharedPtr<FImguiPreviewEditorWindow>>& GetPreviewWindows() const { return PreviewWindows; }
 
 private:
 	FEditorApplication() = default;

@@ -13,6 +13,8 @@ class FGizmo;
 class FGrid;
 class AActor;
 class UScene;
+class UStaticMesh;
+struct FPreviewRenderTarget;
 
 class FRenderView final {
 	FRenderer& Renderer;
@@ -31,6 +33,15 @@ public:
 	// 전체 뷰포트 렌더링
 	void RenderView(const FSceneView& View, const UScene& Scene, const FEditorRenderContext& EditorCtx);
 	void CollectScenePrimitives(const UScene& Scene, const FSceneView& View, const AActor* SelectedActor);
+
+	// 프리뷰 씬 렌더링
+	void RenderPreviewScene(
+		FPreviewRenderTarget& RenderTarget,
+		const FCamera& Camera,
+		UStaticMesh* TargetMesh,
+		uint32 Width = 0,
+		uint32 Height = 0,
+		bool bDrawGrid = true);
 
 	// 뷰포트 패스 파이프라인
 	void BeginView(FVector2 TopLeftUV, FVector2 LengthUV, EViewModeIndex ViewMode, const FLightConstants& LightConstants);

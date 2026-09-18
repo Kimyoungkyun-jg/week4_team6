@@ -4,6 +4,7 @@
 #include "ThirdParty/Imgui/imgui_impl_dx11.h"
 #include "ThirdParty/Imgui/imgui_impl_win32.h"
 #include "Runtime/Core/FString.h"
+#include "Runtime/Engine/FRenderView.h"
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Rendering/FTexture.h"
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include "FImguiDragDrop.h"
+#include "Editor/Application/FEditorApplication.h"
 FImguiContentsDrawer::FImguiContentsDrawer() : LeftPanelWidth(200.0f)
 {
 	RootPath = std::filesystem::current_path() / "Resources";
@@ -46,6 +48,26 @@ void FImguiContentsDrawer::RefreshEntries()
 	Entries.clear();
 	CachedPath = CurrentPath;
 	bNeedsRefresh = false;
+
+	// StaticMesh 폴더일 때는 라이브러리의 썸네일 맵 기준 목록 표시
+	if (CurrentPath.filename() == "StaticMesh")
+	{
+		for (const auto& [Key, Thumb] : FRenderResourceLibrary::Get().GetAllMeshThumbnailMap())
+		{
+			FContentEntry Item;
+			Item.DisplayName = Key.ToString();
+			Item.Extension = ".staticmesh";
+			Item.bIsDirectory = false;
+			Item.Path = (RootPath / "StaticMesh") / (Key.ToString() + ".staticmesh");
+			Entries.push_back(std::move(Item));
+		}
+		std::sort(Entries.begin(), Entries.end(),
+			[](const FContentEntry& A, const FContentEntry& B)
+			{
+				return A.DisplayName < B.DisplayName;
+			});
+		return;
+	}
 
 	std::error_code Ec;
 	for (const auto& Entry : std::filesystem::directory_iterator(CurrentPath, Ec))
@@ -175,24 +197,42 @@ void FImguiContentsDrawer::RenderContentView()
 
 		const TSharedPtr<FTexture> Thumbnail = GetOrLoadThumbnail(Item);
 
-		// 폴더는 썸네일이 없으므로 에디터 아이콘으로 대신한다.
-		// 아이콘이 없으면 DisplayImage가 nullptr이 되어 아래 else로 떨어진다.
-		TSharedPtr<FTexture> DisplayImage = Thumbnail;
+		// 썸네일 SRV 결정
+		ID3D11ShaderResourceView* DisplaySRV = nullptr;
+
 		if (Item.bIsDirectory)
 		{
-			DisplayImage = FRenderResourceLibrary::Get().GetEditTexture("foldericon");
+			if (auto FolderTex = FRenderResourceLibrary::Get().GetEditTexture("foldericon"))
+			{
+				DisplaySRV = FolderTex->GetSRV();
+			}
+		}
+		else if (Item.Extension == ".staticmesh")
+		{
+			// 라이브러리에서 3D 스냅샷 썸네일 조회
+			const FName MeshKey(Item.DisplayName);
+			if (auto MeshTex = FRenderResourceLibrary::Get().GetMeshThumbnail(MeshKey))
+			{
+				DisplaySRV = MeshTex->GetSRV();
+			}
+		}
+		else
+		{
+			if (const TSharedPtr<FTexture> Thumbnail = GetOrLoadThumbnail(Item))
+			{
+				DisplaySRV = Thumbnail->GetSRV();
+			}
 		}
 
-		if (DisplayImage && DisplayImage->GetSRV())          
+		if (DisplaySRV)          
 		{
-			// 선택 상태를 배경색으로 표시한다.
+			// 선택 상태를 배경색으로 표시
 			const ImGuiStyle& S = ImGui::GetStyle();
 			ImGui::PushStyleColor(ImGuiCol_Button,
 				bSelected ? S.Colors[ImGuiCol_ButtonActive] : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
-			// ImGui 1.93의 ImTextureID는 ImU64라서 포인터를 정수로 한 번 거쳐야 한다.
 			const ImTextureID TexId =
-				static_cast<ImTextureID>(reinterpret_cast<intptr_t>(DisplayImage->GetSRV()));
+				static_cast<ImTextureID>(reinterpret_cast<intptr_t>(DisplaySRV));
 
 			if (ImGui::ImageButton("##thumb", TexId, ImVec2(ThumbnailSize, ThumbnailSize)))
 			{
@@ -218,25 +258,22 @@ void FImguiContentsDrawer::RenderContentView()
 		if (!Item.bIsDirectory && ImGui::BeginDragDropSource())
 		{
 			FContentDragPayload DragData;
-			DragData.Kind = Thumbnail ? FContentDragPayload::EKind::Texture
-				: FContentDragPayload::EKind::Unknown;
+			DragData.Kind = (Item.Extension == ".staticmesh") ? FContentDragPayload::EKind::Mesh
+				: (DisplaySRV ? FContentDragPayload::EKind::Texture : FContentDragPayload::EKind::Unknown);
 
 			const FString PathUtf8 = WideToUTF8(Item.Path.wstring());
 			std::snprintf(DragData.Path, sizeof(DragData.Path), "%s", PathUtf8.c_str());
 
-			FString Key = Item.Path.stem().string();
-			std::transform(Key.begin(), Key.end(), Key.begin(),
-				[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			FString Key = Item.DisplayName;
 			std::snprintf(DragData.Key, sizeof(DragData.Key), "%s", Key.c_str());
 
-			// ImGui가 내부 버퍼로 복사하므로 지역 변수를 넘겨도 된다.
 			ImGui::SetDragDropPayload(ContentDragPayloadType, &DragData, sizeof(DragData));
 
-			// 드래그 중 마우스를 따라다닐 미리보기
-			if (Thumbnail && Thumbnail->GetSRV())
+			// 드래그 중 미리보기
+			if (DisplaySRV)
 			{
 				const ImTextureID PreviewId =
-					static_cast<ImTextureID>(reinterpret_cast<intptr_t>(Thumbnail->GetSRV()));
+					static_cast<ImTextureID>(reinterpret_cast<intptr_t>(DisplaySRV));
 				ImGui::Image(PreviewId, ImVec2(48.0f, 48.0f));
 				ImGui::SameLine();
 			}
@@ -250,12 +287,24 @@ void FImguiContentsDrawer::RenderContentView()
 			ImGui::SetTooltip("%s", Item.DisplayName.c_str());
 		}
 
-		// 더블클릭은 Selectable 반환값이 아니라 항목 위에서 직접 판정한다.
-		// 반환값 안에서 보면 클릭 타이밍에 따라 놓치는 경우가 있다.
+		// 더블클릭 처리
 		if (Item.bIsDirectory && ImGui::IsItemHovered() &&
 			ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 		{
 			PendingNavigate = Item.Path;
+		}
+		else if (!Item.bIsDirectory && ImGui::IsItemHovered() &&
+			ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			if (Item.Extension == ".staticmesh" || Item.Extension == ".obj")
+			{
+				const FName MeshId(Item.DisplayName);
+				UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh(MeshId);
+				if (Mesh)
+				{
+					FEditorApplication::Get().OpenPreviewWindow(Mesh);
+				}
+			}
 		}
 
 		if (ImGui::IsItemHovered())

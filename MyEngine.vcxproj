@@ -277,6 +277,8 @@
     <ClCompile Include="Source\Editor\UI\Imgui\FImguiPropertyWindow.cpp" />
     <ClCompile Include="Source\Editor\UI\Imgui\FImguiToolBar.cpp" />
     <ClCompile Include="Source\Editor\UI\Imgui\FImguiWorldOutliner.cpp" />
+    <ClCompile Include="Source\Editor\UI\Imgui\FimguiWorlOutliner.cpp" />
+    <ClCompile Include="Source\Editor\UI\Imgui\FImguiPreviewEditorWindow.cpp" />
     <ClCompile Include="Source\Editor\Visualizer\FBillboardVisualizer.cpp" />
     <ClCompile Include="Source\Editor\Visualizer\FPrimitiveVisualizer.cpp" />
     <ClCompile Include="Source\Editor\Visualizer\FSpotlightVisualizer.cpp" />
@@ -328,6 +330,7 @@
     <ClCompile Include="Source\Runtime\Rendering\FMaterial.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FMesh.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FObjDecoder.cpp" />
+    <ClCompile Include="Source\Runtime\Rendering\FPreviewRenderTarget.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FRenderer.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FRenderPipeline.cpp" />
     <ClCompile Include="Source\Runtime\Rendering\FRenderResourceLibrary.cpp" />
@@ -414,6 +417,7 @@
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiPropertyWindow.h" />
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiToolBar.h" />
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiWorldOutliner.h" />
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiPreviewEditorWindow.h" />
     <ClInclude Include="Source\Editor\Visualizer\FBillboardVisualizer.h" />
     <ClInclude Include="Source\Editor\Visualizer\FPrimitiveVisualizer.h" />
     <ClInclude Include="Source\Editor\Visualizer\FSpotlightVisualizer.h" />
@@ -481,6 +485,7 @@
     <ClInclude Include="Source\Runtime\Rendering\FMaterial.h" />
     <ClInclude Include="Source\Runtime\Rendering\FMesh.h" />
     <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FPreviewRenderTarget.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h" />
     <ClInclude Include="Source\Runtime\Rendering\EBlendMode.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderPipeline.h" />
