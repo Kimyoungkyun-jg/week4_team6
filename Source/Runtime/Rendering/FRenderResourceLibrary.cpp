@@ -1405,7 +1405,7 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
       FName MeshKey(StemName);
 
       // FObjDecoder로 파일 파싱
-      FObjModelData ModelData;
+      FObjModelInfo ModelData;
       if (!FObjDecoder::DecodeFromFile(Entry.path().string(), ModelData)) {
         UE_LOG_WARN("[OBJ Loader] 파싱 실패: %s",
                     Entry.path().string().c_str());

@@ -3,7 +3,6 @@
 #include <fstream>
 #include <string>
 #include <filesystem>
-#include <unordered_map>
 #include <algorithm>
 #include <string_view>
 #include <ranges>
@@ -45,87 +44,9 @@ namespace
 		}
 		return FName("None");
 	}
-
-	constexpr int32 INVALID_INDEX = -1;
-
-	// v, vt, vn 인덱스 묶음 키
-	struct FObjIndexKey
-	{
-		int32 VIndex = INVALID_INDEX;
-		int32 VTIndex = INVALID_INDEX;
-		int32 VNIndex = INVALID_INDEX;
-
-		bool operator==(const FObjIndexKey& Other) const = default;
-	};
-
-	struct FObjIndexKeyHasher
-	{
-		size_t operator()(const FObjIndexKey& Key) const
-		{
-			size_t H1 = std::hash<int32>()(Key.VIndex);
-			size_t H2 = std::hash<int32>()(Key.VTIndex);
-			size_t H3 = std::hash<int32>()(Key.VNIndex);
-			return H1 ^ (H2 << 1) ^ (H3 << 2);
-		}
-	};
-
-	// "v/vt/vn", "v//vn", "v/vt", "v" 형태의 토큰 파싱
-	FObjIndexKey ParseFaceToken(const FString& Token)
-	{
-		FObjIndexKey Key{};
-		size_t FirstSlash = Token.find('/');
-		if (FirstSlash == FString::npos)
-		{
-			Key.VIndex = std::stoi(Token);
-			return Key;
-		}
-
-		Key.VIndex = std::stoi(Token.substr(0, FirstSlash)); //첫번째 슬래시 전까지 위치
-
-		size_t SecondSlash = Token.find('/', FirstSlash + 1);
-		if (SecondSlash == FString::npos)
-		{
-			// v/vt 형식
-			FString VTStr = Token.substr(FirstSlash + 1); 
-			if (!VTStr.empty())
-			{
-				Key.VTIndex = std::stoi(VTStr); //2번째 슬래시 없으면 바로 uv로
-			}
-			return Key;
-		}
-
-		// v/vt/vn 또는 v//vn 형식
-		FString VTStr = Token.substr(FirstSlash + 1, SecondSlash - FirstSlash - 1);
-		if (!VTStr.empty())
-		{
-			Key.VTIndex = std::stoi(VTStr); //2번째 숫자가 있는 경우
-		}
-
-		FString VNStr = Token.substr(SecondSlash + 1);
-		if (!VNStr.empty())
-		{
-			Key.VNIndex = std::stoi(VNStr);
-		}
-
-		return Key;
-	}
-
-	// 1-based 및 음수 상대 인덱스를 0-based 인덱스로 변환
-	int32 ResolveIndex(int32 Index, size_t TotalCount)
-	{
-		if (Index > 0)
-		{
-			return Index - 1;
-		}
-		if (Index < 0)
-		{
-			return static_cast<int32>(TotalCount) + Index;
-		}
-		return -1;
-	}
 }
 
-bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelData& OutData)
+bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelInfo& OutData)
 {
 	std::ifstream File(FilePath);
 	if (!File.is_open())
@@ -145,7 +66,7 @@ bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelData& OutData
 }
 
 
-bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory)
+bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelInfo& OutData, const FString& BaseDirectory)
 {
 	TArray<FVector> Positions;
 	TArray<FVector2> UVs;
@@ -198,16 +119,21 @@ bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& Ou
 				FVertexKey VertexKey;
 				uint32 i = 0;
 				bool bIsValid = true;
+				const int32 Counts[3] = { static_cast<uint32>(Positions.size()), static_cast<uint32>(UVs.size()), static_cast<uint32>(Normals.size()) };
 				for (auto Parsed : std::string_view(InString) | std::views::split('/'))
 				{
-					std::string_view StringNum(Parsed.begin(), Parsed.end());
-					int32 ResolvedIndex = ResolveIndex(StringNum, VertexCache.size());
-					if (bIsValid
-						|| (i == 0 && ResolvedIndex == INVALID_INDEX) 
-						|| (i != 1 && !StringNum.empty() && ResolvedIndex == INVALID_INDEX))
+					if (!bIsValid || i >= 3)
 					{
 						bIsValid = false;
-						continue;
+						break;
+					}
+					std::string_view StringNum(Parsed.begin(), Parsed.end());
+					int32 ResolvedIndex = ResolveIndex(StringNum, Counts[i]);
+					if((i == 0 && ResolvedIndex == INVALID_INDEX) 
+						|| ((i == 1 || i == 2) && !StringNum.empty() && ResolvedIndex == INVALID_INDEX))
+					{
+						bIsValid = false;
+						break;
 					}
 					VertexKey[i++] = ResolvedIndex;
 				}
@@ -226,20 +152,14 @@ bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& Ou
 
 				for (uint32 j = 0; j < 3; j++)
 				{
-					auto it = VertexCache.find(Triangle[j]);
-					int32 Index = OutData.Vertices.size();
-					if (it == VertexCache.end())
+					FVertexKey Key = Triangle[j];
+					auto [It, bInserted] = VertexCache.try_emplace(Key, OutData.Vertices.size());
+					if (bInserted)
 					{
-						FVertexKey Key = Triangle[j];
-						VertexCache[Key] = Index;
 						auto VertexData = MakeVertex(Key, Positions, UVs, Normals);
-						OutData.Vertices.push_back(*VertexData);
-						OutData.Indices.push_back(Index);
+						OutData.Vertices.push_back(VertexData);
 					}
-					else
-					{
-						OutData.Indices.push_back(it->second);
-					}
+					OutData.Indices.push_back(It->second);
 				}
 			}
 		}
@@ -262,7 +182,7 @@ int32 FObjDecoder::ResolveIndex(const std::string_view& String, const uint32 Cou
 	{
 		return INVALID_INDEX;
 	}
-	uint32 InInteger = 0;
+	int32 InInteger = 0;
 	const auto [Ptr, Ec] = std::from_chars(String.data(), String.data() + String.size(), InInteger);
 	if (Ec != std::errc{} || InInteger == 0)
 	{
@@ -270,15 +190,15 @@ int32 FObjDecoder::ResolveIndex(const std::string_view& String, const uint32 Cou
 	}
 	const long long Resolved = (InInteger > 0) 
 		? static_cast<long long>(InInteger) - 1
-		: static_cast<long long>(Count + InInteger);
-	if (Resolved < 0 || Resolved > Count)
+		: static_cast<long long>(Count) + InInteger;
+	if (Resolved < 0 || Resolved >= Count)
 	{
 		return INVALID_INDEX;
 	}
 	return static_cast<int32>(Resolved);
 }
 
-TSharedPtr<FVertexData> FObjDecoder::MakeVertex(const FVertexKey& Key, const TArray<FVector> Positions, const TArray<FVector2> UVs, const TArray<FVector> Normals)
+FVertexData FObjDecoder::MakeVertex(const FVertexKey& Key, const TArray<FVector>& Positions, const TArray<FVector2>& UVs, const TArray<FVector>& Normals)
 {
 	FVertexData VertexData{};
 	VertexData.x = Positions[Key.PosIndex].X; // TODO: FVertexData를 FVector화 하기 (대공사)
@@ -295,11 +215,11 @@ TSharedPtr<FVertexData> FObjDecoder::MakeVertex(const FVertexKey& Key, const TAr
 		VertexData.ny = Normals[Key.NormalIndex].Y;
 		VertexData.nz = Normals[Key.NormalIndex].Z;
 	}
-	return MakeShared<FVertexData>(VertexData);
+	return VertexData;
 }
 
 // 로컬 AABB 바운딩 박스 계산
-void FObjDecoder::ComputeStaticBounds(FObjModelData& OutData)
+void FObjDecoder::ComputeStaticBounds(FObjModelInfo& OutData)
 {
 	FVector MinBound{ (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)() };
 	FVector MaxBound{ (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)() };

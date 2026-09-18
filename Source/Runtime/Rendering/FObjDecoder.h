@@ -16,10 +16,7 @@ struct FVertexKey
 	{
 	}
 
-	bool operator== (const FVertexKey& Other) const
-	{
-		return this->PosIndex == Other.PosIndex && this->UVIndex == Other.UVIndex && this->NormalIndex == Other.NormalIndex;
-	}
+	bool operator== (const FVertexKey& Other) const = default;
 
 	int32& operator[] (const int32 Index)
 	{
@@ -40,44 +37,45 @@ struct FVertexKey
 	int32 NormalIndex = -1;
 };
 
+constexpr int32 INVALID_INDEX = -1;
+
 template<>
 struct std::hash<FVertexKey>
 {
-	size_t operator() (const FVertexKey& Vertex) const
+	size_t operator()(const FVertexKey& Key) const
 	{
-		size_t PosIndexHash = std::hash<uint64>{}(static_cast<uint64>(Vertex.PosIndex));
-		size_t UVIndexHash = std::hash<uint64>{}(static_cast<uint64>(Vertex.UVIndex));
-		size_t NormalIndexHash = std::hash<uint64>{}(static_cast<uint64>(Vertex.NormalIndex));
-
-		return std::hash<uint64>{}((0x9e3779b9 + PosIndexHash ^ (UVIndexHash << 6)) + (NormalIndexHash >> 2));
+		size_t Hash = std::hash<int32>()(Key.PosIndex);
+		Hash ^= std::hash<int32>()(Key.UVIndex) + 0x9e3779b9 + (Hash << 6) + (Hash >> 2);
+		Hash ^= std::hash<int32>()(Key.NormalIndex) + 0x9e3779b9 + (Hash << 6) + (Hash >> 2);
+		return Hash;
 	}
 };
 
-struct FObjModelData
+struct FObjModelInfo
 {
 	TArray<FVertexData> Vertices;
 	TArray<uint32> Indices;
 	FAxisAlignedBoundingBox LocalBounds;
 	FName ObjectName{ "None" };
 	FName TextureName{ "None" };
-	FName MaterialName{ "None" };
+	//FName MaterialName{ "None" };
 	bool bIsValid = false;
 };
 
 class FObjDecoder
 {
 public:
-	static bool DecodeFromFile(const FString& FilePath, FObjModelData& OutData);
+	static bool DecodeFromFile(const FString& FilePath, FObjModelInfo& OutData);
 
-	static bool DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory);
+	static bool DecodeFromString(const FString& FileContent, FObjModelInfo& OutData, const FString& BaseDirectory);
 
 
 private:
 	static int32 ResolveIndex(const std::string_view& String, const uint32 Count);
 
 	[[nodiscard]]
-	static TSharedPtr<FVertexData> MakeVertex(const FVertexKey& Key, const TArray<FVector> Positions, const TArray<FVector2> UVs, const TArray<FVector> Normals);
+	static FVertexData MakeVertex(const FVertexKey& Key, const TArray<FVector>& Positions, const TArray<FVector2>& UVs, const TArray<FVector>& Normals);
 
-	static void ComputeStaticBounds(FObjModelData& OutData);
+	static void ComputeStaticBounds(FObjModelInfo& OutData);
 
 };
