@@ -304,3 +304,205 @@ bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& Ou
 	OutData.bIsValid = true;
 	return true;
 }
+
+#include <cassert>
+#include <fstream>
+
+#include "FObjDecoder.h"
+#include "Source/Runtime/CoreUObject/UStaticMesh.h"
+
+FStaticMesh* FObjDecoder::LoadObjStaticMeshAsset(const std::string& PathFileName)
+{
+    // Todo: Temp, works on y-forward, z-up, x-right obj file
+    TMap<FString, FStaticMesh*>::iterator FoundIter = ObjStaticMeshMap.find(PathFileName);
+    if (FoundIter != ObjStaticMeshMap.end())
+    {
+        return FoundIter->second;
+    }
+
+    // OBJ Parsing and create a new FStaticMesh
+    std::ifstream FileInput("Resources/Asset/cube.obj");
+    assert(FileInput.is_open());
+
+    TArray<FVector> Positions;
+    TArray<FVector2> UVs;
+    TArray<FVector> Normals;
+
+    FObjModelData ModelData;
+    TMap<FString, uint32_t> UniqueVertexIndexMap; // Todo:
+
+    FString Line;
+    while (true)
+    {
+        getline(FileInput, Line);
+        if (FileInput.eof())
+        {
+            break;
+        }
+
+        if (Line.empty())
+        {
+            continue;
+        }
+
+        std::istringstream InputLineStream(Line);
+        
+        std::string Type = "";
+        InputLineStream >> Type;
+
+        if (Type == "#")
+        {
+            continue;
+        }
+
+        if (Type == "v")
+        {
+            float x;
+            float y;
+            float z;
+
+            // Todo: Need to check wrong input
+            InputLineStream >> x >> y >> z;
+            // Y-Forward, Z-Up, X-Right 좌표계 변환
+            Positions.emplace_back(z, x, y);
+        }
+        else if (Type == "vt")
+        {
+            float u;
+            float v;
+
+            // Todo: some file might have only u
+            InputLineStream >> u >> v;
+            v = 1.0f - v; // UV, V축 반전
+
+            UVs.emplace_back(u, v);
+
+            continue;
+        }
+        else if (Type == "vn")
+        {
+            float x;
+            float y;
+            float z;
+
+            InputLineStream >> x >> y >> z;
+            Normals.emplace_back(z, x, y);
+        }
+        else if (Type == "f")
+        {
+            //OBJ 면(f) 데이터의 4가지 유형
+            //f v1 v2 v3 : 위치 인덱스만 존재
+            //f v1 / vt1 v2 / vt2 v3 / vt3 : 위치 + 텍스처 좌표 인덱스
+            //f v1 / vt1 / vn1 v2 / vt2 / vn2 v3 / vt3 / vn3 : 위치 + 텍스처 좌표 + 법선(Normal) 인덱스
+            //f v1//vn1 v2//vn2 v3//vn3 : 위치 + 법선 인덱스 (텍스처 좌표 생략)
+
+            const uint8 MAX_VERTEX_INDICES_COUNT = 3U; // Todo: Move to header
+
+            FString VertexIndiceStrings[MAX_VERTEX_INDICES_COUNT];
+            InputLineStream >> VertexIndiceStrings[0] >> VertexIndiceStrings[1] >> VertexIndiceStrings[2];
+
+            for (uint8 i = 0; i < MAX_VERTEX_INDICES_COUNT; ++i)
+            {
+                FString& VertexKey = VertexIndiceStrings[i];
+
+                auto UniqueVertexIndexIter = UniqueVertexIndexMap.find(VertexKey);
+                if (UniqueVertexIndexIter != UniqueVertexIndexMap.end())
+                {
+                    ModelData.Indices.push_back(UniqueVertexIndexIter->second);
+
+                    continue;
+                }
+
+                std::stringstream VetexIndexStream(VertexIndiceStrings[i]);
+                // Todo: Check type range
+                int32 VertexIndices[MAX_VERTEX_INDICES_COUNT] = { -1, -1, -1 }; // Position, Texture, Normal 
+
+                for (uint8 j = 0; j < MAX_VERTEX_INDICES_COUNT; ++j)
+                {
+                    std::string IndexString;
+
+                    if (std::getline(VetexIndexStream, IndexString, '/'))
+                    {
+                        if (IndexString.empty() == false)
+                        {
+                            VertexIndices[j] = static_cast<int32>(std::stoi(IndexString) - 1);
+                        }
+                    }
+                }
+
+                int32 PositionsIndex = VertexIndices[0];
+                int32 UVsIndex = VertexIndices[1];
+                int32 NormalsIndex = VertexIndices[2];
+
+                // Todo: Fix
+                FVertexData NewVertexData;
+                if (PositionsIndex >= 0)
+                {
+                    assert(PositionsIndex < Positions.size());
+
+                    NewVertexData.x = Positions[PositionsIndex].X;
+                    NewVertexData.y = Positions[PositionsIndex].Y;
+                    NewVertexData.z = Positions[PositionsIndex].Z;
+                }
+
+                if (UVsIndex >= 0)
+                {
+                    assert(UVsIndex < UVs.size());
+
+                    NewVertexData.u = UVs[UVsIndex].X;
+                    NewVertexData.v = UVs[UVsIndex].Y;
+                }
+
+                if (NormalsIndex >= 0)
+                {
+                    assert(NormalsIndex < Normals.size());
+
+                    NewVertexData.nx = Normals[NormalsIndex].X;
+                    NewVertexData.ny = Normals[NormalsIndex].Y;
+                    NewVertexData.nz = Normals[NormalsIndex].Z;
+                }
+
+                uint32_t NewIndex = static_cast<uint32_t>(ModelData.Vertices.size());
+                ModelData.Vertices.push_back(NewVertexData);
+                ModelData.Indices.push_back(NewIndex);
+
+                UniqueVertexIndexMap[VertexKey] = NewIndex;
+            }
+        }
+        else
+        {
+            // Todo: Add more types
+            continue;
+        }
+    }
+
+    FileInput.close();
+
+    FStaticMesh* NewStaticMesh = nullptr;
+    /*
+    FStaticMesh* NewStaticMesh = new FStaticMesh(ModelData);
+    ObjStaticMeshMap[PathFileName] = NewStaticMesh;
+    */
+
+    return NewStaticMesh;
+
+    return FoundIter->second;
+}
+
+/*
+
+static UStaticMesh* LoadObjStaticMesh(const std::string& PathFileName)
+{
+    for (TObjectIterator<UStaticMesh> It; It; ++It)
+    {
+        UStaticMesh* StaticMesh = *It;
+        if (StaticMesh->GetAssetPathFileName() == PathFileName)
+            return It;
+    }
+
+    FStaticMesh* Asset = FObjManager::LoadObjStaticMeshAsset(PathFileName);
+    UStaticMesh* StaticMesh = ConstructObject<UStaticMesh>();
+    StaticMesh->SetStaticMeshAsset(StaticMeshAsset);
+}
+
+*/

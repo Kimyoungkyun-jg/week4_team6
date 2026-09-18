@@ -1,6 +1,9 @@
 #pragma once
 
+#include <fstream>
+
 #include "Runtime/Core/FString.h"
+#include "Runtime/Core/TMap.h"
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Core/FName.h"
 #include "Runtime/Rendering/Vertices.h"
@@ -10,6 +13,7 @@ struct FObjModelData
 {
 	TArray<FVertexData> Vertices;
 	TArray<uint32> Indices;
+
 	FAxisAlignedBoundingBox LocalBounds;
 	FName TextureName{ "None" };
 	bool bIsValid = false;
@@ -18,6 +22,13 @@ struct FObjModelData
 class FObjDecoder
 {
 public:
+	FObjDecoder() = default;
+	~FObjDecoder() = default;
+
+	FStaticMesh* LoadObjStaticMeshAsset(const std::string& PathFileName);
+
+private:
+	TMap<FString, FStaticMesh*> ObjStaticMeshMap;
 	
 	static bool DecodeFromFile(const FString& FilePath, FObjModelData& OutData);
 

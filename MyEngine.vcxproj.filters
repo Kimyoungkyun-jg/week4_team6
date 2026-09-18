@@ -313,6 +313,9 @@
     <ClCompile Include="Source\Runtime\Actors\AMasterYi.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\Rendering\FObjDecoder.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h">
@@ -603,6 +606,7 @@
     <ClInclude Include="Source\Runtime\CoreUObject\UStaticMesh.h">
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">
@@ -673,5 +677,8 @@
     <ClCompile Include="Source\Runtime\Rendering\FLineBatcher.cpp">
       <Filter>Source\Runtime\Rendering</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Object Include="Resources\Asset\cube.obj" />
   </ItemGroup>
 </Project>
