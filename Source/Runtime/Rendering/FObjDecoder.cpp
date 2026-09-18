@@ -493,64 +493,98 @@ void FObjDecoder::ParseMtlLine(std::string_view Line)
 
 	float Values[3] = { 0.0f, 0.0f, 0.0f };
 
-	if (Keyword == "Ka")
+	if (Keyword == "Ka") // 주변 색상
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Ambient = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (Keyword == "Kd")
+	else if (Keyword == "Kd") // 확산 색상
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Diffuse = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (Keyword == "Ks")
+	else if (Keyword == "Ks") // 반사색
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Specular = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (Keyword == "Ns")
+	else if (Keyword == "Ns") // 반사율
 	{
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.SpecularExponent = Values[0];
 	}
-	else if (Keyword == "d")
+	else if (Keyword == "d") // 투명성
 	{
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.Opacity = Values[0];
 	}
-	else if (Keyword == "Tr")
+	else if (Keyword == "Tr") // 투명성
 	{
-		// Tr 은 투명도라 d 와 반대
+		// Tr 은 d 와 반대
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.Opacity = 1.0f - Values[0];
 	}
-	else if (Keyword == "illum")
+	else if (Keyword == "Ke") // 발광
+	{
+		if (ReadFloats(Line, Values, 3) == 3)
+			Material.Emissive = FVector(Values[0], Values[1], Values[2]);
+	}
+	else if (Keyword == "Tf") // 투과 필터 색상
+	{
+		if (ReadFloats(Line, Values, 3) == 3)
+			Material.TransmissionFilter = FVector(Values[0], Values[1], Values[2]);
+	}
+	else if (Keyword == "Ni") // 굴절률
+	{
+		if (ReadFloats(Line, Values, 1) == 1)
+			Material.OpticalDensity = Values[0];
+	}
+	else if (Keyword == "illum") // 조명 모델
 	{
 		int32 Model = 0;
 		if (StringToInt(Trim(Line), Model))
 			Material.IlluminationModel = Model;
 	}
-	else if (Keyword == "map_Kd")
+	else if (Keyword == "map_Kd") // 디퓨즈 컬러 맵
 	{
 		Material.DiffuseTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_Ka")
+	else if (Keyword == "map_Ka") // 주변 색상 맵
 	{
 		Material.AmbientTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_Ks")
+	else if (Keyword == "map_Ks") // 반사 색상 맵
 	{
 		Material.SpecularTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_d")
+	else if (Keyword == "map_d") // 알파 택스쳐 맵
 	{
 		Material.AlphaTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_bump" || Keyword == "bump" || Keyword == "norm")
+	else if (Keyword == "map_bump" || Keyword == "bump") // 범프 맵
 	{
 		Material.NormalTexture = ParseTexturePath(Line);
 	}
-	// 아직 처리하지 않는 키워드: Ke, Ni, map_Ns, refl, disp, decal
+	else if (Keyword == "map_Ke") // 발광 텍스처
+	{
+		Material.EmissiveTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "map_Ns") // 반사광 하이라이트 구성 요소
+	{
+		Material.SpecularExponentTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "refl") // 구형 반사 맵
+	{
+		Material.ReflectionTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "disp") // 변위 맵
+	{
+		Material.DisplacementTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "decal") // 스텐실 데칼 텍스처
+	{
+		Material.DecalTexture = ParseTexturePath(Line);
+	}
 }
 
 void FObjDecoder::ParseLine(std::string_view Line)
@@ -590,7 +624,7 @@ void FObjDecoder::ParseLine(std::string_view Line)
 		AddMaterialLib(Line);
 	else if (Keyword == "usemtl")
 		UseMaterial(Line);
-	// 아직 처리하지 않는 키워드: vp, s, l, p
+	// 아직 처리하지 않는 키워드: vp(파라미터 공간 정점), s(스무딩그룹), l(선), p(점)
 }
 
 FObjInfo FObjDecoder::ParseObjFile(const FString& File)
