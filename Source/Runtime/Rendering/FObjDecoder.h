@@ -25,12 +25,11 @@ public:
 	FObjDecoder() = default;
 	~FObjDecoder() = default;
 
-	FStaticMesh* LoadObjStaticMeshAsset(const std::string& PathFileName);
+	void LoadObjStaticMeshAsset(const std::string& PathFileName, FObjModelData* OutModelData);
 
 private:
-	TMap<FString, FStaticMesh*> ObjStaticMeshMap;
+	TMap<FString, FObjModelData*> StringModelDataMap;
 	
-	static bool DecodeFromFile(const FString& FilePath, FObjModelData& OutData);
-
-	static bool DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory);
+	//static bool DecodeFromFile(const FString& FilePath, FObjModelData& OutData);
+	//static bool DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory);
 };

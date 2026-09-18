@@ -1405,12 +1405,20 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
       FName MeshKey(StemName);
 
       // FObjDecoder로 파일 파싱
+      /*
       FObjModelData ModelData;
       if (!FObjDecoder::DecodeFromFile(Entry.path().string(), ModelData)) {
         UE_LOG_WARN("[OBJ Loader] 파싱 실패: %s",
                     Entry.path().string().c_str());
         continue;
       }
+      */
+
+      FObjModelData ModelData;
+      
+      FObjDecoder decoder;
+      //decoder.LoadObjStaticMeshAsset("Resources/Assets/cube-tex.obj", &ModelData);
+      decoder.LoadObjStaticMeshAsset("Resources/Assets/FinalBaseMesh.obj", &ModelData);
 
       FMeshDesc Desc{
           .VertexData = ModelData.Vertices.data(),
