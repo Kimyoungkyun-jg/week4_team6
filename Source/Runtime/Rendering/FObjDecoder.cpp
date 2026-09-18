@@ -332,16 +332,64 @@ void FObjDecoder::ParseFace(std::string_view Line)
 			static_cast<float>(A.VN), static_cast<float>(B.VN), static_cast<float>(C.VN)));
 		ObjInfo.MaterialList.push_back(CurrentMaterial);
 		ObjInfo.GroupList.push_back(CurrentGroup);
+		ObjInfo.ObjectNamesList.push_back(CurrentObjectName);
 	}
 }
 
-void FObjDecoder::AddGroup(std::string_view Line)
+int32 FObjDecoder::FindOrAddGroup(std::string_view Name)
 {
-	int32 Temp;
-	if (!Line.empty() && StringToInt(Line, Temp))
+	for (size_t i = 0; i < ObjInfo.Groups.size(); ++i)
 	{
-		CurrentGroup = Temp;
+		if (ObjInfo.Groups[i].Name == Name)
+		{
+			return static_cast<int32>(i);
+		}
 	}
+
+	FObjGroupInfo Group{};
+	Group.Name = FString(Name);
+	ObjInfo.Groups.push_back(Group);
+	return static_cast<int32>(ObjInfo.Groups.size() - 1);
+}
+
+void FObjDecoder::UseGroup(std::string_view Line)
+{
+	const std::string_view Name = Trim(Line);
+	if (Name.empty())
+	{
+		CurrentGroup = -1;
+		return;
+	}
+
+	CurrentGroup = FindOrAddGroup(Name);
+}
+
+int32 FObjDecoder::FindOrAddObjectName(std::string_view Name)
+{
+	for (size_t i = 0; i < ObjInfo.ObjectNames.size(); ++i)
+	{
+		if (ObjInfo.ObjectNames[i].Name == Name)
+		{
+			return static_cast<int32>(i);
+		}
+	}
+
+	FObjObjectInfo ObjectName{};
+	ObjectName.Name = FString(Name);
+	ObjInfo.ObjectNames.push_back(ObjectName);
+	return static_cast<int32>(ObjInfo.ObjectNames.size() - 1);
+}
+
+void FObjDecoder::UseObjectName(std::string_view Line)
+{
+	const std::string_view Name = Trim(Line);
+	if (Name.empty())
+	{
+		CurrentObjectName = -1;
+		return;
+	}
+
+	CurrentObjectName = FindOrAddObjectName(Name);
 }
 
 void FObjDecoder::AddMaterialLib(std::string_view Line)
@@ -535,12 +583,14 @@ void FObjDecoder::ParseLine(std::string_view Line)
 	else if (Keyword == "f")
 		ParseFace(Line);
 	else if (Keyword == "g")
-		AddGroup(Line);
+		UseGroup(Line);
+	else if (Keyword == "o")
+		UseObjectName(Line);
 	else if (Keyword == "mtllib")
 		AddMaterialLib(Line);
 	else if (Keyword == "usemtl")
 		UseMaterial(Line);
-	// 아직 처리하지 않는 키워드: vp, o, g, s
+	// 아직 처리하지 않는 키워드: vp, s, l, p
 }
 
 FObjInfo FObjDecoder::ParseObjFile(const FString& File)
@@ -548,6 +598,9 @@ FObjInfo FObjDecoder::ParseObjFile(const FString& File)
 	ObjInfo = FObjInfo{};
 	CurrentMaterial = -1;
 	DefiningMaterial = -1;
+	CurrentGroup = -1;
+	CurrentObjectName = -1;
+
 
 	std::string_view Remaining = File;
 	while (!Remaining.empty())
@@ -663,8 +716,10 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 {
 	Out.Vertices.clear();
 	Out.Indices.clear();
-	Out.TriangleMaterials.clear();
+	//Out.TriangleMaterials.clear();
 	Out.Materials = Info.Materials;
+	Out.Groups = Info.Groups;
+	Out.ObjectNames = Info.ObjectNames;
 
 	const size_t TriangleCount = Info.VertexIndexList.size();
 	if (TriangleCount == 0)
@@ -679,46 +734,80 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 		return false;
 	}
 
+	TSortedMap<FSectionKey, TArray<size_t>> Bucket;
+
+	for (size_t Index = 0; Index < TriangleCount; ++Index)
+	{
+		FSectionKey Key;
+		Key.Object = Info.ObjectNamesList[Index];
+		Key.Group = Info.GroupList[Index];
+		Key.Material = Info.MaterialList[Index];
+		Bucket[Key].push_back(Index);
+	}
+
 	FUniqueVertexMap UniqueVertices;
 	UniqueVertices.reserve(TriangleCount * 3);
 	Out.Indices.reserve(TriangleCount * 3);
 
-	for (size_t Triangle = 0; Triangle < TriangleCount; ++Triangle)
+
+	uint32 CurrnetIndex = 0;
+	for (const auto& [SectionKey, Triangles] : Bucket)
 	{
-		const FVector& V  = Info.VertexIndexList[Triangle];
-		const FVector& VT = Info.UVIndexList[Triangle];
-		const FVector& VN = Info.NormalIndexList[Triangle];
+		FMeshSection CurrentSection;
+		CurrentSection.FirstIndex = CurrnetIndex;
+		CurrentSection.Object = SectionKey.Object;
+		CurrentSection.Group = SectionKey.Group;
+		CurrentSection.MaterialIndex = SectionKey.Material;
+		uint32 EndIndex = CurrnetIndex;
 
-		const FCornerKey Corners[3] = {
-			{ static_cast<int32>(V.X), static_cast<int32>(VT.X), static_cast<int32>(VN.X) },
-			{ static_cast<int32>(V.Y), static_cast<int32>(VT.Y), static_cast<int32>(VN.Y) },
-			{ static_cast<int32>(V.Z), static_cast<int32>(VT.Z), static_cast<int32>(VN.Z) },
-		};
-
-		// 범위 밖 인덱스가 하나라도 있으면 이 삼각형은 버린다.
-		bool bValid = true;
-		for (const FCornerKey& Corner : Corners)
+		for (auto Triangle : Triangles)
 		{
-			if (Corner.V < 0 || !IsIndexValid(Corner.V, Info.VertexList.size())
-				|| !IsIndexValid(Corner.VT, Info.UVList.size())
-				|| !IsIndexValid(Corner.VN, Info.NormalList.size()))
+			const FVector& V = Info.VertexIndexList[Triangle];
+			const FVector& VT = Info.UVIndexList[Triangle];
+			const FVector& VN = Info.NormalIndexList[Triangle];
+
+			const FCornerKey Corners[3] = {
+				{ static_cast<int32>(V.X), static_cast<int32>(VT.X), static_cast<int32>(VN.X) },
+				{ static_cast<int32>(V.Y), static_cast<int32>(VT.Y), static_cast<int32>(VN.Y) },
+				{ static_cast<int32>(V.Z), static_cast<int32>(VT.Z), static_cast<int32>(VN.Z) },
+			};
+
+			// 범위 밖 인덱스가 하나라도 있으면 이 삼각형은 버린다.
+			bool bValid = true;
+			for (const FCornerKey& Corner : Corners)
 			{
-				bValid = false;
-				break;
+				if (Corner.V < 0 || !IsIndexValid(Corner.V, Info.VertexList.size())
+					|| !IsIndexValid(Corner.VT, Info.UVList.size())
+					|| !IsIndexValid(Corner.VN, Info.NormalList.size()))
+				{
+					bValid = false;
+					break;
+				}
 			}
-		}
-		if (!bValid)
-		{
-			continue;
-		}
+			if (!bValid)
+			{
+				continue;
+			}
 
-		for (const FCornerKey& Corner : Corners)
-		{
-			Out.Indices.push_back(GetOrAddVertex(Info, Corner, UniqueVertices, Out));
-		}
+			for (const FCornerKey& Corner : Corners)
+			{
+				
+				Out.Indices.push_back(GetOrAddVertex(Info, Corner, UniqueVertices, Out));
 
-		Out.TriangleMaterials.push_back(Info.MaterialList[Triangle]);
-		Out.TriangleGroups.push_back(Info.GroupList[Triangle]);
+				for (int i = 0; i < 3; i++)
+				{
+					if (Info.VertexList[Corner.V][i] < CurrentSection.LocalBounds.Min[i])
+						CurrentSection.LocalBounds.Min[i] = Info.VertexList[Corner.V][i];
+					if (Info.VertexList[Corner.V][i] > CurrentSection.LocalBounds.Max[i])
+						CurrentSection.LocalBounds.Max[i] = Info.VertexList[Corner.V][i];
+				}
+			}
+
+			EndIndex += 3;
+		}
+		CurrentSection.IndexCount = EndIndex - CurrnetIndex;
+		CurrnetIndex = EndIndex;
+		Out.Sections.push_back(CurrentSection);
 	}
 
 	return (!Out.Indices.empty());
