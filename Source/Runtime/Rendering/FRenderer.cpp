@@ -161,6 +161,7 @@ TSharedPtr<FStaticMesh> FRenderer::CreateMesh(const FMeshDesc &Desc) {
   }
 
   auto Mesh = TSharedPtr<FStaticMesh>{new FStaticMesh()};
+  
   D3D11_BUFFER_DESC VertexBufferDesc = {
       .ByteWidth = Desc.VertexDataSize,
       .Usage = D3D11_USAGE_DEFAULT,
@@ -850,10 +851,19 @@ void FRenderer::ClearTextInstances() {
   FRenderResourceLibrary::Get().DestroyAllInstancingArray();
 }
 
-void FRenderer::RenderOutline() {
-  // 백버퍼 뷰포트 및 토폴로지 복구
+void FRenderer::BindBackBufferWithDepth() {
+  Context->OMSetRenderTargets(1, BackBufferRTV.GetAddressOf(), DepthStencilView.Get());
+}
 
-  Context->RSSetViewports(1, &Viewport);
+void FRenderer::RenderOutline(FVector2 TopLeftUV, FVector2 LengthUV) {
+  // 뷰포트 영역 설정
+  D3D11_VIEWPORT RenderViewport = Viewport;
+  RenderViewport.TopLeftX = TopLeftUV.X * Viewport.Width;
+  RenderViewport.TopLeftY = TopLeftUV.Y * Viewport.Height;
+  RenderViewport.Width = LengthUV.X * Viewport.Width;
+  RenderViewport.Height = LengthUV.Y * Viewport.Height;
+
+  Context->RSSetViewports(1, &RenderViewport);
   Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   Context->IASetInputLayout(nullptr);
 
@@ -862,17 +872,18 @@ void FRenderer::RenderOutline() {
   Context->IASetVertexBuffers(0, 1, &NullVB, &Zero, &Zero);
 
   Context->OMSetRenderTargets(1, BackBufferRTV.GetAddressOf(), nullptr);
-  // 씬 텍스처와 스텐실 텍스처 바인딩
+  // 텍스처 바인딩
   ID3D11ShaderResourceView *SRVs[] = {EditorViewPortSRV.Get(),
                                       DepthStencilSRV.Get()};
   Context->PSSetShaderResources(0, 2, SRVs);
 
-  FRenderResourceLibrary::Get()
-      .GetPipeline(FName("PostProcess"))
-      ->Bind(*Context.Get());
+  FRenderResourceLibrary::Get().GetPipeline(FName("PostProcess"))->Bind(*Context.Get());
   Context->Draw(3, 0);
 
   // 슬롯 해제
   ID3D11ShaderResourceView *NullSRVs[] = {nullptr, nullptr};
   Context->PSSetShaderResources(0, 2, NullSRVs);
+
+  // 깊이버퍼 복구
+  BindBackBufferWithDepth();
 }

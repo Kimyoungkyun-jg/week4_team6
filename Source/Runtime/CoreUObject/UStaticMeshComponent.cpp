@@ -16,6 +16,11 @@ bool UStaticMeshComponent::SetStaticMesh(UStaticMesh* InStaticMesh)
     {
         RenderData.MeshId = StaticMesh->MeshId;
         RenderData.MaterialId = GetMaterialID();
+
+        FName TexId = StaticMesh->GetDefaultTextureID();
+        SetTextureID(!TexId.IsNone() ? TexId : FName("None"));
+
+        CalcLocalBounds();
     }
     return true;
 }
@@ -56,13 +61,28 @@ const FRenderData& UStaticMeshComponent::GetRenderData(const FCamera& Camera)
 {
     RenderData.MeshId = GetMeshID();
     RenderData.MaterialId = GetMaterialID();
+
+    if (StaticMesh)
+    {
+        FName TexId = StaticMesh->GetDefaultTextureID();
+        RenderData.TextureId = !TexId.IsNone() ? TexId : FName("None");
+    }
+
     return RenderData;
 }
 
 const FRenderData& UStaticMeshComponent::GetPureRenderData() const
 {
-    const_cast<FRenderData&>(RenderData).MeshId = GetMeshID();
-    const_cast<FRenderData&>(RenderData).MaterialId = GetMaterialID();
+    FRenderData& MutableData = const_cast<FRenderData&>(RenderData);
+    MutableData.MeshId = GetMeshID();
+    MutableData.MaterialId = GetMaterialID();
+
+    if (StaticMesh)
+    {
+        FName TexId = StaticMesh->GetDefaultTextureID();
+        MutableData.TextureId = !TexId.IsNone() ? TexId : FName("None");
+    }
+
     return RenderData;
 }
 

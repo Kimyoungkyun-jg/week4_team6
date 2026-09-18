@@ -58,6 +58,8 @@ public:
   [[nodiscard]] TArray<FEditorViewport> &GetViewports() {
     return EditorViewports;
   }
+  int32 GetActiveViewportIndex() const { return ActiveViewportIndex; }
+  void SetActiveViewportIndex(int32 Index) { ActiveViewportIndex = Index; }
   [[nodiscard]] UScene *GetCurrentScene() const {
     return SceneManager ? SceneManager->CurrentScene : nullptr;
   }
@@ -80,6 +82,7 @@ private:
       nullptr; // 씬을 다중으로 가질 수 있도록 구조개선 가능-이경우 에디터쪽에
                // 클래스를 추가해 씬과 FEditorViewport들을 연관
   TArray<FEditorViewport> EditorViewports;
+  int32 ActiveViewportIndex = 0;
 
   FGizmo Gizmo;
   FGrid Grid;

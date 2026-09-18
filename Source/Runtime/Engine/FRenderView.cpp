@@ -20,6 +20,8 @@ FRenderView::FRenderView(FRenderer &Renderer) : Renderer(Renderer) {}
 
 void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& View, const AActor* SelectedActor)
 {
+    auto& ResLib = FRenderResourceLibrary::Get();
+
     for (auto& MeshComponent : Scene.GetRenderComponents())
     {
         if (!MeshComponent) continue;
@@ -39,11 +41,10 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
         FRenderData Data = MeshComponent->GetRenderData(View.Camera);
         Data.bSelected = bSelected;
 
-        // 인스턴싱 및 텍스트는 인스턴스 배열을 사용하므로 바로 푸시
-        if (Data.type == ERenderType::Text || Data.type == ERenderType::Instancing)
+        // 인스턴스 데이터가 있으면 인스턴싱 큐로 분류
+        if (!Data.Instances.empty())
         {
-
-            RenderQueue.Push(Data);
+            RenderQueue.PushInstancing(Data);
             continue;
         }
 
@@ -63,7 +64,17 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
             Data.Constants.ColorOverride = FVector{ 1.0f, 1.0f, 1.0f };
             Data.Constants.ColorOverrideAmount = 0.5f;
         }
-        RenderQueue.Push(Data);
+
+        // 머티리얼의 블렌드 모드에 따라 불투명 및 반투명 패스 자동 분기
+        auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
+        if (Material && (Material->GetBlendMode() == EBlendMode::Additive || Material->GetBlendMode() == EBlendMode::Translucent))
+        {
+            RenderQueue.PushTranslucent(Data);
+        }
+        else
+        {
+            RenderQueue.PushOpaque(Data);
+        }
     }
 }
 
@@ -104,7 +115,7 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
     FlushLinePass(View.Camera);
 
     // 후처리 외곽선 패스
-    RenderPostProcessPass(View.Camera, EditorCtx.SelectedActor);
+    RenderPostProcessPass(View.Camera, EditorCtx.SelectedActor, View.TopLeftUV, View.LengthUV);
 
     // 오버레이 패스
     if (EditorCtx.Gizmo && EditorCtx.SelectedActor)
@@ -118,6 +129,7 @@ void FRenderView::BeginView(FVector2 TopLeftUV, FVector2 LengthUV, EViewModeInde
     // 에디터 뷰포트 렌더타겟 바인딩
     Renderer.BindEditorViewportRenderTargets();
     Renderer.SetViewportUV(TopLeftUV, LengthUV);
+    Renderer.ClearDepth();
     Renderer.SetRenderMode(ViewMode);
     Renderer.UpdateLightConstants(LightConstants, ViewMode);
 }
@@ -144,9 +156,9 @@ void FRenderView::FlushLinePass(const FCamera& Camera)
     FlushLineBatch(Camera.CreateViewProjectionMatrix());
 }
 
-void FRenderView::RenderPostProcessPass(const FCamera& Camera, const AActor* SelectedActor)
+void FRenderView::RenderPostProcessPass(const FCamera& Camera, const AActor* SelectedActor, FVector2 TopLeftUV, FVector2 LengthUV)
 {
-    RenderOutline(Camera, SelectedActor);
+    RenderOutline(Camera, SelectedActor, TopLeftUV, LengthUV);
 }
 
 void FRenderView::RenderOverlayPass(const FCamera& Camera, const FSceneView& SceneView, const FTransform& SelectedTransform, const FGizmo& Gizmo, UTextInstanceComponent* TextComp)
@@ -249,9 +261,11 @@ void FRenderView::RenderUUIDText(const FCamera& Camera, FVector2 TopLeftUV,
 }
 
 void FRenderView::RenderOutline(const FCamera &Camera,
-                                const AActor *SelectedActor) {
+                                const AActor *SelectedActor,
+                                FVector2 TopLeftUV,
+                                FVector2 LengthUV) {
   DrawStencilMask(Camera, SelectedActor);
-  Renderer.RenderOutline();
+  Renderer.RenderOutline(TopLeftUV, LengthUV);
 }
 
 void FRenderView::DrawStencilMask(const FCamera& Camera,
@@ -286,7 +300,7 @@ void FRenderView::RenderPostProcess(const FCamera &Camera, FVector2 TopLeftUV,
                                     FVector2 LengthUV, AActor *SelectedActor) {
   // 에디터 뷰포트 설정 후 후처리 수행
   Renderer.SetViewportUV(TopLeftUV, LengthUV);
-  RenderOutline(Camera, SelectedActor);
+  RenderOutline(Camera, SelectedActor, TopLeftUV, LengthUV);
 }
 void FRenderView::SetViewportUV(FVector2 TopLeftUV, FVector2 LengthUV)
 {
@@ -321,20 +335,37 @@ void FRenderView::FlushLineBatch(const FMatrix& ViewProjection, const FName& Pip
     Renderer.FlushLineBatch(Constants, PipelineId);
 }
 
-void FRenderView::FlushQueue(const FCamera& Camera)
+void FRenderView::DrawRenderData(const FRenderData& Data)
 {
     auto& ResLib = FRenderResourceLibrary::Get();
+    auto Mesh = ResLib.GetMesh(Data.MeshId);
+    auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
+    if (!Mesh || !Material) return;
 
-    // Primitive 큐 처리
-    for (const FRenderData& Data : RenderQueue.GetPrimRenderQ())
+    // 텍스처 오버라이드 처리
+    if (!Data.TextureId.IsNone() && Data.TextureId != FName("None"))
     {
-        auto Mesh     = ResLib.GetMesh(Data.MeshId);
-        auto Material = ResLib.GetMaterial(Data.MaterialId);
-        if (!Mesh || !Material) continue;
-        Renderer.Draw(*Mesh, *Material, Data.Constants);
+        auto Tex = ResLib.GetTexture(Data.TextureId);
+        if (Tex && Material->GetTexture() != Tex)
+        {
+            auto MatInst = TSharedPtr<FMaterial>(new FMaterial(*Material));
+            MatInst->SetTexture(Tex);
+            Renderer.Draw(*Mesh, *MatInst, Data.Constants);
+            return;
+        }
+    }
+    Renderer.Draw(*Mesh, *Material, Data.Constants);
+}
+
+void FRenderView::FlushQueue(const FCamera& Camera)
+{
+    // 불투명 패스
+    for (const FRenderData& Data : RenderQueue.GetOpaqueRenderQ())
+    {
+        DrawRenderData(Data);
     }
 
-    // Instancing 큐
+    // 인스턴싱 패스
     if (!RenderQueue.IsInstancingRQEmpty())
     {
         for (const FRenderData& Data : RenderQueue.GetInstancingRenderQ())
@@ -345,47 +376,21 @@ void FRenderView::FlushQueue(const FCamera& Camera)
         Renderer.ClearTextInstances();
     }
 
-    // Texture 큐: Primitive와 동일하지만 TextureId로 머티리얼 텍스처 교체 후 드로우
-    for (const FRenderData& Data : RenderQueue.GetTextureRenderQ())
+    // 반투명 패스
+    for (const FRenderData& Data : RenderQueue.GetTranslucentRenderQ())
     {
-        auto Mesh     = ResLib.GetMesh(Data.MeshId);
-        auto Material = ResLib.GetMaterial(Data.MaterialId);
-        if (!Mesh || !Material) continue;
-
-        if (!Data.TextureId.IsNone())
-        {
-            auto Tex = ResLib.GetTexture(Data.TextureId);
-            if (Tex)
-            {
-                // 원본 머티리얼을 건드리지 않도록 인스턴스 복사
-                auto MatInst = TSharedPtr<FMaterial>(new FMaterial(*Material));
-                MatInst->SetTexture(Tex);
-                Renderer.Draw(*Mesh, *MatInst, Data.Constants);
-                continue;
-            }
-        }
-        Renderer.Draw(*Mesh, *Material, Data.Constants);
+        DrawRenderData(Data);
     }
 
-    // Spotlight 큐: 불투명 렌더링 후 가산 블렌딩 수행
-    for (const FRenderData& Data : RenderQueue.GetSpotlightRenderQ())
-    {
-        auto Mesh     = ResLib.GetMesh(Data.MeshId);
-        auto Material = ResLib.GetMaterial(Data.MaterialId);
-        if (!Mesh || !Material) continue;
-        Renderer.Draw(*Mesh, *Material, Data.Constants);
-    }
-
-    // Text 큐: BuildRenderData()에서 이미 계산된 Instances 배열 사용
+    // 텍스트 패스
     if (!RenderQueue.IsTextRQEmpty())
     {
         const FRenderData& First = RenderQueue.GetTextRenderQ()[0];
-        FName     TextMeshId     = First.MeshId;
-        FName     TextMaterialId = First.MaterialId;
-        
+        FName TextMeshId = First.MeshId;
+        FName TextMaterialId = First.MaterialId;
+
         for (const FRenderData& Data : RenderQueue.GetTextRenderQ())
         {
-            // Font에서 미리 계산된 글자별 쿼드 데이터를 그대로 넘김
             Renderer.AddTextInstanceArray(Data.Instances, Data.MeshId, Data.MaterialId);
         }
         Renderer.DrawTextInstances(Camera, TextMeshId, TextMaterialId);

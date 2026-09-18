@@ -1,16 +1,21 @@
 #include "FRenderResourceLibrary.h"
-#include "Vertices.h"
 #include "Resources/MasterYi/MasterYi_HeadData.h"
+#include "Vertices.h"
 
+
+#include "FObjDecoder.h"
 #include "FRenderer.h"
 #include "FTexture.h"
-#include <d3dcompiler.h>
 #include "Runtime/Core/TArray.h"
+#include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Geometry/Sphere.h"
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/FRenderer.h"
 #include <cmath>
+#include <d3dcompiler.h>
 #include <numbers>
+
 
 #define STB_IMAGE_IMPLEMENTATION
 
@@ -125,7 +130,6 @@ const FPipelineEntry pipelineTable[] = {
         .bIsInstancing = true,
     },
 };
-
 
 // 머티리얼 정보 엔트리
 struct FMaterialEntry {
@@ -265,11 +269,9 @@ bool FRenderResourceLibrary::CreateOutlinePipeline(FRenderer &Renderer) {
   }
 
   // 입력 레이아웃 생성
-  Result = Device->CreateInputLayout(FVertexLayouts::Layout,
-                                     FVertexLayouts::NumElements,
-                                     Blob->GetBufferPointer(),
-                                     Blob->GetBufferSize(),
-                                     &Pipeline->InputLayout);
+  Result = Device->CreateInputLayout(
+      FVertexLayouts::Layout, FVertexLayouts::NumElements,
+      Blob->GetBufferPointer(), Blob->GetBufferSize(), &Pipeline->InputLayout);
   if (FAILED(Result)) {
     return false;
   }
@@ -280,9 +282,9 @@ bool FRenderResourceLibrary::CreateOutlinePipeline(FRenderer &Renderer) {
     return false;
   }
 
-  Result = Device->CreatePixelShader(Blob->GetBufferPointer(),
-                                     Blob->GetBufferSize(), nullptr,
-                                     &Pipeline->PixelShader);
+  Result =
+      Device->CreatePixelShader(Blob->GetBufferPointer(), Blob->GetBufferSize(),
+                                nullptr, &Pipeline->PixelShader);
   if (FAILED(Result)) {
     return false;
   }
@@ -381,9 +383,9 @@ bool FRenderResourceLibrary::CreatePostProcessPipeline(FRenderer &Renderer) {
     return false;
   }
 
-  Result = Device->CreatePixelShader(Blob->GetBufferPointer(),
-                                     Blob->GetBufferSize(), nullptr,
-                                     &Pipeline->PixelShader);
+  Result =
+      Device->CreatePixelShader(Blob->GetBufferPointer(), Blob->GetBufferSize(),
+                                nullptr, &Pipeline->PixelShader);
   if (FAILED(Result)) {
     return false;
   }
@@ -484,8 +486,7 @@ bool FRenderResourceLibrary::InitializePipelines(FRenderer &Renderer) {
 
 bool FRenderResourceLibrary::Initialize(FRenderer &Renderer) {
   RendererRef = &Renderer;
-  if (!InitializePipelines(
-          Renderer) // 파이프라인을 먼저 생성해야 뒤에 material 할당가능
+  if (!InitializePipelines(Renderer) // 파이프라인 먼저 생성
       || !CreateCubeMesh(Renderer) ||
       !CreateCylinderMesh(Renderer, 1.0f, 24u, 1.0f, 1.0f) ||
       !CreateConeMesh(Renderer) || !CreateSpotlightConeMesh(Renderer) ||
@@ -494,12 +495,39 @@ bool FRenderResourceLibrary::Initialize(FRenderer &Renderer) {
       !CreateGridMesh(Renderer) || !CreateSphereMesh(Renderer) ||
       !CreateLineMesh(Renderer) || !CreatePlaneMesh(Renderer) ||
       !CreateRectMesh(Renderer) || !CreateMasterYiMesh(Renderer) ||
-      !CreateTextures(Renderer) ||
-      !InitializeMaterials(Renderer) || !CreateInstancingArrayMap() ||
-      !CreateEditTextures(Renderer) || !CreateFonts(Renderer)) {
+      !CreateTextures(Renderer) || !InitializeMaterials(Renderer) ||
+      !CreateInstancingArrayMap() || !CreateEditTextures(Renderer) ||
+      !CreateFonts(Renderer) || !CreateObjMeshes(Renderer)) {
     return false;
   }
 
+  CreateUStaticMeshMap();
+
+  return true;
+}
+
+bool FRenderResourceLibrary::CreateUStaticMeshMap() {
+  for (const auto &[Key, Mesh] : AllFStaticMeshMap) {
+    FName MaterialName = FName("Simple");
+
+    // 메시별 기본 머티리얼 및 텍스처 예외 처리
+    if (Key == FName("MasterYi")) {
+      MaterialName = FName("Textured");
+      if (Mesh && Mesh->DefaultTextureId.IsNone()) {
+        Mesh->DefaultTextureId = FName("MasterYi_Head");
+      }
+    } else if (Key == FName("SpotlightCone") || Key == FName("Spotlight")) {
+      MaterialName = FName("Spotlight");
+    } else if (Mesh && !Mesh->DefaultTextureId.IsNone() &&
+               Mesh->DefaultTextureId != FName("None")) {
+      MaterialName = FName("Textured");
+    }
+
+    UStaticMesh *StaticMeshObj = NewObject<UStaticMesh>(Key, MaterialName);
+    if (StaticMeshObj) {
+      AllUStaticMeshMap[Key] = StaticMeshObj;
+    }
+  }
   return true;
 }
 
@@ -515,7 +543,7 @@ bool FRenderResourceLibrary::CreateCubeMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Cube"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Cube")] != nullptr;
+  return AllFStaticMeshMap[FName("Cube")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateCylinderMesh(FRenderer &Renderer,
@@ -622,7 +650,7 @@ bool FRenderResourceLibrary::CreateCylinderMesh(FRenderer &Renderer,
   };
 
   RegisterMesh(FName("Cylinder"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Cylinder")] != nullptr;
+  return AllFStaticMeshMap[FName("Cylinder")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateConeMesh(FRenderer &Renderer) {
@@ -710,7 +738,7 @@ bool FRenderResourceLibrary::CreateConeMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Cone"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Cone")] != nullptr;
+  return AllFStaticMeshMap[FName("Cone")] != nullptr;
 }
 
 // 스포트라이트 전용 열린 원뿔 메쉬 생성
@@ -778,7 +806,7 @@ bool FRenderResourceLibrary::CreateSpotlightConeMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("SpotlightCone"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("SpotlightCone")] != nullptr;
+  return AllFStaticMeshMap[FName("SpotlightCone")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateArrowMesh(FRenderer &Renderer) {
@@ -897,7 +925,7 @@ bool FRenderResourceLibrary::CreateArrowMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Arrow"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Arrow")] != nullptr;
+  return AllFStaticMeshMap[FName("Arrow")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateCircleMesh(FRenderer &Renderer) {
@@ -958,7 +986,7 @@ bool FRenderResourceLibrary::CreateCircleMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Circle"), Renderer.CreateMesh(Desc));
-  return AllMeshMap[FName("Circle")] != nullptr;
+  return AllFStaticMeshMap[FName("Circle")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateRotationGizmoMesh(FRenderer &Renderer) {
@@ -1028,7 +1056,7 @@ bool FRenderResourceLibrary::CreateRotationGizmoMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("RotGizmo"), Renderer.CreateMesh(Desc));
-  return AllMeshMap[FName("RotGizmo")] != nullptr;
+  return AllFStaticMeshMap[FName("RotGizmo")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateSquareArrowMesh(FRenderer &Renderer) {
@@ -1080,7 +1108,7 @@ bool FRenderResourceLibrary::CreateSquareArrowMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("SquareArrow"), Renderer.CreateMesh(Desc));
-  return AllMeshMap[FName("SquareArrow")] != nullptr;
+  return AllFStaticMeshMap[FName("SquareArrow")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateGridMesh(FRenderer &Renderer) {
@@ -1111,7 +1139,7 @@ bool FRenderResourceLibrary::CreateGridMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Grid"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Grid")] != nullptr;
+  return AllFStaticMeshMap[FName("Grid")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateSphereMesh(FRenderer &Renderer) {
@@ -1126,7 +1154,7 @@ bool FRenderResourceLibrary::CreateSphereMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Sphere"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Sphere")] != nullptr;
+  return AllFStaticMeshMap[FName("Sphere")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateLineMesh(FRenderer &Renderer) {
@@ -1137,7 +1165,7 @@ bool FRenderResourceLibrary::CreateLineMesh(FRenderer &Renderer) {
                  .bIsLine = true};
 
   RegisterMesh(FName("Line"), Renderer.CreateMesh(Desc));
-  return AllMeshMap[FName("Line")] != nullptr;
+  return AllFStaticMeshMap[FName("Line")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreatePlaneMesh(FRenderer &Renderer) {
@@ -1149,7 +1177,7 @@ bool FRenderResourceLibrary::CreatePlaneMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Plane"), Renderer.CreateMesh(Desc));
-  return AllMeshMap[FName("Plane")] != nullptr;
+  return AllFStaticMeshMap[FName("Plane")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateRectMesh(FRenderer &Renderer) {
@@ -1177,7 +1205,7 @@ bool FRenderResourceLibrary::CreateRectMesh(FRenderer &Renderer) {
   };
 
   RegisterMesh(FName("Rect"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("Rect")] != nullptr;
+  return AllFStaticMeshMap[FName("Rect")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateMasterYiMesh(FRenderer &Renderer) {
@@ -1191,8 +1219,13 @@ bool FRenderResourceLibrary::CreateMasterYiMesh(FRenderer &Renderer) {
       .IndexCount = MasterYiHeadIndexCount,
   };
 
-  RegisterMesh(FName("MasterYi"), Renderer.CreateMesh(MeshDesc));
-  return AllMeshMap[FName("MasterYi")] != nullptr;
+  TSharedPtr<FStaticMesh> YiMesh = Renderer.CreateMesh(MeshDesc);
+  if (YiMesh) {
+    // 기본 텍스처 등록
+    YiMesh->DefaultTextureId = FName("MasterYi_Head");
+    RegisterMesh(FName("MasterYi"), YiMesh);
+  }
+  return AllFStaticMeshMap[FName("MasterYi")] != nullptr;
 }
 
 bool FRenderResourceLibrary::CreateInstancingArrayMap() {
@@ -1202,7 +1235,7 @@ bool FRenderResourceLibrary::CreateInstancingArrayMap() {
   AllInstancingArrayMap[{FName("Instance_Simple"), FName("Cube")}] = {};
   AllInstancingArrayMap[{FName("Instance_Textured"), FName("MasterYi")}] = {};
   AllInstancingArrayMap[{FName("SelectedActor_Text"), FName("Rect")}] = {};
-  
+
   return true;
 }
 
@@ -1224,74 +1257,17 @@ bool FRenderResourceLibrary::InitializeMaterials(FRenderer &Renderer) {
   return true;
 }
 
-bool FRenderResourceLibrary::CreateEditTextures(FRenderer& Renderer)
-{
-    const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot =
-        ExeDir.parent_path().parent_path().parent_path();
-
-    TArray<std::filesystem::path> SearchRoots = {
-        ProjectRoot / L"Edit",
-        std::filesystem::current_path() / L"Edit",
-        ExeDir / L"Edit",
-    };
-
-    for (const auto& Root : SearchRoots) {
-        std::error_code Ec;
-        if (!std::filesystem::exists(Root, Ec)) {
-            continue;
-        }
-
-        for (const auto& Entry :
-            std::filesystem::recursive_directory_iterator(Root, Ec)) {
-            if (!Entry.is_regular_file(Ec))
-                continue;
-
-            FWString Ext = Entry.path().extension().wstring();
-            std::transform(Ext.begin(), Ext.end(), Ext.begin(), ::towlower);
-            if (Ext != L".dds" && Ext != L".jpg" && Ext != L".jpeg")
-                continue;
-
-            // 확장자 제거
-            FString KeyWide = Entry.path().stem().string();
-            std::transform(KeyWide.begin(), KeyWide.end(), KeyWide.begin(),
-                ::tolower);
-
-            // 이미 로드된 텍스처 건너뜀
-            if (AllEditorTextureMap.find(KeyWide) != AllEditorTextureMap.end()) {
-                continue;
-            }
-
-            TSharedPtr<FTexture> Texture = Renderer.CreateTexture(Entry.path().wstring().c_str());
-
-            if (!Texture)
-                continue;
-
-            RegisterEditTexture(KeyWide, Texture);
-        }
-    }
-
-    return true;
-}
-
-TSharedPtr<FMaterial> FRenderResourceLibrary::RegisterMaterial(const FName& Id, TSharedPtr<FMaterial> inMaterial) {
-  if (inMaterial) {
-    inMaterial->MaterialId = Id;
-  }
-  AllMaterialMap[Id] = inMaterial;
-  return inMaterial;
-}
-
-bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer) 
-{
+bool FRenderResourceLibrary::CreateEditTextures(FRenderer &Renderer) {
   const std::filesystem::path ExeDir(GetExecutableDirectory());
   const std::filesystem::path ProjectRoot =
       ExeDir.parent_path().parent_path().parent_path();
 
   TArray<std::filesystem::path> SearchRoots = {
-      ProjectRoot / L"Textures",
-      std::filesystem::current_path() / L"Textures",
-      ExeDir / L"Textures",
+      ProjectRoot / L"Resources" / L"Edit",
+      std::filesystem::current_path() / L"Resources" / L"Edit",
+      ProjectRoot / L"Edit",
+      std::filesystem::current_path() / L"Edit",
+      ExeDir / L"Edit",
   };
 
   for (const auto &Root : SearchRoots) {
@@ -1314,14 +1290,77 @@ bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer)
       FString KeyWide = Entry.path().stem().string();
       std::transform(KeyWide.begin(), KeyWide.end(), KeyWide.begin(),
                      ::tolower);
+
+      // 이미 로드된 텍스처 건너뜀
+      if (AllEditorTextureMap.find(KeyWide) != AllEditorTextureMap.end()) {
+        continue;
+      }
+
+      TSharedPtr<FTexture> Texture =
+          Renderer.CreateTexture(Entry.path().wstring().c_str());
+
+      if (!Texture)
+        continue;
+
+      RegisterEditTexture(KeyWide, Texture);
+    }
+  }
+
+  return true;
+}
+
+TSharedPtr<FMaterial>
+FRenderResourceLibrary::RegisterMaterial(const FName &Id,
+                                         TSharedPtr<FMaterial> inMaterial) {
+  if (inMaterial) {
+    inMaterial->MaterialId = Id;
+  }
+  AllMaterialMap[Id] = inMaterial;
+  return inMaterial;
+}
+
+bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer) {
+  const std::filesystem::path ExeDir(GetExecutableDirectory());
+  const std::filesystem::path ProjectRoot =
+      ExeDir.parent_path().parent_path().parent_path();
+
+  TArray<std::filesystem::path> SearchRoots = {
+      ProjectRoot / L"Resources" / L"Textures",
+      std::filesystem::current_path() / L"Resources" / L"Textures",
+      ProjectRoot / L"Textures",
+      std::filesystem::current_path() / L"Textures",
+      ExeDir / L"Textures",
+  };
+
+  for (const auto &Root : SearchRoots) {
+    std::error_code Ec;
+    if (!std::filesystem::exists(Root, Ec)) {
+      continue;
+    }
+
+    for (const auto &Entry :
+         std::filesystem::recursive_directory_iterator(Root, Ec)) {
+      if (!Entry.is_regular_file(Ec))
+        continue;
+
+      FWString Ext = Entry.path().extension().wstring();
+      std::transform(Ext.begin(), Ext.end(), Ext.begin(), ::towlower);
+      if (Ext != L".dds" && Ext != L".jpg" && Ext != L".jpeg" && Ext != L".png")
+        continue;
+
+      // 확장자 제거
+      FString KeyWide = Entry.path().stem().string();
+      std::transform(KeyWide.begin(), KeyWide.end(), KeyWide.begin(),
+                     ::tolower);
       FName TextureKey(KeyWide);
 
       // 이미 로드된 텍스처 건너뜀
       if (AllTextureMap.find(TextureKey) != AllTextureMap.end()) {
         continue;
       }
-  
-      TSharedPtr<FTexture> Texture = Renderer.CreateTexture(Entry.path().wstring().c_str());
+
+      TSharedPtr<FTexture> Texture =
+          Renderer.CreateTexture(Entry.path().wstring().c_str());
 
       if (!Texture)
         continue;
@@ -1333,11 +1372,80 @@ bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer)
   return true;
 }
 
+bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
+  const std::filesystem::path ExeDir(GetExecutableDirectory());
+  const std::filesystem::path ProjectRoot =
+      ExeDir.parent_path().parent_path().parent_path();
+
+  TArray<std::filesystem::path> SearchRoots = {
+      ProjectRoot / L"Resources" / L"Assets",
+      std::filesystem::current_path() / L"Resources" / L"Assets",
+      ProjectRoot / L"Assets",
+      std::filesystem::current_path() / L"Assets",
+      ExeDir / L"Assets",
+  };
+
+  for (const auto &Root : SearchRoots) {
+    std::error_code Ec;
+    if (!std::filesystem::exists(Root, Ec)) {
+      continue;
+    }
+
+    for (const auto &Entry :
+         std::filesystem::recursive_directory_iterator(Root, Ec)) {
+
+      //.obj 확장자 체크
+      std::string Ext = Entry.path().extension().string();
+      std::transform(Ext.begin(), Ext.end(), Ext.begin(), ::tolower);
+
+      if (Ext != ".obj")
+        continue;
+      // 파일명을 MeshID(FName)로 사용
+      std::string StemName = Entry.path().stem().string();
+      FName MeshKey(StemName);
+
+      // FObjDecoder로 파일 파싱
+      FObjModelData ModelData;
+      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), ModelData)) {
+        UE_LOG_WARN("[OBJ Loader] 파싱 실패: %s",
+                    Entry.path().string().c_str());
+        continue;
+      }
+
+      FMeshDesc Desc{
+          .VertexData = ModelData.Vertices.data(),
+          .VertexDataSize = static_cast<uint32>(sizeof(FVertexData) *
+                                                ModelData.Vertices.size()),
+          .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
+          .VertexCount = static_cast<uint32>(ModelData.Vertices.size()),
+
+          .IndexData = ModelData.Indices.data(),
+          .IndexDataSize =
+              static_cast<uint32>(sizeof(uint32) * ModelData.Indices.size()),
+          .IndexCount = static_cast<uint32>(ModelData.Indices.size()),
+          .bIsLine = false};
+
+      TSharedPtr<FStaticMesh> StaticMesh = Renderer.CreateMesh(Desc);
+      if (StaticMesh) {
+        StaticMesh->PathFileName = Entry.path().string();
+        StaticMesh->MeshId = MeshKey;
+        StaticMesh->DefaultTextureId = ModelData.TextureName;
+        RegisterMesh(MeshKey, StaticMesh);
+        UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u)",
+               StemName.c_str(), ModelData.Vertices.size(),
+               ModelData.Indices.size());
+      }
+    }
+  }
+
+  return true;
+}
+
 TSharedPtr<FStaticMesh>
 FRenderResourceLibrary::GetOrCreateMesh(const FName &ID,
                                         const TArray<FVertexData> &vertices) {
-  auto it = AllMeshMap.find(ID);
-  if (it != AllMeshMap.end())
+  auto it = AllFStaticMeshMap.find(ID);
+  if (it != AllFStaticMeshMap.end())
     return it->second;
 
   FMeshDesc Desc{.VertexData = vertices.data(),
@@ -1348,59 +1456,61 @@ FRenderResourceLibrary::GetOrCreateMesh(const FName &ID,
   TSharedPtr<FStaticMesh> newMesh =
       RendererRef ? RendererRef->CreateMesh(Desc) : nullptr;
   if (newMesh) {
-    AllMeshMap[ID] = newMesh;
+    AllFStaticMeshMap[ID] = newMesh;
   }
   return newMesh;
 }
 
-bool FRenderResourceLibrary::CreateFonts(FRenderer& Renderer)
-{
-    const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot =
-        ExeDir.parent_path().parent_path().parent_path();
+bool FRenderResourceLibrary::CreateFonts(FRenderer &Renderer) {
+  const std::filesystem::path ExeDir(GetExecutableDirectory());
+  const std::filesystem::path ProjectRoot =
+      ExeDir.parent_path().parent_path().parent_path();
 
-    TArray<std::filesystem::path> SearchRoots = {
-        ProjectRoot / L"Fonts",
-        std::filesystem::current_path() / L"Fonts",
-        ExeDir / L"Fonts",
-    };
+  TArray<std::filesystem::path> SearchRoots = {
+      ProjectRoot / L"Fonts",
+      std::filesystem::current_path() / L"Fonts",
+      ProjectRoot / L"Resources" / L"Textures" / L"Fonts",
+      std::filesystem::current_path() / L"Resources" / L"Textures" / L"Fonts",
+      ExeDir / L"Fonts",
+      ExeDir / L"Textures" / L"Fonts",
+  };
 
-    for (const auto& Root : SearchRoots) {
-        std::error_code Ec;
-        if (!std::filesystem::exists(Root, Ec)) {
-            continue;
-        }
-
-        for (const auto& Entry :
-            std::filesystem::recursive_directory_iterator(Root, Ec)) {
-            if (!Entry.is_regular_file(Ec))
-                continue;
-
-            FWString Ext = Entry.path().extension().wstring();
-            std::transform(Ext.begin(), Ext.end(), Ext.begin(), ::towlower);
-            if (Ext != L".json")
-                continue;
-
-            TSharedPtr<FFont>Font = MakeShared<FFont>();
-
-            FWString Path = Entry.path().wstring();
-            Font->Deserialize(Path);
-
-            // 확장자 제거
-            FString KeyWide = Entry.path().stem().string();
-            std::transform(KeyWide.begin(), KeyWide.end(), KeyWide.begin(),
-                ::tolower);
-            FName TextureKey(KeyWide);
-            Font->SetTexture(AllTextureMap[TextureKey]);
-
-            // 이미 로드된 폰트 건너뜀
-            if (AllFontMap.find(TextureKey) != AllFontMap.end()) {
-                continue;
-            }
-
-            AllFontMap[TextureKey] = Font;
-        }
+  for (const auto &Root : SearchRoots) {
+    std::error_code Ec;
+    if (!std::filesystem::exists(Root, Ec)) {
+      continue;
     }
 
-    return true;
+    for (const auto &Entry :
+         std::filesystem::recursive_directory_iterator(Root, Ec)) {
+      if (!Entry.is_regular_file(Ec))
+        continue;
+
+      FWString Ext = Entry.path().extension().wstring();
+      std::transform(Ext.begin(), Ext.end(), Ext.begin(), ::towlower);
+      if (Ext != L".json")
+        continue;
+
+      TSharedPtr<FFont> Font = MakeShared<FFont>();
+
+      FWString Path = Entry.path().wstring();
+      Font->Deserialize(Path);
+
+      // 확장자 제거
+      FString KeyWide = Entry.path().stem().string();
+      std::transform(KeyWide.begin(), KeyWide.end(), KeyWide.begin(),
+                     ::tolower);
+      FName TextureKey(KeyWide);
+      Font->SetTexture(AllTextureMap[TextureKey]);
+
+      // 이미 로드된 폰트 건너뜀
+      if (AllFontMap.find(TextureKey) != AllFontMap.end()) {
+        continue;
+      }
+
+      AllFontMap[TextureKey] = Font;
+    }
+  }
+
+  return true;
 }

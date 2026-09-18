@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Editor/Core/FEditor.h"
 #include "Runtime/Math/FVector2.h"
 #include "Runtime/Input/FCameraInputController.h"
@@ -68,6 +68,18 @@ private:
 		const FVector2& LocalMousePixels, const FVector2& ViewportSizePixels);
 	void UpdateGizmoHover(FEditor& Editor, const FEditorViewport& Viewport,
 		const FVector2& LocalMousePixels, const FVector2& ViewportSizePixels);
+
+	// 분할 뷰포트 헬퍼 함수
+	bool ProcessSplitterDrag(const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& MousePos);
+	void SyncSplitViewports(TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize);
+	void DrawSplitterOverlay(const ImVec2& WinPos, const ImVec2& WinSize) const;
+	void ProcessViewportInteraction(FEditor& Editor, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize, const FVector2& MousePos, float DeltaTime);
+
+	float SplitX = 0.5f;
+	float SplitY = 0.5f;
+	bool bDraggingV = false;
+	bool bDraggingH = false;
+	int LockedViewportIndex = -1;
 
 	FCameraInputController CameraController;
 };

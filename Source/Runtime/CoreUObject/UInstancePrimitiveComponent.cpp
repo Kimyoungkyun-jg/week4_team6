@@ -18,8 +18,6 @@ void UInstancePrimitiveComponent::Initialize() {
     SetMaterialID(FName("Instance_Textured"));
   }
 
-  RenderData.type = ERenderType::Instancing;
-
   // 텍스처 ID가 지정되어 있고 머티리얼이 있는 경우 텍스처 설정
   if (!GetTextureID().IsNone() && GetTextureID() != FName("None")) {
     auto Mat = FRenderResourceLibrary::Get().GetMaterial(GetMaterialID());
@@ -55,7 +53,7 @@ void UInstancePrimitiveComponent::BuildRenderData() {
     });
   } else {
     Built.reserve(InstanceTransforms.size());
-    for (const auto &Entry : InstanceTransforms) {
+    for (const auto &Entry : InstanceTransforms) { 
       FTransform InstTransform = BaseTransform;
       InstTransform.Location = Entry.Position;
       Built.push_back(FInstanceData{

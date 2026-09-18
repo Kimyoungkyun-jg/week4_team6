@@ -29,6 +29,7 @@ public:
 		ShowFlags ^= static_cast<uint64>(Flag);
 	}
 
+
 	[[nodiscard]] bool IsFocused() const { return bFocused; }
 	[[nodiscard]] bool IsHovered() const { return bHovered; }
 };

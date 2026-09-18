@@ -290,6 +290,7 @@
     <ClCompile Include="Source\Runtime\Actors\AInstancingActor.cpp" />
     <ClCompile Include="Source\Runtime\Actors\ASphereActor.cpp" />
     <ClCompile Include="Source\Runtime\Actors\ASpotlightActor.cpp" />
+    <ClCompile Include="Source\Runtime\Actors\AStaticMeshActor.cpp" />
     <ClCompile Include="Source\Runtime\Actors\ATextRenderActor.cpp" />
     <ClCompile Include="Source\Runtime\CoreUObject\FGarbageCollector.cpp" />
     <ClCompile Include="Source\Runtime\CoreUObject\FReferenceCollector.cpp" />
@@ -426,6 +427,7 @@
     <ClInclude Include="Source\Runtime\Actors\AMasterYi.h" />
     <ClInclude Include="Source\Runtime\Actors\ASphereActor.h" />
     <ClInclude Include="Source\Runtime\Actors\ASpotlightActor.h" />
+    <ClInclude Include="Source\Runtime\Actors\AStaticMeshActor.h" />
     <ClInclude Include="Source\Runtime\Actors\ATextRenderActor.h" />
     <ClInclude Include="Source\Runtime\CoreUObject\FClassIdSet.h" />
     <ClInclude Include="Source\Runtime\CoreUObject\FGarbageCollector.h" />

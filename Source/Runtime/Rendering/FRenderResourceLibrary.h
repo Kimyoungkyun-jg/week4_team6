@@ -15,6 +15,7 @@
 
 class FRenderer;
 class FTexture;
+class UStaticMesh;
 struct FTextVertex {
   FVector Pos;
   float u, v;
@@ -29,8 +30,10 @@ public:
 
   // 파이프라인 보관 맵
   TMap<FName, TSharedPtr<FRenderPipeline>> AllPipelineMap;
-  // 메쉬 보관 맵
-  TMap<FName, TSharedPtr<FStaticMesh>> AllMeshMap;
+  // 저수준 렌더 정적 메시 보관 맵
+  TMap<FName, TSharedPtr<FStaticMesh>> AllFStaticMeshMap;
+  // 게임 및 에디터용 UStaticMesh 에셋 보관 맵
+  TMap<FName, UStaticMesh*> AllUStaticMeshMap;
   // 머티리얼 보관 맵 (FName 기반)
   TMap<FName, TSharedPtr<FMaterial>> AllMaterialMap;
   // 텍스쳐 보관 맵 (FName 기반)
@@ -75,8 +78,8 @@ public:
 
   // 메쉬 조회
   TSharedPtr<FStaticMesh> GetMesh(const FName &ID) const {
-    auto it = AllMeshMap.find(ID);
-    if (it != AllMeshMap.end())
+    auto it = AllFStaticMeshMap.find(ID);
+    if (it != AllFStaticMeshMap.end())
       return it->second;
     return nullptr;
   }
@@ -84,9 +87,27 @@ public:
   // 메쉬 등록
   TSharedPtr<FStaticMesh> RegisterMesh(const FName &ID, TSharedPtr<FStaticMesh> inMesh) {
     inMesh->MeshId = ID;
-    AllMeshMap[ID] = inMesh;
+    AllFStaticMeshMap[ID] = inMesh;
     return inMesh;
   }
+
+  // UStaticMesh 맵 조회
+  [[nodiscard]] UStaticMesh* GetUStaticMesh(const FName& ID) const {
+    auto it = AllUStaticMeshMap.find(ID);
+    if (it != AllUStaticMeshMap.end())
+      return it->second;
+    return nullptr;
+  }
+  [[nodiscard]] const TMap<FName, UStaticMesh*>& GetAllUStaticMeshMap() const {
+    return AllUStaticMeshMap;
+  }
+
+  // UStaticMesh 맵 생성 함수
+  bool CreateUStaticMeshMap();
+
+  //Obj용 등록함수
+  TSharedPtr<FStaticMesh> CreateStaticMesh(const FName& ID,const TArray<FVertexData>& Vertices,const TArray<uint32>& Indices);
+
 
   // 개별 메쉬 접근자
   [[nodiscard]] TSharedPtr<FStaticMesh> GetCubeMesh() const {
@@ -165,7 +186,10 @@ public:
   }
 
   // 메쉬 전체 해제
-  void DestroyAllMeshes() { AllMeshMap.clear(); }
+  void DestroyAllMeshes() {
+    AllFStaticMeshMap.clear();
+    AllUStaticMeshMap.clear();
+  }
 
   // 머티리얼 전체 해제
   void DestroyAllMaterials() { AllMaterialMap.clear(); }
@@ -197,6 +221,12 @@ public:
   }
 
 
+  TSharedPtr<FStaticMesh> CreateAndRegisterStaticMesh(
+      const FName& ID,
+      const TArray<FVertexData>& Vertices,
+      const TArray<uint32>& Indices
+  );
+
 private:
   bool InitializePipelines(FRenderer &Renderer);
   bool CreateSolidWireframePipeline(FRenderer &Renderer);
@@ -227,6 +257,11 @@ private:
   bool CreateTextures(FRenderer &Renderer);
   bool InitializeMaterials(FRenderer &Renderer);
   bool CreateEditTextures(FRenderer &Renderer);
+
+  //모든 obj 만드는 용도
+  bool CreateObjMeshes(FRenderer& Renderer);
+
+
 
   // 폰트 일괄 초기화
   bool CreateFonts(FRenderer& Renderer);

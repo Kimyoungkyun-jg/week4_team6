@@ -14,7 +14,6 @@ void USpotLightComponent::Initialize()
 	// 스포트라이트 메쉬 및 머티리얼 장착
 	SetMeshID(FName("SpotlightCone"));
 	SetMaterialID(FName("Spotlight"));
-	RenderData.type = ERenderType::Spotlight;
 }
 
 void USpotLightComponent::Serialize(FArchive& Archive) const

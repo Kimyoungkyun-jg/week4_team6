@@ -80,7 +80,8 @@ public:
   void DrawTextInstances(const FCamera& Camera, const FName& MeshId, const FName& MaterialId);
   void ClearTextInstances();
 
-  void RenderOutline();
+  void RenderOutline(FVector2 TopLeftUV, FVector2 LengthUV);
+  void BindBackBufferWithDepth();
   ID3D11RenderTargetView* GetBackBuffer() { return BackBufferRTV.Get(); }
 
 

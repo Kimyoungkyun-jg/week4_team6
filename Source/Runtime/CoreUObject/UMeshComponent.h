@@ -19,11 +19,9 @@ public:
     void SetMeshID(const FName& InMeshId)         { RenderData.MeshId = InMeshId; }
     void SetMaterialID(const FName& InMaterialId) { RenderData.MaterialId = InMaterialId; }
     void SetTextureID(const FName& InTextureId)   { RenderData.TextureId = InTextureId; }
-    void SetRenderType(ERenderType InType)       { RenderData.type = InType; }
     virtual const FName& GetMeshID() const       { return RenderData.MeshId; }
     virtual const FName& GetMaterialID() const   { return RenderData.MaterialId; }
     const FName& GetTextureID() const            { return RenderData.TextureId; }
-    ERenderType GetRenderType() const            { return RenderData.type; }
 
     // 텍스처 이름으로 머티리얼 텍스처 교체
     bool SetTextureByName(const FName& InTextureName);
@@ -35,7 +33,6 @@ protected:
        .MeshId = FName("None"),
        .MaterialId = FName("None"),
        .TextureId = FName("None"),
-       .type = ERenderType::None,
        .bSelected = false,
     };
 };

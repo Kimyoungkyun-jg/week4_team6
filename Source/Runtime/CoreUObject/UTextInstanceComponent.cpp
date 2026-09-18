@@ -41,7 +41,6 @@ void UTextInstanceComponent::Initialize() {
   RenderData.MeshId = FName("Rect");
   RenderData.MaterialId = FName("Instance_Text_Bazzi");
   RenderData.TextureId = FName("bazziotf");
-  RenderData.type = ERenderType::Text;
 
   RebuildTextMesh();
   Super::Initialize();

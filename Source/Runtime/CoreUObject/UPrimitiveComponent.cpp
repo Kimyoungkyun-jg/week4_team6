@@ -15,7 +15,6 @@ namespace
         .MeshId = FName("None"),
         .MaterialId = FName("None"),
         .TextureId = FName("None"),
-        .type = ERenderType::None,
         .bSelected = false,
     };
 }

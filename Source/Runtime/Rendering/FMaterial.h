@@ -38,6 +38,10 @@ public:
   // 원본 머터리얼에서 텍스처 교체 함수
   bool SetTextureByName(const FName& InTextureName);
 
+  // 파이프라인 블렌드 모드 조회
+  [[nodiscard]] EBlendMode GetBlendMode() const {
+    return Pipeline ? Pipeline->GetPipelineDesc().BlendMode : EBlendMode::Opaque;
+  }
 
   FName MaterialId{"None"};
 private:

@@ -18,4 +18,12 @@ UStaticMesh::UStaticMesh(const FName& InMeshId, const FName& InMaterialId)
     {
         DefaultMaterialIds.push_back(InMaterialId);
     }
+    else if (StaticMeshAsset && !StaticMeshAsset->DefaultTextureId.IsNone() && StaticMeshAsset->DefaultTextureId != FName("None"))
+    {
+        DefaultMaterialIds.push_back(FName("Textured"));
+    }
+    else
+    {
+        DefaultMaterialIds.push_back(FName("Simple"));
+    }
 }
