@@ -1406,8 +1406,8 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
 
       // FObjDecoder로 파일 파싱
       FObjVertexInfo VertexInfo;
-      FObjMaterialInfo MaterialInfo;
-      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), VertexInfo, MaterialInfo)) {
+      TArray<FObjMaterialInfo> MaterialInfoList;
+      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), VertexInfo, MaterialInfoList)) {
         UE_LOG_WARN("[OBJ Loader] 파싱 실패: %s",
                     Entry.path().string().c_str());
         continue;
@@ -1430,7 +1430,10 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
       if (StaticMesh) {
         StaticMesh->PathFileName = Entry.path().string();
         StaticMesh->MeshId = MeshKey;
-        StaticMesh->DefaultTextureId = MaterialInfo.TextureName;
+        if (MaterialInfoList.size() > 0)
+        {
+            StaticMesh->DefaultTextureId = MaterialInfoList[0].TextureName;
+        }
         RegisterMesh(MeshKey, StaticMesh);
         UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u)",
                StemName.c_str(), VertexInfo.Vertices.size(),

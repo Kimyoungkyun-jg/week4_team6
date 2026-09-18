@@ -7,6 +7,9 @@
 #include "Runtime/Rendering/Vertices.h"
 #include "Runtime/Geometry/FAxisAlignedBoundingBox.h"
 
+constexpr int32 INVALID_INDEX = -1;
+constexpr int32 DEFAULT_INDEX = 0;
+
 struct FVertexKey
 {
 	FVertexKey() = default;
@@ -30,12 +33,10 @@ struct FVertexKey
 		}
 	}
 
-	int32 PosIndex = -1;
-	int32 UVIndex = -1;
-	int32 NormalIndex = -1;
+	int32 PosIndex = INVALID_INDEX;
+	int32 UVIndex = INVALID_INDEX;
+	int32 NormalIndex = INVALID_INDEX;
 };
-
-constexpr int32 INVALID_INDEX = -1;
 
 template<>
 struct std::hash<FVertexKey>
@@ -51,7 +52,12 @@ struct std::hash<FVertexKey>
 
 struct FObjMaterialInfo
 {
-	FName MaterialName{ "None" };
+	FObjMaterialInfo() = default;
+	FObjMaterialInfo(FName InName)
+	{
+		MaterialName = InName;
+	}
+	FName MaterialName{ "Default" };
 	FVector KaAmbient{ 0.2f, 0.2f, 0.2f };
 	FVector KdDiffuse{ 0.8f, 0.8f, 0.8f };
 	FVector KsSpecular{ 1.f,1.f,1.f };
@@ -59,35 +65,40 @@ struct FObjMaterialInfo
 	float NsShininess = 32.f;
 	float DOpacity = 1.f;
 	int32 Illumination = 2;
-	FName TextureName{ "uv-test.png" };
+	FName TextureName{ "uv-test" };
 };
 
 struct FObjMeshSection
 {
 	uint32 StartIndex = 0;
 	uint32 IndexCount = 0;
-	int32 MaterialIndex = INVALID_INDEX;
+	int32 MaterialIndex = DEFAULT_INDEX;
+	FName GroupName;
 };
 
 struct FObjVertexInfo
 {
+	FObjVertexInfo() = default;
+	FObjVertexInfo(FName InName)
+	{
+		ObjectName = InName;
+	}
 	FName ObjectName{ "None" };
 	TArray<FVertexData> Vertices;
 	TArray<uint32> Indices;
-	TArray<FObjMaterialInfo> Materials;
+	//TArray<FObjMaterialInfo> Materials;
 	TArray<FObjMeshSection> Sections;
 	FAxisAlignedBoundingBox LocalBounds;
-	//FName TextureName{ "uv-test.png" };
 	bool bIsValid = false;
 };
 
 class FObjDecoder
 {
 public:
-	static bool DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, FObjMaterialInfo& MaterialInfoOut);
+	static bool DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, TArray<FObjMaterialInfo>& MaterialInfoOut);
 
 private:
-	static bool DecodeObjFile(const FString& FileContent, FObjVertexInfo& OutData);
+	static bool DecodeObjFile(const FString& FileContent, const FString& BaseDirectory, FObjVertexInfo& VertexInfoOut, TArray<FObjMaterialInfo>& MaterialInfoOut);
 
 	static int32 ResolveIndex(const std::string_view& String, const uint32 Count);
 
@@ -96,6 +107,8 @@ private:
 
 	static void ComputeStaticBounds(FObjVertexInfo& OutData);
 
-	static bool DecodeMtlFile(const FString& FileContent, FObjMaterialInfo& OutData);
+	static bool DecodeMtlFile(const FString& FilePath, TArray<FObjMaterialInfo>& OutData);
+
+	static void CheckSection(FObjVertexInfo& OutData, int32 InMaterialIndex, FName InGroupName);
 
 };

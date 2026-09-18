@@ -9,42 +9,7 @@
 #include <charconv>
 #include <cassert>
 
-
-
-// .mtl 파일을 읽어 map_Kd의 파일명을 추출하는 함수
-FName ParseMtlTexture(const std::filesystem::path& MtlPath)
-{
-	std::ifstream File(MtlPath);
-	if (!File.is_open())
-	{
-		return FName("None");
-	}
-	std::string Line;
-	while (std::getline(File, Line))
-	{
-		if (Line.empty() || Line[0] == '#')
-			continue;
-		std::istringstream Stream(Line);
-		std::string Prefix;
-		Stream >> Prefix;
-		// map_Kd: 디퓨즈(기본) 컬러 텍스처 맵
-		if (Prefix == "map_Kd")
-		{
-			std::string TextureFileName;
-			Stream >> TextureFileName;
-			if (!TextureFileName.empty())
-			{
-				// 경로가 포함되어 있어도 순수 파일명(stem)만 추출
-				// 예: "textures/MasterYi_Head.png" -> "MasterYi_Head"
-				std::string StemName = std::filesystem::path(TextureFileName).stem().string();
-				return FName(StemName);
-			}
-		}
-	}
-	return FName("None");
-}
-
-bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, FObjMaterialInfo& MaterialInfoOut)
+bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, TArray<FObjMaterialInfo>& MaterialInfoOut)
 {
 	std::error_code Ec;
 	std::ifstream File(FilePath);
@@ -60,35 +25,26 @@ bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexI
 	std::stringstream ObjBuffer;
 	ObjBuffer << File.rdbuf();
 
-	if (!DecodeObjFile(ObjBuffer.str(), VetexInfoOut))
-	{
-		return false;
-	}
-
-	std::filesystem::path Candidate = ObjPath;
-	Candidate.replace_extension(".mtl");
-	if (std::filesystem::is_regular_file(Candidate, Ec))
-	{
-		std::ifstream MtlFile(Candidate);
-		if (MtlFile.is_open())
-		{
-			std::stringstream MtlBuffer;
-			MtlBuffer << MtlFile.rdbuf();
-			DecodeMtlFile(MtlBuffer.str(), MaterialInfoOut);
-		}
-	}
-
-	return true;
+	return DecodeObjFile(ObjBuffer.str(), BaseDir.string(), VetexInfoOut, MaterialInfoOut);
 }
 
 
-bool FObjDecoder::DecodeObjFile(const FString& FileContent, FObjVertexInfo& OutData)
+bool FObjDecoder::DecodeObjFile(const FString& FileContent, const FString& BaseDirectory, FObjVertexInfo& VertexInfoOut, TArray<FObjMaterialInfo>& MaterialInfoOut)
 {
 	TArray<FVector> Positions;
 	TArray<FVector2> UVs;
 	TArray<FVector> Normals;
 	TMap<FVertexKey, uint32> VertexCache;
+	int32 CurrentMaterialIndex = DEFAULT_INDEX;
+	FName CurrentGroupName{ "None" };
+	TMap<FName, int32> MaterialNameToIndex;
+	MaterialNameToIndex["Default"] = DEFAULT_INDEX;
+	VertexInfoOut.Vertices.clear();
+	VertexInfoOut.Indices.clear();
+	MaterialInfoOut.clear();
+	MaterialInfoOut.push_back(FObjMaterialInfo{});
 
+	// Start Parse
 	std::istringstream File(FileContent);
 	FString Line;
 	while (std::getline(File, Line))
@@ -101,12 +57,16 @@ bool FObjDecoder::DecodeObjFile(const FString& FileContent, FObjVertexInfo& OutD
 		if (Keyword == "o")
 		{
 			FString Input;
+			if (SS >> Word)
+			{
+				Input.append(Word);
+			}
 			while (SS >> Word)
 			{
-				Input.append(Word).append("_");
+				Input.append("_").append(Word);
 			}
 			FName InName(Input);
-			OutData.ObjectName = InName;
+			VertexInfoOut.ObjectName = InName;
 		}
 		else if (Keyword == "v")
 		{
@@ -169,25 +129,85 @@ bool FObjDecoder::DecodeObjFile(const FString& FileContent, FObjVertexInfo& OutD
 				for (uint32 j = 0; j < 3; j++)
 				{
 					FVertexKey Key = Triangle[j];
-					auto [It, bInserted] = VertexCache.try_emplace(Key, OutData.Vertices.size());
+					auto [It, bInserted] = VertexCache.try_emplace(Key, VertexInfoOut.Vertices.size());
 					if (bInserted)
 					{
 						auto VertexData = MakeVertex(Key, Positions, UVs, Normals);
-						OutData.Vertices.push_back(VertexData);
+						VertexInfoOut.Vertices.push_back(VertexData);
 					}
-					OutData.Indices.push_back(It->second);
+					CheckSection(VertexInfoOut, CurrentMaterialIndex, CurrentGroupName);
+					VertexInfoOut.Indices.push_back(It->second);
+					VertexInfoOut.Sections.back().IndexCount++;
 				}
 			}
 		}
+		else if (Keyword == "mtllib")
+		{
+			FString Input;
+			while (SS >> Input)
+			{
+				std::filesystem::path MtlPath = std::filesystem::path(BaseDirectory) / Input;
+				if (MtlPath.empty())
+				{
+					continue;
+				}
+				uint32 MaterialCountBefore = MaterialInfoOut.size();
+				DecodeMtlFile(MtlPath.string(), MaterialInfoOut);
+				for (uint32 i = MaterialCountBefore; i < MaterialInfoOut.size(); i++)
+				{
+					MaterialNameToIndex[MaterialInfoOut[i].MaterialName] = static_cast<uint32>(i);
+				}
+			}
+		}
+		else if (Keyword == "usemtl")
+		{
+			FString Input;
+			if (SS >> Word)
+			{
+				Input.append(Word);
+			}
+			while (SS >> Word)
+			{
+				Input.append("_").append(Word);
+			}
+			FName InName(Input);
+			if (auto it = MaterialNameToIndex.find(InName); it != MaterialNameToIndex.end())
+			{
+				CurrentMaterialIndex = it->second;
+			}
+			else
+			{
+				CurrentMaterialIndex = DEFAULT_INDEX;
+				UE_LOG("usemtl %s mtl 재질 찾기 실패", Input.c_str());
+			}
+		}
+		else if (Keyword == "g")
+		{
+			FString Input;
+			if (SS >> Word)
+			{
+				Input.append(Word);
+			}
+			while (SS >> Word)
+			{
+				Input.append("_").append(Word);
+			}
+			FName InName(Input);
+			CurrentGroupName = InName;
+		}
 	}
+	// Parse Ended
 
-	if (OutData.Vertices.empty() || OutData.Indices.empty())
+
+	if (VertexInfoOut.Vertices.empty() || VertexInfoOut.Indices.empty())
 	{
 		return false;
 	}
 
 	// 로컬 AABB 바운딩 박스 계산
-	ComputeStaticBounds(OutData);
+	ComputeStaticBounds(VertexInfoOut);
+
+	UE_LOG("%s.OBJ 파일 열기 성공: 버텍스 %d개, 인덱스%d개", VertexInfoOut.ObjectName.ToString().c_str(), VertexInfoOut.Vertices.size(), VertexInfoOut.Indices.size());
 
 	return true;
 }
@@ -256,7 +276,127 @@ void FObjDecoder::ComputeStaticBounds(FObjVertexInfo& OutData)
 	OutData.bIsValid = true;
 }
 
-bool FObjDecoder::DecodeMtlFile(const FString& FileContent, FObjMaterialInfo& OutData)
+bool FObjDecoder::DecodeMtlFile(const FString& FilePath, TArray<FObjMaterialInfo>& OutData)
 {
-	return 1;
+	int32 CurrentIndex = INVALID_INDEX;
+
+	std::error_code Ec;
+	std::ifstream File(FilePath);
+	if (!File.is_open())
+	{
+		UE_LOG("MTL 파일 열기 실패: %s", FilePath.c_str());
+		return false;
+	}
+	std::stringstream FileContent;
+	FileContent << File.rdbuf();
+
+	std::istringstream Stream(FileContent.str());
+	FString Line;
+	while (std::getline(Stream, Line))
+	{
+		std::istringstream SS(Line);
+		FString Keyword;
+		FString Word;
+		SS >> Keyword;
+
+		if (Keyword == "newmtl")
+		{
+			FString Input;
+			if (SS >> Word)
+			{
+				Input.append(Word);
+			}
+			while (SS >> Word)
+			{
+				Input.append("_").append(Word);
+			}
+			FName InName(Input);
+			OutData.push_back(FObjMaterialInfo{InName});
+			CurrentIndex = static_cast<int32>(OutData.size() - 1);
+		}
+		else if (CurrentIndex == INVALID_INDEX)
+		{
+			continue;
+		}
+		else if (Keyword == "Ka")
+		{
+			float x, y, z;
+			SS >> x >> y >> z;
+			OutData[CurrentIndex].KaAmbient = FVector(x, y, z);
+		}
+		else if (Keyword == "Kd")
+		{
+			float x, y, z;
+			SS >> x >> y >> z;
+			OutData[CurrentIndex].KdDiffuse = FVector(x, y, z);
+		}
+		else if (Keyword == "Ks")
+		{
+			float x, y, z;
+			SS >> x >> y >> z;
+			OutData[CurrentIndex].KsSpecular = FVector(x, y, z);
+		}
+		else if (Keyword == "Ke")
+		{
+			float x, y, z;
+			SS >> x >> y >> z;
+			OutData[CurrentIndex].KeEmissive = FVector(x, y, z);
+		}
+		else if (Keyword == "Ns")
+		{
+			float s;
+			SS >> s;
+			OutData[CurrentIndex].NsShininess = s;
+		}
+		else if (Keyword == "d")
+		{
+			float d;
+			SS >> d;
+			OutData[CurrentIndex].DOpacity = d;
+		}
+		else if (Keyword == "Tr")
+		{
+			float tr;
+			SS >> tr;
+			OutData[CurrentIndex].DOpacity = 1 - tr;
+		}
+		else if (Keyword == "illum")
+		{
+			int32 illum;
+			SS >> illum;
+			OutData[CurrentIndex].Illumination = illum;
+		}
+		else if (Keyword == "map_Kd")
+		{
+			std::string TextureFileName;
+			SS >> TextureFileName;
+			if (!TextureFileName.empty())
+			{
+				// 경로가 포함되어 있어도 순수 파일명(stem)만 추출
+				// 예: "textures/MasterYi_Head.png" -> "MasterYi_Head"
+				std::string StemName = std::filesystem::path(TextureFileName).stem().string();
+				OutData[CurrentIndex].TextureName = StemName;
+			}
+		}
+	}
+	UE_LOG("%s .MTL 파일 열기 성공: mtl %d 개", FilePath.c_str(), OutData.size());
+	return true;
+}
+
+void FObjDecoder::CheckSection(FObjVertexInfo& OutData, int32 InMaterialIndex, FName InGroupName)
+{
+	if (!OutData.Sections.empty())
+	{
+		FObjMeshSection& LastSection = OutData.Sections.back();
+		if (LastSection.MaterialIndex == InMaterialIndex)
+		{
+			return;
+		}
+	}
+	FObjMeshSection NewSection = {};
+	NewSection.StartIndex = OutData.Indices.size();
+	NewSection.IndexCount = 0;
+	NewSection.MaterialIndex = InMaterialIndex;
+	NewSection.GroupName = InGroupName;
+	OutData.Sections.push_back(NewSection);
 }
