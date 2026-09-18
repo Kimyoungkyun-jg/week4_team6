@@ -486,6 +486,7 @@
     <ClInclude Include="Source\Runtime\Rendering\FRenderPipeline.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderResourceLibrary.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderQueue.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FStaticMesh.h" />
     <ClInclude Include="Source\Runtime\Rendering\FTexture.h" />
     <ClInclude Include="Source\Runtime\Rendering\ShaderConstants.h" />
     <ClInclude Include="Source\Runtime\Rendering\Vertices.h" />

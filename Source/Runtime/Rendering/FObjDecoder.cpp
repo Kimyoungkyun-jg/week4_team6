@@ -1,11 +1,15 @@
 #include "FObjDecoder.h"
 #include "Runtime/Core/Log.h"
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <filesystem>
 #include <unordered_map>
 #include <algorithm>
+#include <string_view>
+#include <ranges>
+#include <charconv>
+#include <cassert>
+
 
 namespace
 {
@@ -42,17 +46,16 @@ namespace
 		return FName("None");
 	}
 
+	constexpr int32 INVALID_INDEX = -1;
+
 	// v, vt, vn 인덱스 묶음 키
 	struct FObjIndexKey
 	{
-		int32 VIndex = 0;
-		int32 VTIndex = 0;
-		int32 VNIndex = 0;
+		int32 VIndex = INVALID_INDEX;
+		int32 VTIndex = INVALID_INDEX;
+		int32 VNIndex = INVALID_INDEX;
 
-		bool operator==(const FObjIndexKey& Other) const
-		{
-			return VIndex == Other.VIndex && VTIndex == Other.VTIndex && VNIndex == Other.VNIndex;
-		}
+		bool operator==(const FObjIndexKey& Other) const = default;
 	};
 
 	struct FObjIndexKeyHasher
@@ -144,135 +147,98 @@ bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelData& OutData
 
 bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& OutData, const FString& BaseDirectory)
 {
-	OutData.Vertices.clear();
-	OutData.Indices.clear();
-	OutData.TextureName = FName("None"); // 초기화
-	OutData.bIsValid = false;
+	TArray<FVector> Positions;
+	TArray<FVector2> UVs;
+	TArray<FVector> Normals;
+	TMap<FVertexKey, uint32> VertexCache;
 
-	TArray<FVector> RawPositions;
-	TArray<FVector2> RawTexCoords;
-	TArray<FVector> RawNormals;
-
-	// 중복 정점 검출용 해시맵 (Key -> 생성된 정점 인덱스)
-	std::unordered_map<FObjIndexKey, uint32, FObjIndexKeyHasher> UniqueVertexMap;
-
-	std::istringstream Stream(FileContent);
+	std::istringstream File(FileContent);
 	FString Line;
-
-	while (std::getline(Stream, Line))
+	while (std::getline(File, Line))
 	{
-		if (Line.empty() || Line[0] == '#')
-		{
-			continue;
-		}
+		std::istringstream SS(Line);
+		FString Keyword;
+		FString Word;
+		SS >> Keyword;
 
-		std::istringstream LineStream(Line);
-		FString Prefix;
-		LineStream >> Prefix;
-		
-		if (Prefix == "mtllib")
+		if (Keyword == "o")
 		{
-			std::string MtlFileName;
-			LineStream >> MtlFileName;
-			if (!MtlFileName.empty() && !BaseDirectory.empty())
+			FString Input;
+			while (SS >> Word)
 			{
-				// OBJ와 같은 폴더에 있는 .mtl 전체 경로 생성
-				std::filesystem::path FullMtlPath = std::filesystem::path(BaseDirectory) / MtlFileName;
-				// .mtl 파싱해서 텍스처 이름 가져오기
-				FName FoundTex = ParseMtlTexture(FullMtlPath);
-				if (!FoundTex.IsNone() && FoundTex != FName("None"))
+				Input.append(Word).append("_");
+			}
+			FName InName(Input);
+			OutData.ObjectName = InName;
+		}
+		else if (Keyword == "v")
+		{
+			float x, y, z;
+			SS >> x >> y >> z;
+			Positions.push_back(FVector(x, y, z));
+		}
+		else if (Keyword == "vt")
+		{
+			float u, v;
+			SS >> u >> v;
+			UVs.push_back(FVector2(u, v));
+		}
+		else if (Keyword == "vn")
+		{
+			float x, y, z;
+			SS >> x >> y >> z;
+			Normals.push_back(FVector(x, y, z));
+		}
+		else if (Keyword == "f")
+		{
+			FString InString;
+			TArray<FVertexKey> VertexKeyList;
+			while (SS >> InString)
+			{
+				FVertexKey VertexKey;
+				uint32 i = 0;
+				bool bIsValid = true;
+				for (auto Parsed : std::string_view(InString) | std::views::split('/'))
 				{
-					OutData.TextureName = FoundTex;
+					std::string_view StringNum(Parsed.begin(), Parsed.end());
+					int32 ResolvedIndex = ResolveIndex(StringNum, VertexCache.size());
+					if (bIsValid
+						|| (i == 0 && ResolvedIndex == INVALID_INDEX) 
+						|| (i != 1 && !StringNum.empty() && ResolvedIndex == INVALID_INDEX))
+					{
+						bIsValid = false;
+						continue;
+					}
+					VertexKey[i++] = ResolvedIndex;
+				}
+				if (bIsValid)
+				{
+					VertexKeyList.push_back(VertexKey);
 				}
 			}
-		}
-		else if (Prefix == "v")
-		{
-			// 정점 위치
-			float X = 0.0f, Y = 0.0f, Z = 0.0f;
-			LineStream >> X >> Y >> Z;
-			RawPositions.push_back(FVector{ X, Y, Z });
-		}
-		else if (Prefix == "vt")
-		{
-			// 텍스처 좌표 (DirectX 좌표계를 위해 V축 반전)
-			float U = 0.0f, V = 0.0f;
-			LineStream >> U >> V;
-			RawTexCoords.push_back(FVector2{ U, 1.0f - V });
-		}
-		else if (Prefix == "vn")
-		{
-			// 법선 벡터
-			float NX = 0.0f, NY = 0.0f, NZ = 0.0f;
-			LineStream >> NX >> NY >> NZ;
-			RawNormals.push_back(FVector{ NX, NY, NZ });
-		}
-		else if (Prefix == "f")
-		{
-			// 면(Face) 토큰 파싱
-			TArray<FObjIndexKey> FaceKeys;
-			FString Token;
-			while (LineStream >> Token)
-			{
-				FaceKeys.push_back(ParseFaceToken(Token));
-			}
-
-			if (FaceKeys.size() < 3)
+			if (VertexKeyList.size() < 3)
 			{
 				continue;
 			}
-
-			// n각형을 삼각형 팬(0, i, i+1)으로 분할
-			for (size_t i = 1; i + 1 < FaceKeys.size(); ++i)
+			for (uint32 i = 0; i < VertexKeyList.size() - 2; i++)
 			{
-				FObjIndexKey Triangle[3] = { FaceKeys[0], FaceKeys[i], FaceKeys[i + 1] };
+				FVertexKey Triangle[3] = { VertexKeyList[0], VertexKeyList[i + 1], VertexKeyList[i + 2] };
 
-				for (int j = 0; j < 3; ++j)
+				for (uint32 j = 0; j < 3; j++)
 				{
-					const FObjIndexKey& Key = Triangle[j];
-					auto It = UniqueVertexMap.find(Key);
-					if (It != UniqueVertexMap.end())
+					auto it = VertexCache.find(Triangle[j]);
+					int32 Index = OutData.Vertices.size();
+					if (it == VertexCache.end())
 					{
-						// 이미 등록된 정점이면 인덱스만 재사용
-						OutData.Indices.push_back(It->second);
+						FVertexKey Key = Triangle[j];
+						VertexCache[Key] = Index;
+						auto VertexData = MakeVertex(Key, Positions, UVs, Normals);
+						OutData.Vertices.push_back(*VertexData);
+						OutData.Indices.push_back(Index);
 					}
 					else
 					{
-						// 새로운 정점 생성
-						uint32 NewIndex = static_cast<uint32>(OutData.Vertices.size());
-						UniqueVertexMap[Key] = NewIndex;
-						OutData.Indices.push_back(NewIndex);
-
-						FVertexData Vertex{};
-						Vertex.r = 1.0f;
-						Vertex.g = 1.0f;
-						Vertex.b = 1.0f;
-						Vertex.a = 1.0f;
-
-						int32 VIdx = ResolveIndex(Key.VIndex, RawPositions.size());
-						if (VIdx >= 0 && VIdx < static_cast<int32>(RawPositions.size()))
-						{
-							Vertex.x = RawPositions[VIdx].X;
-							Vertex.y = RawPositions[VIdx].Y;
-							Vertex.z = RawPositions[VIdx].Z;
-						}
-
-						int32 VTIdx = ResolveIndex(Key.VTIndex, RawTexCoords.size());
-						if (VTIdx >= 0 && VTIdx < static_cast<int32>(RawTexCoords.size()))
-						{
-							Vertex.u = RawTexCoords[VTIdx].X;
-							Vertex.v = RawTexCoords[VTIdx].Y;
-						}
-
-						int32 VNIdx = ResolveIndex(Key.VNIndex, RawNormals.size());
-						if (VNIdx >= 0 && VNIdx < static_cast<int32>(RawNormals.size()))
-						{
-							Vertex.nx = RawNormals[VNIdx].X;
-							Vertex.ny = RawNormals[VNIdx].Y;
-							Vertex.nz = RawNormals[VNIdx].Z;
-						}
-
-						OutData.Vertices.push_back(Vertex);
+						OutData.Indices.push_back(it->second);
 					}
 				}
 			}
@@ -285,6 +251,56 @@ bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& Ou
 	}
 
 	// 로컬 AABB 바운딩 박스 계산
+	ComputeStaticBounds(OutData);
+
+	return true;
+}
+
+int32 FObjDecoder::ResolveIndex(const std::string_view& String, const uint32 Count)
+{
+	if (String.empty())
+	{
+		return INVALID_INDEX;
+	}
+	uint32 InInteger = 0;
+	const auto [Ptr, Ec] = std::from_chars(String.data(), String.data() + String.size(), InInteger);
+	if (Ec != std::errc{} || InInteger == 0)
+	{
+		return INVALID_INDEX;
+	}
+	const long long Resolved = (InInteger > 0) 
+		? static_cast<long long>(InInteger) - 1
+		: static_cast<long long>(Count + InInteger);
+	if (Resolved < 0 || Resolved > Count)
+	{
+		return INVALID_INDEX;
+	}
+	return static_cast<int32>(Resolved);
+}
+
+TSharedPtr<FVertexData> FObjDecoder::MakeVertex(const FVertexKey& Key, const TArray<FVector> Positions, const TArray<FVector2> UVs, const TArray<FVector> Normals)
+{
+	FVertexData VertexData{};
+	VertexData.x = Positions[Key.PosIndex].X; // TODO: FVertexData를 FVector화 하기 (대공사)
+	VertexData.y = Positions[Key.PosIndex].Y;
+	VertexData.z = Positions[Key.PosIndex].Z;
+	if (Key.UVIndex != INVALID_INDEX)
+	{
+		VertexData.u = UVs[Key.UVIndex].X;
+		VertexData.v = UVs[Key.UVIndex].Y;
+	}
+	if (Key.NormalIndex != INVALID_INDEX)
+	{
+		VertexData.nx = Normals[Key.NormalIndex].X;
+		VertexData.ny = Normals[Key.NormalIndex].Y;
+		VertexData.nz = Normals[Key.NormalIndex].Z;
+	}
+	return MakeShared<FVertexData>(VertexData);
+}
+
+// 로컬 AABB 바운딩 박스 계산
+void FObjDecoder::ComputeStaticBounds(FObjModelData& OutData)
+{
 	FVector MinBound{ (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)() };
 	FVector MaxBound{ (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)() };
 
@@ -302,5 +318,4 @@ bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelData& Ou
 	OutData.LocalBounds.Min = MinBound;
 	OutData.LocalBounds.Max = MaxBound;
 	OutData.bIsValid = true;
-	return true;
 }
