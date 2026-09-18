@@ -525,6 +525,8 @@ bool FRenderResourceLibrary::Initialize(FRenderer &Renderer) {
 }
 
 bool FRenderResourceLibrary::CreateUStaticMeshMap() {
+  UE_LOG("[UStaticMeshMap] 생성 시작 (등록된 FStaticMesh 개수: %zu)", AllFStaticMeshMap.size());
+
   for (const auto &[Key, Mesh] : AllFStaticMeshMap) {
     FName MaterialName = FName("Simple");
 
@@ -559,8 +561,6 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
       }
     }
 
-
-
     UStaticMesh *StaticMeshObj = NewObject<UStaticMesh>(Key, MaterialName);
     if (StaticMeshObj) {
       if (Mesh) {
@@ -576,8 +576,45 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
       }
 
       AllUStaticMeshMap[Key] = StaticMeshObj;
+
+      // 텍스처 및 노멀맵 매핑 상태 로깅
+      const FName& DefDiff = StaticMeshObj->GetDefaultTextureID(0);
+      const FName& DefNorm = StaticMeshObj->GetDefaultNormalTextureID(0);
+      const FName& DefSpec = StaticMeshObj->GetDefaultSpecularTextureID(0);
+      bool bDiffLoaded = !DefDiff.IsNone() && DefDiff != FName("None") && GetTexture(DefDiff) != nullptr;
+      bool bNormLoaded = !DefNorm.IsNone() && DefNorm != FName("None") && GetTexture(DefNorm) != nullptr;
+      bool bSpecLoaded = !DefSpec.IsNone() && DefSpec != FName("None") && GetTexture(DefSpec) != nullptr;
+
+      UE_LOG("[UStaticMeshMap] Mesh: %s | Mat: %s | Diff: %s (%s) | Norm: %s (%s) | Spec: %s (%s) | Slots: %d",
+             Key.ToString().c_str(),
+             MaterialName.ToString().c_str(),
+             DefDiff.ToString().c_str(), bDiffLoaded ? "LOADED" : "MISSING",
+             DefNorm.ToString().c_str(), bNormLoaded ? "LOADED" : "MISSING",
+             DefSpec.ToString().c_str(), bSpecLoaded ? "LOADED" : "MISSING",
+             StaticMeshObj->GetMaterialSlotCount());
+
+      // 섹션별 텍스처 매핑 상태 로깅
+      if (Mesh && !Mesh->GetSections().empty()) {
+        int32 SecIdx = 0;
+        for (const auto& Sec : Mesh->GetSections()) {
+          FName SDiff = !Sec.DiffuseTextureName.IsNone() ? Sec.DiffuseTextureName : Sec.TextureName;
+          bool bSDiffLoaded = !SDiff.IsNone() && SDiff != FName("None") && GetTexture(SDiff) != nullptr;
+          bool bSNormLoaded = !Sec.NormalTextureName.IsNone() && Sec.NormalTextureName != FName("None") && GetTexture(Sec.NormalTextureName) != nullptr;
+          bool bSSpecLoaded = !Sec.SpecularTextureName.IsNone() && Sec.SpecularTextureName != FName("None") && GetTexture(Sec.SpecularTextureName) != nullptr;
+
+          UE_LOG("[UStaticMeshMap]   Sec %d: Diff=%s (%s), Norm=%s (%s), Spec=%s (%s)",
+                 SecIdx++,
+                 SDiff.ToString().c_str(), bSDiffLoaded ? "LOADED" : "MISSING",
+                 Sec.NormalTextureName.ToString().c_str(), bSNormLoaded ? "LOADED" : "MISSING",
+                 Sec.SpecularTextureName.ToString().c_str(), bSSpecLoaded ? "LOADED" : "MISSING");
+        }
+      }
+    } else {
+      UE_LOG_WARN("[UStaticMeshMap] %s UStaticMesh 생성 실패", Key.ToString().c_str());
     }
   }
+
+  UE_LOG("[UStaticMeshMap] 생성 완료 (총 %zu 개)", AllUStaticMeshMap.size());
   return true;
 }
 

@@ -473,6 +473,17 @@ void FImguiEditorViewportWindow::UpdateCamera(FEditor &Editor, FEditorViewport &
     // 우클릭 중에는 WASD 가 카메라 비행에 쓰이므로 단축키와 겹치지 않게 나눈다.
     if (FInputManager::Get().IsMouseDown(EMouseButton::Right))
     {
+        // 우클릭 상태 휠 스크롤 속도 조절
+        const float Wheel = ImGui::GetIO().MouseWheel;
+        if (Wheel != 0.0f)
+        {
+            float CurSpeed = Editor.State.GetCameraSpeed();
+            CurSpeed += Wheel * 0.5f;
+            CurSpeed = std::clamp(CurSpeed, 1.0f, 15.0f);
+            Editor.State.SetCameraSpeed(CurSpeed);
+            CameraController.CameraMoveSpeed = CurSpeed;
+        }
+
         CameraController.UpdateKeyInput(Camera, DeltaTime);
         return;
     }

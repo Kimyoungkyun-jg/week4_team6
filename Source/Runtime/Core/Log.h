@@ -3,6 +3,8 @@
 #include "TArray.h"
 #include <cstdarg>
 #include <cstdio>
+// 디버그 API 헤더
+#include <debugapi.h>
 # define UE_LOG(...) FLogManager::Get().AddLog(0, __VA_ARGS__);
 # define UE_LOG_WARN(...) FLogManager::Get().AddLog(1, __VA_ARGS__);
 # define UE_LOG_ERROR(...) FLogManager::Get().AddLog(2, __VA_ARGS__);
@@ -36,6 +38,9 @@ public:
 		std::vsnprintf(buf + written, sizeof(buf) - written, fmt, args);
 		va_end(args);
 		buf[sizeof(buf) - 1] = '\0';
+		// 디버거 출력 전달
+		OutputDebugStringA(buf);
+		OutputDebugStringA("\n");
 		Logs.push_back(buf);
 	}
 
@@ -70,6 +75,9 @@ public:
 		std::vsnprintf(buf + written, sizeof(buf) - written, fmt, args);
 		va_end(args);
 		buf[sizeof(buf) - 1] = '\0';
+		// 디버거 출력 전달
+		OutputDebugStringA(buf);
+		OutputDebugStringA("\n");
 		Logs.push_back(buf);
 	}
 

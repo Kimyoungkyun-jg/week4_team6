@@ -164,7 +164,7 @@ void FImguiConsoleWindow::ShowCommandLine()
 
 FImguiConsoleWindow::FImguiConsoleWindow()
 {
-	FLogManager::Get().Clear();
+	// 시작 시 초기화 로그 보존
 
 	// "CLASSIFY" is here to provide the test case where "C"+[tab] completes to "CL" and display multiple matches.
 	Commands.push_back("HELP");

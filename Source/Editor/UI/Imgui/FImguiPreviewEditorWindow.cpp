@@ -108,7 +108,8 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		ImGui::Checkbox("Grid", &bShowGrid);
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth(120.0f);
-		ImGui::SliderFloat("Speed", &CameraSpeed, 1.0f, 7.0f, "%.2f");
+		// 카메라 속도 슬라이더
+		ImGui::SliderFloat("Speed", &CameraSpeed, 1.0f, 15.0f, "%.2f");
 		ImGui::SameLine();
 		if (ImGui::Button("Focus (F)"))
 		{
@@ -188,7 +189,8 @@ void FImguiPreviewEditorWindow::ProcessViewportInput(FEditor& Editor, const ImVe
 		if (Wheel != 0.0f)
 		{
 			CameraSpeed += Wheel * 0.1f;
-			CameraSpeed = std::clamp(CameraSpeed, 1.0f, 7.0f);
+			// 휠 조절 속도 상한
+			CameraSpeed = std::clamp(CameraSpeed, 1.0f, 15.0f);
 		}
 
 		CameraController.CameraRotateSpeed = Editor.State.GetCameraSensitivity();
