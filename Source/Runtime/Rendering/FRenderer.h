@@ -164,11 +164,43 @@ public:
     Material.BindResources(*Context.Get());
     Mesh.BindResources(*Context.Get());
 
-    if (Mesh.HasIndices()) {
-      Context->DrawIndexed(Mesh.IndexCount, 0, 0);
-    } else {
-      Context->Draw(Mesh.VertexCount, 0);
+
+    if (Mesh.GetSections().empty())
+    {
+        if (Mesh.HasIndices()) {
+            Context->DrawIndexed(Mesh.IndexCount, 0, 0);
+        }
+        else {
+            Context->Draw(Mesh.VertexCount, 0);
+        }
     }
+    else
+    {
+        // 섹션별 머티리얼 바인딩 및 드로우
+        for (const auto& Section : Mesh.GetSections())
+        {
+            FMaterial SectionMat = Material;
+            FName DiffuseName = !Section.DiffuseTextureName.IsNone() ? Section.DiffuseTextureName : Section.TextureName;
+            if (!DiffuseName.IsNone() && DiffuseName != FName("None"))
+            {
+                SectionMat.SetDiffuseMapByName(DiffuseName);
+            }
+            if (!Section.NormalTextureName.IsNone() && Section.NormalTextureName != FName("None"))
+            {
+                SectionMat.SetNormalMapByName(Section.NormalTextureName);
+            }
+            if (!Section.SpecularTextureName.IsNone() && Section.SpecularTextureName != FName("None"))
+            {
+                SectionMat.SetSpecularMapByName(Section.SpecularTextureName);
+            }
+
+            SectionMat.BindResources(*Context.Get());
+            Context->DrawIndexed(Section.IndexCount, Section.FirstIndex, 0);
+        }
+    }
+
+
+
   }
 
 

@@ -10,6 +10,7 @@
 #include "Runtime/Math/FVector4.h"
 #include <string_view>
 
+// 재질 속성 정보
 struct FObjMaterialInfo
 {
     FString Name;
@@ -18,38 +19,23 @@ struct FObjMaterialInfo
     FVector Diffuse{ 0.8f, 0.8f, 0.8f };   // Kd
     FVector Specular{ 0.0f, 0.0f, 0.0f };  // Ks
     float SpecularExponent = 0.0f;         // Ns
-    float Opacity = 1.0f;                  // d  (Tr 는 1 - d)
+    float Opacity = 1.0f;                  // d
     int32 IlluminationModel = 0;           // illum
 
     FString DiffuseTexture;   // map_Kd
     FString AmbientTexture;   // map_Ka
     FString SpecularTexture;  // map_Ks
     FString AlphaTexture;     // map_d
-    FString NormalTexture;    // map_bump / bump / norm
+    FString NormalTexture;    // map_bump
 };
 
-
+// 섹션 그룹화 키
 struct FSectionKey
 {
     int32 Object = -1;
     int32 Group = -1;
     int32 Material = -1;
     auto operator<=>(const FSectionKey&) const = default;
-    // 비교 연산자 6개를 전부 만들어준다. 결과를 0과 비교해서 사용
-    // 예시 if ((A <=> B) < 0) -> A가 작다
-};
-
-struct FMeshSection
-{
-    uint32 FirstIndex = 0; // Indices 배열에서 이 그룹이 시작하는 위치
-    uint32 IndexCount = 0; // 이 그룹의 인덱스 개수 (삼각형 수 × 3)
-
-    int32 Object = -1; //해당 섹션의 ObjectName
-    int32 Group = -1; //해당 색션의 Group 번호
-    int32 MaterialIndex = -1; // 해당 섹션의 Material번호
-
-    FAxisAlignedBoundingBox LocalBounds;  // 이 그룹만의 바운딩 박스 (파츠 피킹용)
-    
 };
 
 struct FObjGroupInfo
@@ -62,28 +48,36 @@ struct FObjObjectInfo
     FString Name;
 };
 
-
-// Cooked Data
-struct FObjModelData // 이름바꿔야됨
+// 디코딩 완료 모델 데이터
+struct FObjModelData
 {
     std::string PathFileName;
 
-    TArray<FVertexData> Vertices; // 정점들 (큐브기준 24)
-    TArray<uint32> Indices; // 사용할 인덱스 순서 (큐브기준 36)
-
+    TArray<FVertexData> Vertices;
+    TArray<uint32> Indices;
 
     FName TextureName{ "None" };
+    FName NormalTextureName{ "None" };
+    FName SpecularTextureName{ "None" };
     bool bIsValid = false;
 
     TArray<FMeshSection> Sections;
 
     TArray<FObjMaterialInfo> Materials;
     TArray<FObjGroupInfo> Groups;
-    TArray<FObjObjectInfo> ObjectNames;    
+    TArray<FObjObjectInfo> ObjectNames;
+
+    bool HasTextures() const
+    {
+        return (!TextureName.IsNone() && TextureName != FName("None")) ||
+               (!NormalTextureName.IsNone() && NormalTextureName != FName("None")) ||
+               (!SpecularTextureName.IsNone() && SpecularTextureName != FName("None"));
+    }
+
+    bool HasSections() const { return !Sections.empty(); }
 };
 
-// Raw Data
-// 없는 항목(vt/vn 생략)은 -1.
+// 원시 파싱 데이터
 struct FObjInfo
 {
     TArray<FVector4> VertexList;
@@ -108,10 +102,10 @@ struct FObjInfo
     TArray<FObjObjectInfo> ObjectNames;
 };
 
+// OBJ 디코더 클래스
 class FObjDecoder
 {
 private:
-    static TSortedMap<FString, FObjModelData*> ObjStaticMeshMap;
     FObjInfo ObjInfo;
 
     FString ObjDirectory;
@@ -121,17 +115,20 @@ private:
     int32 CurrentGroup = -1;
     int32 CurrentObjectName = -1;
 
-    // obj
+    // 정점 및 속성 추가
     void AddVertexList(std::string_view Line);
     void AddUVList(std::string_view Line);
     void AddNormalList(std::string_view Line);
 
+    // 라인 및 면 파싱
     void ParseLine(std::string_view Line);
     void ParseFace(std::string_view Line);
 
+    // 머티리얼 라이브러리
     void AddMaterialLib(std::string_view Line);
     void UseMaterial(std::string_view Line);
 
+    // 그룹 및 오브젝트
     void UseGroup(std::string_view Line);
     int32 FindOrAddGroup(std::string_view Name);
 
@@ -141,7 +138,7 @@ private:
     FObjInfo ParseObjFile(const FString& File);
     FObjInfo StartObjFileParser(const FString& PathFileName);
 
-    // mtl
+    // 머티리얼 파싱
     void ParseMtlFile(const FString& File);
     void ParseMtlLine(std::string_view Line);
     int32 FindOrAddMaterial(std::string_view Name);
@@ -150,7 +147,4 @@ private:
 
 public:
     static bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
-
-    static FObjModelData* LoadObjStaticMeshAsset(const FString& PathFileName);
-
 };

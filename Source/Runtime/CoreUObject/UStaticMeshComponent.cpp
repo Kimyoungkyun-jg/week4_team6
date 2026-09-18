@@ -66,6 +66,8 @@ const FRenderData& UStaticMeshComponent::GetRenderData(const FCamera& Camera)
     {
         FName TexId = StaticMesh->GetDefaultTextureID();
         RenderData.TextureId = !TexId.IsNone() ? TexId : FName("None");
+        RenderData.NormalTextureId = StaticMesh->GetDefaultNormalTextureID();
+        RenderData.SpecularTextureId = StaticMesh->GetDefaultSpecularTextureID();
     }
 
     return RenderData;
@@ -81,6 +83,8 @@ const FRenderData& UStaticMeshComponent::GetPureRenderData() const
     {
         FName TexId = StaticMesh->GetDefaultTextureID();
         MutableData.TextureId = !TexId.IsNone() ? TexId : FName("None");
+        MutableData.NormalTextureId = StaticMesh->GetDefaultNormalTextureID();
+        MutableData.SpecularTextureId = StaticMesh->GetDefaultSpecularTextureID();
     }
 
     return RenderData;

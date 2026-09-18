@@ -11,7 +11,6 @@
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Core/TMap.h"
 #include "Vertices.h"
-#include "FFont.h"
 
 class FRenderer;
 class FTexture;
@@ -267,7 +266,6 @@ private:
   bool CreatePlaneMesh();
   bool CreateRectMesh();
   bool CreateMasterYiMesh();
-  bool CreateMasteryMesh() { return CreateMasterYiMesh(); }
 
   bool CreateInstancingArrayMap();
 

@@ -16,6 +16,10 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
     if (Viewports.empty()) return;
 
     const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+    if (!MainViewport || MainViewport->Size.x <= 0.0f || MainViewport->Size.y <= 0.0f)
+    {
+        return;
+    }
     const FVector2 ClientSize{ MainViewport->Size.x, MainViewport->Size.y };
 
     BeginWindow();
@@ -178,6 +182,7 @@ bool FImguiEditorViewportWindow::ProcessSplitterDrag(FVector2& CenterUV, const I
 void FImguiEditorViewportWindow::SyncSplitViewports(const FVector2& CenterUV, TArray<FEditorViewport>& Viewports, const ImVec2& WinPos, const ImVec2& WinSize, const FVector2& ClientSize)
 {
     if (Viewports.size() < 4) return;
+    if (ClientSize.X <= 0.0f || ClientSize.Y <= 0.0f || WinSize.x <= 0.0f || WinSize.y <= 0.0f) return;
 
     const float BaseU = WinPos.x / ClientSize.X;
     const float BaseV = WinPos.y / ClientSize.Y;
@@ -325,7 +330,7 @@ void FImguiEditorViewportWindow::SyncViewportRect(FEditorViewport &Viewport,
     const FVector2 WindowSize{ImGui::GetWindowSize().x, ImGui::GetWindowSize().y};
 
     // 창을 접거나 탭으로 숨기면 0 이 될 수 있으므로 나눗셈 전에 막는다.
-    if (WindowSize.X <= 0.0f || WindowSize.Y <= 0.0f)
+    if (WindowSize.X <= 0.0f || WindowSize.Y <= 0.0f || ClientSize.X <= 0.0f || ClientSize.Y <= 0.0f)
     {
         return;
     }

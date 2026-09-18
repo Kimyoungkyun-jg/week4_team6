@@ -5,8 +5,16 @@
 #include "Runtime/Rendering/FMaterial.h"
 #include "Runtime/Geometry/FAxisAlignedBoundingBox.h"
 
-
 class FStaticMesh;
+
+// 머티리얼 슬롯 정보
+struct FStaticMaterial
+{
+    FName MaterialId{ "Simple" };
+    FName DiffuseTextureId{ "None" };
+    FName NormalTextureId{ "None" };
+    FName SpecularTextureId{ "None" };
+};
 
 class UStaticMesh : public UObject
 {
@@ -18,44 +26,50 @@ public:
     UStaticMesh(const FName& InMeshId, const FName& InMaterialId = FName("None"));
 
     // 렌더 메시
-    FName MeshId{"None"};
+    FName MeshId{ "None" };
     TSharedPtr<FStaticMesh> StaticMeshAsset = nullptr;
 
-    // 기본 머티리얼 슬롯
+    // 슬롯 목록
+    TArray<FStaticMaterial> StaticMaterials;
+
+    // 하위 호환 배열
     TArray<FName> DefaultMaterialIds;
+    TArray<FName> DefaultTextureIds;
+    TArray<FName> DefaultNormalTextureIds;
+    TArray<FName> DefaultSpecularTextureIds;
 
     // 바운딩 박스
     FAxisAlignedBoundingBox LocalBounds{};
 
+    // 유효성 확인
+    bool IsValid() const { return StaticMeshAsset != nullptr; }
+
     // 접근자
     const FAxisAlignedBoundingBox& GetBounds() const { return LocalBounds; }
-    
     TSharedPtr<FStaticMesh> GetStaticMeshAsset() const { return StaticMeshAsset; }
+    int32 GetMaterialSlotCount() const;
 
-    FName GetDefaultTextureID() const {
-        return (StaticMeshAsset && !StaticMeshAsset->DefaultTextureId.IsNone()) 
-            ? StaticMeshAsset->DefaultTextureId : FName("None");
-    }
+    const FName& GetDefaultMaterialID(int32 Slot = 0) const;
+    const FName& GetDefaultTextureID(int32 Slot = 0) const;
+    const FName& GetDefaultNormalTextureID(int32 Slot = 0) const;
+    const FName& GetDefaultSpecularTextureID(int32 Slot = 0) const;
 
-    const FName& GetDefaultMaterialID(int32 Slot = 0) const {
-        static const FName SimpleMat("Simple");
-        if (Slot >= 0 && Slot < static_cast<int32>(DefaultMaterialIds.size()) && !DefaultMaterialIds[Slot].IsNone())
-        {
-            return DefaultMaterialIds[Slot];
-        }
-        return SimpleMat;
-    }
+    // 슬롯 설정 메서드
+    void SetMaterialSlot(int32 Slot, const FName& InMaterialId, const FName& InDiffuse = FName("None"), const FName& InNormal = FName("None"), const FName& InSpecular = FName("None"));
+    void SetDefaultMaterialID(int32 Slot, const FName& InMaterialId);
+    void SetDefaultTextureID(int32 Slot, const FName& InTextureId);
+    void SetDefaultNormalTextureID(int32 Slot, const FName& InTextureId);
+    void SetDefaultSpecularTextureID(int32 Slot, const FName& InTextureId);
 
+    // 에셋 정보 조회
+    const FString& GetAssetPathFileName() const;
 
-    const FString& GetAssetPathFileName() {
-        return StaticMeshAsset->PathFileName;
-    }
+    // 메시 에셋 설정
+    void SetStaticMeshAsset(TSharedPtr<FStaticMesh> InStaticMesh);
+    void SetStaticMeshAsset(FStaticMesh* InStaticMesh);
 
-    void SetStaticMeshAsset(TSharedPtr<FStaticMesh> InStaticMesh) {
-        StaticMeshAsset = InStaticMesh;
-    }
-
-    void SetStaticMeshAsset(FStaticMesh* InStaticMesh) {
-        StaticMeshAsset = TSharedPtr<FStaticMesh>(InStaticMesh);
-    }
+private:
+    void InitializeFromAsset(const FName& InMaterialId);
+    void SynchronizeCompatibilityArrays();
+    static FName DetermineMaterialId(const FName& FallbackMaterialId, const FName& Diffuse, const FName& Normal, const FName& Specular);
 };

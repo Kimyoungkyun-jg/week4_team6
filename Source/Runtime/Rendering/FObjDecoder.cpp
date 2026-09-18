@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-TSortedMap<FString, FObjModelData*> FObjDecoder::ObjStaticMeshMap;
 
 namespace
 {
@@ -45,14 +44,22 @@ namespace
 
 			if (!IsUnder(FilePath, AssetDir))
 			{
-				throw std::runtime_error("Attempted to read outside of the asset directory: " + FilePath.string());
+				UE_LOG_WARN("FObjDecoder : 에셋 폴더 외부 경로 접근 - %s", FilePath.string().c_str());
+				return FString();
 			}
+		}
+
+		if (!std::filesystem::exists(FilePath))
+		{
+			UE_LOG_WARN("FObjDecoder : 파일이 존재하지 않음 - %s", FilePath.string().c_str());
+			return FString();
 		}
 
 		std::ifstream FileStream(FilePath, std::ios::in);
 		if (!FileStream.is_open())
 		{
-			throw std::runtime_error("Failed to open file for reading: " + FilePath.string());
+			UE_LOG_WARN("FObjDecoder : 파일 열기 실패 - %s", FilePath.string().c_str());
+			return FString();
 		}
 
 		std::stringstream Buffer;
@@ -478,13 +485,16 @@ void FObjDecoder::ParseMtlLine(std::string_view Line)
 		return;
 	}
 
-	if (Keyword == "newmtl")
+	std::string LowerKeyword(Keyword);
+	std::transform(LowerKeyword.begin(), LowerKeyword.end(), LowerKeyword.begin(), ::tolower);
+
+	if (LowerKeyword == "newmtl")
 	{
 		DefiningMaterial = FindOrAddMaterial(Trim(Line));
 		return;
 	}
 
-	// newmtl 이 나오기 전의 속성 줄은 붙일 곳이 없다.
+	// 재질 정의 전 속성 라인은 건너뜀
 	if (DefiningMaterial < 0)
 	{
 		return;
@@ -493,64 +503,64 @@ void FObjDecoder::ParseMtlLine(std::string_view Line)
 
 	float Values[3] = { 0.0f, 0.0f, 0.0f };
 
-	if (Keyword == "Ka")
+	if (LowerKeyword == "ka")
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Ambient = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (Keyword == "Kd")
+	else if (LowerKeyword == "kd")
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Diffuse = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (Keyword == "Ks")
+	else if (LowerKeyword == "ks")
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Specular = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (Keyword == "Ns")
+	else if (LowerKeyword == "ns")
 	{
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.SpecularExponent = Values[0];
 	}
-	else if (Keyword == "d")
+	else if (LowerKeyword == "d")
 	{
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.Opacity = Values[0];
 	}
-	else if (Keyword == "Tr")
+	else if (LowerKeyword == "tr")
 	{
-		// Tr 은 투명도라 d 와 반대
+		// 투명도 반전 계산
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.Opacity = 1.0f - Values[0];
 	}
-	else if (Keyword == "illum")
+	else if (LowerKeyword == "illum")
 	{
 		int32 Model = 0;
 		if (StringToInt(Trim(Line), Model))
 			Material.IlluminationModel = Model;
 	}
-	else if (Keyword == "map_Kd")
+	else if (LowerKeyword == "map_kd")
 	{
 		Material.DiffuseTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_Ka")
+	else if (LowerKeyword == "map_ka")
 	{
 		Material.AmbientTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_Ks")
+	else if (LowerKeyword == "map_ks")
 	{
 		Material.SpecularTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_d")
+	else if (LowerKeyword == "map_d")
 	{
 		Material.AlphaTexture = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_bump" || Keyword == "bump" || Keyword == "norm")
+	else if (LowerKeyword == "map_bump" || LowerKeyword == "bump" || LowerKeyword == "norm")
 	{
 		Material.NormalTexture = ParseTexturePath(Line);
 	}
-	// 아직 처리하지 않는 키워드: Ke, Ni, map_Ns, refl, disp, decal
+	// 기타 속성 처리 생략
 }
 
 void FObjDecoder::ParseLine(std::string_view Line)
@@ -757,7 +767,34 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 		CurrentSection.FirstIndex = CurrnetIndex;
 		CurrentSection.Object = SectionKey.Object;
 		CurrentSection.Group = SectionKey.Group;
-		CurrentSection.MaterialIndex = SectionKey.Material;
+		int32 MatIdx = SectionKey.Material;
+		if (MatIdx < 0 && !Info.Materials.empty())
+		{
+			MatIdx = 0;
+		}
+		if (MatIdx >= 0 && MatIdx < static_cast<int32>(Info.Materials.size()))
+		{
+			const auto& Mat = Info.Materials[MatIdx];
+			if (!Mat.DiffuseTexture.empty())
+			{
+				FString Stem = std::filesystem::path(Mat.DiffuseTexture).stem().string();
+				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
+				CurrentSection.TextureName = FName(Stem);
+				CurrentSection.DiffuseTextureName = FName(Stem);
+			}
+			if (!Mat.NormalTexture.empty())
+			{
+				FString Stem = std::filesystem::path(Mat.NormalTexture).stem().string();
+				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
+				CurrentSection.NormalTextureName = FName(Stem);
+			}
+			if (!Mat.SpecularTexture.empty())
+			{
+				FString Stem = std::filesystem::path(Mat.SpecularTexture).stem().string();
+				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
+				CurrentSection.SpecularTextureName = FName(Stem);
+			}
+		}
 		uint32 EndIndex = CurrnetIndex;
 
 		for (auto Triangle : Triangles)
@@ -810,6 +847,70 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 		Out.Sections.push_back(CurrentSection);
 	}
 
+	// 정점별 탄젠트 및 바이탄젠트 누적 계산
+	for (auto& V : Out.Vertices)
+	{
+		V.tx = 0.0f; V.ty = 0.0f; V.tz = 0.0f;
+		V.bx = 0.0f; V.by = 0.0f; V.bz = 0.0f;
+	}
+
+	for (size_t i = 0; i + 2 < Out.Indices.size(); i += 3)
+	{
+		const uint32 i0 = Out.Indices[i];
+		const uint32 i1 = Out.Indices[i + 1];
+		const uint32 i2 = Out.Indices[i + 2];
+
+		FVertexData& v0 = Out.Vertices[i0];
+		FVertexData& v1 = Out.Vertices[i1];
+		FVertexData& v2 = Out.Vertices[i2];
+
+		const FVector pos0(v0.x, v0.y, v0.z);
+		const FVector pos1(v1.x, v1.y, v1.z);
+		const FVector pos2(v2.x, v2.y, v2.z);
+
+		const FVector edge1 = pos1 - pos0;
+		const FVector edge2 = pos2 - pos0;
+
+		const float du1 = v1.u - v0.u;
+		const float dv1 = v1.v - v0.v;
+		const float du2 = v2.u - v0.u;
+		const float dv2 = v2.v - v0.v;
+
+		const float det = du1 * dv2 - du2 * dv1;
+		if (std::abs(det) > 1e-6f)
+		{
+			const float invDet = 1.0f / det;
+			const FVector tangent = (edge1 * dv2 - edge2 * dv1) * invDet;
+			const FVector bitangent = (edge2 * du1 - edge1 * du2) * invDet;
+
+			v0.tx += tangent.X; v0.ty += tangent.Y; v0.tz += tangent.Z;
+			v1.tx += tangent.X; v1.ty += tangent.Y; v1.tz += tangent.Z;
+			v2.tx += tangent.X; v2.ty += tangent.Y; v2.tz += tangent.Z;
+
+			v0.bx += bitangent.X; v0.by += bitangent.Y; v0.bz += bitangent.Z;
+			v1.bx += bitangent.X; v1.by += bitangent.Y; v1.bz += bitangent.Z;
+			v2.bx += bitangent.X; v2.by += bitangent.Y; v2.bz += bitangent.Z;
+		}
+	}
+
+	// 정점별 직교화 및 정규화
+	for (auto& v : Out.Vertices)
+	{
+		FVector N(v.nx, v.ny, v.nz);
+		FVector T(v.tx, v.ty, v.tz);
+		FVector B(v.bx, v.by, v.bz);
+
+		T = T - N * N.Dot(T);
+		const float tLen = T.Size();
+		T = (tLen > 1e-6f) ? (T / tLen) : FVector(1.0f, 0.0f, 0.0f);
+
+		const float bLen = B.Size();
+		B = (bLen > 1e-6f) ? (B / bLen) : N.Cross(T);
+
+		v.tx = T.X; v.ty = T.Y; v.tz = T.Z;
+		v.bx = B.X; v.by = B.Y; v.bz = B.Z;
+	}
+
 	return (!Out.Indices.empty());
 }
 
@@ -836,11 +937,28 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 	}
 	
 	Out.TextureName = FName("None");
-	if (!Out.Materials.empty() && !Out.Materials.front().DiffuseTexture.empty())
+	Out.NormalTextureName = FName("None");
+	Out.SpecularTextureName = FName("None");
+	if (!Out.Materials.empty())
 	{
-		FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTexture).stem().string();
-		std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
-		Out.TextureName = FName(TextureKey);
+		if (!Out.Materials.front().DiffuseTexture.empty())
+		{
+			FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTexture).stem().string();
+			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			Out.TextureName = FName(TextureKey);
+		}
+		if (!Out.Materials.front().NormalTexture.empty())
+		{
+			FString TextureKey = std::filesystem::path(Out.Materials.front().NormalTexture).stem().string();
+			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			Out.NormalTextureName = FName(TextureKey);
+		}
+		if (!Out.Materials.front().SpecularTexture.empty())
+		{
+			FString TextureKey = std::filesystem::path(Out.Materials.front().SpecularTexture).stem().string();
+			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			Out.SpecularTextureName = FName(TextureKey);
+		}
 	}
 
 	UE_LOG("FObjDecoder : %s  cooked  vertices=%zu indices=%zu materials=%zu",
@@ -854,6 +972,5 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 			Material.DiffuseTexture.c_str());
 	}
 
-	// ObjStaticMeshMap.emplace(AbsolutePath, Out);
 	return true;
 }

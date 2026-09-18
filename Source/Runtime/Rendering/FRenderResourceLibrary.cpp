@@ -139,6 +139,8 @@ struct FMaterialEntry {
   FName Id;
   FName PipelineID;
   const char *TextureName = nullptr;
+  const char *NormalTextureName = nullptr;
+  const char *SpecularTextureName = nullptr;
 };
 
 // 기본 머티리얼 테이블
@@ -526,7 +528,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
   for (const auto &[Key, Mesh] : AllFStaticMeshMap) {
     FName MaterialName = FName("Simple");
 
-    // 메시별 기본 머티리얼 및 텍스처 예외 처리
+    // 메시별 기본 머티리얼 및 텍스처 설정
     if (Key == FName("MasterYi")) {
       MaterialName = FName("Textured");
       if (Mesh && Mesh->DefaultTextureId.IsNone()) {
@@ -534,13 +536,45 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
       }
     } else if (Key == FName("SpotlightCone") || Key == FName("Spotlight")) {
       MaterialName = FName("Spotlight");
-    } else if (Mesh && !Mesh->DefaultTextureId.IsNone() &&
-               Mesh->DefaultTextureId != FName("None")) {
-      MaterialName = FName("Textured");
+    } else if (Mesh) {
+      // 텍스처 존재 여부 확인
+      bool bHasTexture = (!Mesh->DefaultTextureId.IsNone() && Mesh->DefaultTextureId != FName("None")) ||
+                         (!Mesh->DefaultNormalTextureId.IsNone() && Mesh->DefaultNormalTextureId != FName("None")) ||
+                         (!Mesh->DefaultSpecularTextureId.IsNone() && Mesh->DefaultSpecularTextureId != FName("None"));
+
+      if (!bHasTexture) {
+        for (const auto& Section : Mesh->GetSections()) {
+          FName DiffuseName = !Section.DiffuseTextureName.IsNone() ? Section.DiffuseTextureName : Section.TextureName;
+          if ((!DiffuseName.IsNone() && DiffuseName != FName("None")) ||
+              (!Section.NormalTextureName.IsNone() && Section.NormalTextureName != FName("None")) ||
+              (!Section.SpecularTextureName.IsNone() && Section.SpecularTextureName != FName("None"))) {
+            bHasTexture = true;
+            break;
+          }
+        }
+      }
+
+      if (bHasTexture) {
+        MaterialName = FName("Textured");
+      }
     }
+
+
 
     UStaticMesh *StaticMeshObj = NewObject<UStaticMesh>(Key, MaterialName);
     if (StaticMeshObj) {
+      if (Mesh) {
+        if (!Mesh->DefaultTextureId.IsNone() && Mesh->DefaultTextureId != FName("None")) {
+          StaticMeshObj->SetDefaultTextureID(0, Mesh->DefaultTextureId);
+        }
+        if (!Mesh->DefaultNormalTextureId.IsNone() && Mesh->DefaultNormalTextureId != FName("None")) {
+          StaticMeshObj->SetDefaultNormalTextureID(0, Mesh->DefaultNormalTextureId);
+        }
+        if (!Mesh->DefaultSpecularTextureId.IsNone() && Mesh->DefaultSpecularTextureId != FName("None")) {
+          StaticMeshObj->SetDefaultSpecularTextureID(0, Mesh->DefaultSpecularTextureId);
+        }
+      }
+
       AllUStaticMeshMap[Key] = StaticMeshObj;
     }
   }
@@ -673,6 +707,7 @@ bool FRenderResourceLibrary::CreateCylinderMesh(float Height, uint32 SliceCount,
   RegisterMesh(FName("Cylinder"), Renderer.CreateMesh(MeshDesc));
   return AllFStaticMeshMap[FName("Cylinder")] != nullptr;
 }
+
 
 bool FRenderResourceLibrary::CreateConeMesh() {
   if (!RendererRef) return false;
@@ -1305,7 +1340,13 @@ bool FRenderResourceLibrary::InitializeMaterials() {
     }
 
     if (Entry.TextureName) {
-      Material->SetTexture(GetTexture(Entry.TextureName));
+      Material->SetDiffuseMap(GetTexture(Entry.TextureName));
+    }
+    if (Entry.NormalTextureName) {
+      Material->SetNormalMap(GetTexture(Entry.NormalTextureName));
+    }
+    if (Entry.SpecularTextureName) {
+      Material->SetSpecularMap(GetTexture(Entry.SpecularTextureName));
     }
 
     RegisterMaterial(Entry.Id, Material);
@@ -1468,6 +1509,11 @@ bool FRenderResourceLibrary::CreateObjMeshes() {
       std::string StemName = Entry.path().stem().string();
       FName MeshKey(StemName);
 
+      // 이미 로드된 메시는 건너뜀
+      if (AllFStaticMeshMap.find(MeshKey) != AllFStaticMeshMap.end()) {
+        continue;
+      }
+
       // FObjDecoder로 파일 파싱
       FObjModelData ModelData;
       if (!FObjDecoder::DecodeFromFile(Entry.path().string(), ModelData)) {
@@ -1494,15 +1540,41 @@ bool FRenderResourceLibrary::CreateObjMeshes() {
         StaticMesh->PathFileName = Entry.path().string();
         StaticMesh->MeshId = MeshKey;
         StaticMesh->DefaultTextureId = ModelData.TextureName;
+        StaticMesh->DefaultNormalTextureId = ModelData.NormalTextureName;
+        StaticMesh->DefaultSpecularTextureId = ModelData.SpecularTextureName;
+        StaticMesh->Sections = std::move(ModelData.Sections);
         RegisterMesh(MeshKey, StaticMesh);
-        UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u)",
+        UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u, 섹션: %zu)",
                StemName.c_str(), ModelData.Vertices.size(),
-               ModelData.Indices.size());
+               ModelData.Indices.size(), StaticMesh->Sections.size());
       }
     }
   }
 
   return true;
+}
+
+TSharedPtr<FStaticMesh>
+FRenderResourceLibrary::CreateStaticMesh(const FName& ID,
+                                         const TArray<FVertexData>& Vertices,
+                                         const TArray<uint32>& Indices) {
+  if (!RendererRef || Vertices.empty()) return nullptr;
+
+  FMeshDesc Desc{
+      .VertexData = Vertices.data(),
+      .VertexDataSize = static_cast<uint32>(sizeof(FVertexData) * Vertices.size()),
+      .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
+      .VertexCount = static_cast<uint32>(Vertices.size()),
+      .IndexData = Indices.empty() ? nullptr : Indices.data(),
+      .IndexDataSize = static_cast<uint32>(sizeof(uint32) * Indices.size()),
+      .IndexCount = static_cast<uint32>(Indices.size()),
+  };
+
+  TSharedPtr<FStaticMesh> NewMesh = RendererRef->CreateMesh(Desc);
+  if (NewMesh) {
+    RegisterMesh(ID, NewMesh);
+  }
+  return NewMesh;
 }
 
 TSharedPtr<FStaticMesh>
@@ -1520,7 +1592,7 @@ FRenderResourceLibrary::GetOrCreateMesh(const FName &ID,
   TSharedPtr<FStaticMesh> newMesh =
       RendererRef ? RendererRef->CreateMesh(Desc) : nullptr;
   if (newMesh) {
-    AllFStaticMeshMap[ID] = newMesh;
+    RegisterMesh(ID, newMesh);
   }
   return newMesh;
 }

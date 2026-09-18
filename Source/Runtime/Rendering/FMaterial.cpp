@@ -11,13 +11,26 @@ void FMaterial::SetPipeLine(const TSharedPtr<FRenderPipeline>& InPipeline)
 }
 
 
-void FMaterial::SetTexture(const TSharedPtr<FTexture>& InTexture)
+void FMaterial::SetTexture(EMaterialTextureSlot Slot, const TSharedPtr<FTexture>& InTexture)
 {
-    Texture = InTexture;
+    const size_t Index = static_cast<size_t>(Slot);
+    if (Index < static_cast<size_t>(EMaterialTextureSlot::Count))
+    {
+        Textures[Index] = InTexture;
+    }
 }
 
+TSharedPtr<FTexture> FMaterial::GetTexture(EMaterialTextureSlot Slot) const
+{
+    const size_t Index = static_cast<size_t>(Slot);
+    if (Index < static_cast<size_t>(EMaterialTextureSlot::Count))
+    {
+        return Textures[Index];
+    }
+    return nullptr;
+}
 
-bool FMaterial::SetTextureByName(const FName& InTextureName)
+bool FMaterial::SetTextureByName(EMaterialTextureSlot Slot, const FName& InTextureName)
 {
     auto& lib = FRenderResourceLibrary::Get();
 
@@ -28,14 +41,19 @@ bool FMaterial::SetTextureByName(const FName& InTextureName)
         return false;
     }
 
-    SetTexture(it);
+    SetTexture(Slot, it);
     return true;
 }
 
 void FMaterial::BindResources(ID3D11DeviceContext& Context) const
 {
-    // 텍스처가 없어도 반드시 바인딩한다.
-    // D3D 상태는 끈끈해서, 건너뛰면 이전 드로우의 SRV가 슬롯에 남는다.
-    ID3D11ShaderResourceView* SRVs[1] = { Texture ? Texture->GetSRV() : nullptr };
-    Context.PSSetShaderResources(0u, 1u, SRVs);
+    // 슬롯별 리소스 뷰 배열 구성
+    ID3D11ShaderResourceView* SRVs[static_cast<size_t>(EMaterialTextureSlot::Count)] = {
+        Textures[static_cast<size_t>(EMaterialTextureSlot::Diffuse)] ? Textures[static_cast<size_t>(EMaterialTextureSlot::Diffuse)]->GetSRV() : nullptr,
+        Textures[static_cast<size_t>(EMaterialTextureSlot::Normal)] ? Textures[static_cast<size_t>(EMaterialTextureSlot::Normal)]->GetSRV() : nullptr,
+        Textures[static_cast<size_t>(EMaterialTextureSlot::Specular)] ? Textures[static_cast<size_t>(EMaterialTextureSlot::Specular)]->GetSRV() : nullptr
+    };
+
+    // 픽셀 셰이더 슬롯에 한 번에 바인딩
+    Context.PSSetShaderResources(0u, static_cast<UINT>(EMaterialTextureSlot::Count), SRVs);
 }

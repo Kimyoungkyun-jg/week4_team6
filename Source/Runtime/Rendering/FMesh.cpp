@@ -19,6 +19,9 @@ bool FStaticMesh::UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Conte
 		return false;
 	}
 
+	// 토폴로지 설정
+	Topology = Desc.bIsLine ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
 	// 정점 버퍼 갱신
 	if (VertexBuffer && Desc.VertexDataSize <= VertexBufferSize)
 	{

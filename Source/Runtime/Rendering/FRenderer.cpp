@@ -16,6 +16,7 @@
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Editor/Grid/FGrid.h"
 #include <Windows.h>
+#include <cmath>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -70,7 +71,15 @@ void FRenderer::BindEditorViewportRenderTargets() {
 }
 
 void FRenderer::SetViewportUV(FVector2 TopLeftUV, FVector2 LengthUV) {
-  // Viewport는 전체 백버퍼 크기를 유지하고, UV는 그리기 직전에 픽셀로 변환한다.
+  // 유효성 검사
+  if (Viewport.Width <= 0.0f || Viewport.Height <= 0.0f ||
+      LengthUV.X <= 0.0f || LengthUV.Y <= 0.0f ||
+      !std::isfinite(TopLeftUV.X) || !std::isfinite(TopLeftUV.Y) ||
+      !std::isfinite(LengthUV.X) || !std::isfinite(LengthUV.Y)) {
+    return;
+  }
+
+  // 뷰포트 변환
   D3D11_VIEWPORT RenderViewport = Viewport;
   RenderViewport.TopLeftX = TopLeftUV.X * Viewport.Width;
   RenderViewport.TopLeftY = TopLeftUV.Y * Viewport.Height;
