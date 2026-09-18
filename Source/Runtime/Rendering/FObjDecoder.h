@@ -6,15 +6,13 @@
 #include "Runtime/Core/FName.h"
 #include "Runtime/Rendering/Vertices.h"
 #include "Runtime/Geometry/FAxisAlignedBoundingBox.h"
-#include "Runtime/Core/PointerTypes.h"
 
 struct FVertexKey
 {
 	FVertexKey() = default;
 	FVertexKey(int32 _p, int32 _uv, int32 _n)
 		:PosIndex(_p), UVIndex(_uv), NormalIndex(_n)
-	{
-	}
+	{}
 
 	bool operator== (const FVertexKey& Other) const = default;
 
@@ -51,31 +49,53 @@ struct std::hash<FVertexKey>
 	}
 };
 
-struct FObjModelInfo
+struct FObjMaterialInfo
 {
+	FName MaterialName{ "None" };
+	FVector KaAmbient{ 0.2f, 0.2f, 0.2f };
+	FVector KdDiffuse{ 0.8f, 0.8f, 0.8f };
+	FVector KsSpecular{ 1.f,1.f,1.f };
+	FVector KeEmissive{ 0.f,0.f,0.f };
+	float NsShininess = 32.f;
+	float DOpacity = 1.f;
+	int32 Illumination = 2;
+	FName TextureName{ "uv-test.png" };
+};
+
+struct FObjMeshSection
+{
+	uint32 StartIndex = 0;
+	uint32 IndexCount = 0;
+	int32 MaterialIndex = INVALID_INDEX;
+};
+
+struct FObjVertexInfo
+{
+	FName ObjectName{ "None" };
 	TArray<FVertexData> Vertices;
 	TArray<uint32> Indices;
+	TArray<FObjMaterialInfo> Materials;
+	TArray<FObjMeshSection> Sections;
 	FAxisAlignedBoundingBox LocalBounds;
-	FName ObjectName{ "None" };
-	FName TextureName{ "None" };
-	//FName MaterialName{ "None" };
+	//FName TextureName{ "uv-test.png" };
 	bool bIsValid = false;
 };
 
 class FObjDecoder
 {
 public:
-	static bool DecodeFromFile(const FString& FilePath, FObjModelInfo& OutData);
-
-	static bool DecodeFromString(const FString& FileContent, FObjModelInfo& OutData, const FString& BaseDirectory);
-
+	static bool DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, FObjMaterialInfo& MaterialInfoOut);
 
 private:
+	static bool DecodeObjFile(const FString& FileContent, FObjVertexInfo& OutData);
+
 	static int32 ResolveIndex(const std::string_view& String, const uint32 Count);
 
 	[[nodiscard]]
 	static FVertexData MakeVertex(const FVertexKey& Key, const TArray<FVector>& Positions, const TArray<FVector2>& UVs, const TArray<FVector>& Normals);
 
-	static void ComputeStaticBounds(FObjModelInfo& OutData);
+	static void ComputeStaticBounds(FObjVertexInfo& OutData);
+
+	static bool DecodeMtlFile(const FString& FileContent, FObjMaterialInfo& OutData);
 
 };

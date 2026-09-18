@@ -1405,35 +1405,36 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
       FName MeshKey(StemName);
 
       // FObjDecoder로 파일 파싱
-      FObjModelInfo ModelData;
-      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), ModelData)) {
+      FObjVertexInfo VertexInfo;
+      FObjMaterialInfo MaterialInfo;
+      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), VertexInfo, MaterialInfo)) {
         UE_LOG_WARN("[OBJ Loader] 파싱 실패: %s",
                     Entry.path().string().c_str());
         continue;
       }
 
       FMeshDesc Desc{
-          .VertexData = ModelData.Vertices.data(),
+          .VertexData = VertexInfo.Vertices.data(),
           .VertexDataSize = static_cast<uint32>(sizeof(FVertexData) *
-                                                ModelData.Vertices.size()),
+                                                VertexInfo.Vertices.size()),
           .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
-          .VertexCount = static_cast<uint32>(ModelData.Vertices.size()),
+          .VertexCount = static_cast<uint32>(VertexInfo.Vertices.size()),
 
-          .IndexData = ModelData.Indices.data(),
+          .IndexData = VertexInfo.Indices.data(),
           .IndexDataSize =
-              static_cast<uint32>(sizeof(uint32) * ModelData.Indices.size()),
-          .IndexCount = static_cast<uint32>(ModelData.Indices.size()),
+              static_cast<uint32>(sizeof(uint32) * VertexInfo.Indices.size()),
+          .IndexCount = static_cast<uint32>(VertexInfo.Indices.size()),
           .bIsLine = false};
 
       TSharedPtr<FStaticMesh> StaticMesh = Renderer.CreateMesh(Desc);
       if (StaticMesh) {
         StaticMesh->PathFileName = Entry.path().string();
         StaticMesh->MeshId = MeshKey;
-        StaticMesh->DefaultTextureId = ModelData.TextureName;
+        StaticMesh->DefaultTextureId = MaterialInfo.TextureName;
         RegisterMesh(MeshKey, StaticMesh);
         UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u)",
-               StemName.c_str(), ModelData.Vertices.size(),
-               ModelData.Indices.size());
+               StemName.c_str(), VertexInfo.Vertices.size(),
+            VertexInfo.Indices.size());
       }
     }
   }

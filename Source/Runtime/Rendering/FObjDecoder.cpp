@@ -10,44 +10,43 @@
 #include <cassert>
 
 
-namespace
+
+// .mtl 파일을 읽어 map_Kd의 파일명을 추출하는 함수
+FName ParseMtlTexture(const std::filesystem::path& MtlPath)
 {
-	// .mtl 파일을 읽어 map_Kd의 파일명을 추출하는 함수
-	FName ParseMtlTexture(const std::filesystem::path& MtlPath)
+	std::ifstream File(MtlPath);
+	if (!File.is_open())
 	{
-		std::ifstream File(MtlPath);
-		if (!File.is_open())
-		{
-			return FName("None");
-		}
-		std::string Line;
-		while (std::getline(File, Line))
-		{
-			if (Line.empty() || Line[0] == '#')
-				continue;
-			std::istringstream Stream(Line);
-			std::string Prefix;
-			Stream >> Prefix;
-			// map_Kd: 디퓨즈(기본) 컬러 텍스처 맵
-			if (Prefix == "map_Kd")
-			{
-				std::string TextureFileName;
-				Stream >> TextureFileName;
-				if (!TextureFileName.empty())
-				{
-					// 경로가 포함되어 있어도 순수 파일명(stem)만 추출
-					// 예: "textures/MasterYi_Head.png" -> "MasterYi_Head"
-					std::string StemName = std::filesystem::path(TextureFileName).stem().string();
-					return FName(StemName);
-				}
-			}
-		}
 		return FName("None");
 	}
+	std::string Line;
+	while (std::getline(File, Line))
+	{
+		if (Line.empty() || Line[0] == '#')
+			continue;
+		std::istringstream Stream(Line);
+		std::string Prefix;
+		Stream >> Prefix;
+		// map_Kd: 디퓨즈(기본) 컬러 텍스처 맵
+		if (Prefix == "map_Kd")
+		{
+			std::string TextureFileName;
+			Stream >> TextureFileName;
+			if (!TextureFileName.empty())
+			{
+				// 경로가 포함되어 있어도 순수 파일명(stem)만 추출
+				// 예: "textures/MasterYi_Head.png" -> "MasterYi_Head"
+				std::string StemName = std::filesystem::path(TextureFileName).stem().string();
+				return FName(StemName);
+			}
+		}
+	}
+	return FName("None");
 }
 
-bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelInfo& OutData)
+bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, FObjMaterialInfo& MaterialInfoOut)
 {
+	std::error_code Ec;
 	std::ifstream File(FilePath);
 	if (!File.is_open())
 	{
@@ -55,18 +54,35 @@ bool FObjDecoder::DecodeFromFile(const FString& FilePath, FObjModelInfo& OutData
 		return false;
 	}
 
-	// OBJ 파일이 위치한 부모 폴더 경로를 구함
-	std::string BaseDir = std::filesystem::path(FilePath).parent_path().string();
+	const std::filesystem::path ObjPath(FilePath);
+	const std::filesystem::path BaseDir = ObjPath.parent_path();
 
-	std::stringstream Buffer;
-	Buffer << File.rdbuf();
+	std::stringstream ObjBuffer;
+	ObjBuffer << File.rdbuf();
 
-	// 부모 폴더 경로(BaseDir)를 함께 넘겨줌
-	return DecodeFromString(Buffer.str(), OutData, BaseDir);
+	if (!DecodeObjFile(ObjBuffer.str(), VetexInfoOut))
+	{
+		return false;
+	}
+
+	std::filesystem::path Candidate = ObjPath;
+	Candidate.replace_extension(".mtl");
+	if (std::filesystem::is_regular_file(Candidate, Ec))
+	{
+		std::ifstream MtlFile(Candidate);
+		if (MtlFile.is_open())
+		{
+			std::stringstream MtlBuffer;
+			MtlBuffer << MtlFile.rdbuf();
+			DecodeMtlFile(MtlBuffer.str(), MaterialInfoOut);
+		}
+	}
+
+	return true;
 }
 
 
-bool FObjDecoder::DecodeFromString(const FString& FileContent, FObjModelInfo& OutData, const FString& BaseDirectory)
+bool FObjDecoder::DecodeObjFile(const FString& FileContent, FObjVertexInfo& OutData)
 {
 	TArray<FVector> Positions;
 	TArray<FVector2> UVs;
@@ -219,7 +235,7 @@ FVertexData FObjDecoder::MakeVertex(const FVertexKey& Key, const TArray<FVector>
 }
 
 // 로컬 AABB 바운딩 박스 계산
-void FObjDecoder::ComputeStaticBounds(FObjModelInfo& OutData)
+void FObjDecoder::ComputeStaticBounds(FObjVertexInfo& OutData)
 {
 	FVector MinBound{ (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)() };
 	FVector MaxBound{ (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)(), (std::numeric_limits<float>::lowest)() };
@@ -238,4 +254,9 @@ void FObjDecoder::ComputeStaticBounds(FObjModelInfo& OutData)
 	OutData.LocalBounds.Min = MinBound;
 	OutData.LocalBounds.Max = MaxBound;
 	OutData.bIsValid = true;
+}
+
+bool FObjDecoder::DecodeMtlFile(const FString& FileContent, FObjMaterialInfo& OutData)
+{
+	return 1;
 }
