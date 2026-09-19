@@ -14,7 +14,8 @@ FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 	PreviewViewport.ViewportCamera.Projection.FOV = 60.0f;
 	PreviewViewport.ViewportCamera.Projection.Aspect = 1.0f;
 
-	CameraController.CameraMoveSpeed = 3.0f;
+
+	CameraController.CameraMoveSpeed = 5.0f;
 	CameraController.CameraRotateSpeed = 0.5f;
 }
 
@@ -31,10 +32,16 @@ void FImguiPreviewEditorWindow::Open(UStaticMesh* InMesh, ImGuiID InDockID)
 	bFocusRequested = true;
 	bNeedInitialDock = true;
 
+#if IS_OBJ_VIEWER
+	TitleString += "OBJ_Viewer###PreviewEditor";
+#else
 	// 스크린샷과 동일하게 탭에 메시 이름 표시
 	TitleString = TargetMesh->MeshId.ToString();
-	TitleString += "###PreviewEditor_";
+	TitleString += "###PreviewEditor";
 	TitleString += TargetMesh->MeshId.ToString();
+
+#endif
+
 
 	if (InitialDockID != 0)
 	{
@@ -62,7 +69,12 @@ void FImguiPreviewEditorWindow::FocusOnMesh()
 	MeshCenter = (Bounds.Min + Bounds.Max) * 0.5f;
 
 	MeshExtent = (Bounds.Max - Bounds.Min).Size();
-	const float Distance = (MeshExtent > 0.1f) ? MeshExtent * 1.5f : 5.0f;
+
+	// 최소 거리 2.0f, 최대 거리 500.0f로 클램핑 (필요에 따라 상한값 조절 가능)
+	constexpr float MinDistance = 2.0f;
+	constexpr float MaxDistance = 100.0f;
+	const float CalculatedDistance = (MeshExtent > 0.1f) ? (MeshExtent * 1.5f) : 5.0f;
+	const float Distance = std::clamp(CalculatedDistance, MinDistance, MaxDistance);
 
 	// 메시를 비스듬히 내려다보도록 카메라 배치
 	PreviewViewport.ViewportCamera.Pitch = -20.0f;
@@ -82,9 +94,22 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		return;
 	}
 
+#if IS_OBJ_VIEWER
+	// 뷰어 모드: 전체 화면 강제 고정 및 타이틀바/리사이즈/이동 비활성화
+	const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(MainViewport->WorkPos, ImGuiCond_Always);
+	ImGui::SetNextWindowSize(MainViewport->WorkSize, ImGuiCond_Always);
+
+	const ImGuiWindowFlags ViewerFlags = ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+	if (ImGui::Begin(TitleString.c_str(), nullptr, ViewerFlags)) // &bIsOpen 대신 nullptr로 닫기(X) 버튼 방지
+#else
+	// 기존 에디터 도킹 로직 유지
 	ImGui::SetNextWindowSize(ImVec2(850.0f, 600.0f), ImGuiCond_FirstUseEver);
 
-	// 동일 뷰포트 도킹 공간에 탭으로 중첩 도킹
 	if (bNeedInitialDock && InitialDockID != 0)
 	{
 		ImGui::SetNextWindowDockID(InitialDockID, ImGuiCond_Always);
@@ -95,7 +120,6 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		ImGui::SetNextWindowDockID(InitialDockID, ImGuiCond_FirstUseEver);
 	}
 
-	// 탭 활성화 요청 처리
 	if (bFocusRequested)
 	{
 		ImGui::SetNextWindowFocus();
@@ -103,18 +127,49 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 	}
 
 	if (ImGui::Begin(TitleString.c_str(), &bIsOpen, ImGuiWindowFlags_NoCollapse))
+#endif
 	{
 		// 상단 툴바
 		ImGui::Checkbox("Grid", &bShowGrid);
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth(120.0f);
-		// 카메라 속도 슬라이더
-		ImGui::SliderFloat("Speed", &CameraSpeed, 1.0f, 15.0f, "%.2f");
+		ImGui::SliderFloat("Speed", &CameraSpeed, 1.0f, 100.0f, "%.2f");
 		ImGui::SameLine();
 		if (ImGui::Button("Focus (F)"))
 		{
 			FocusOnMesh();
 		}
+
+
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(200.0f);
+
+		const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
+		if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
+		{
+			const auto& MeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
+			for (const auto& [Key, MeshPtr] : MeshMap)
+			{
+				const std::string ItemName = Key;
+				const bool bIsSelected = (TargetMesh.IsValid() && TargetMesh->MeshId == Key);
+
+				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+				{
+					TargetMesh = MeshPtr;
+					FocusOnMesh(); // 메시 교체 후 카메라 초점 재정렬
+				}
+
+				if (bIsSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+
+
+
 		ImGui::Separator();
 
 		const float DetailsWidth = 260.0f;
@@ -126,7 +181,6 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		const uint32 NewWidth = static_cast<uint32>(ViewWidth);
 		const uint32 NewHeight = static_cast<uint32>(ViewHeight);
 
-		// 창 크기가 변경되었을 때만 해상도 및 종횡비 갱신
 		if (NewWidth != PreviewWidth || NewHeight != PreviewHeight)
 		{
 			PreviewWidth = NewWidth;

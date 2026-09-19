@@ -316,6 +316,18 @@
     <ClCompile Include="Source\Runtime\Rendering\FObjDecoder.cpp">
       <Filter>Source\Runtime\Rendering</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Imgui\FimguiWorlOutliner.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\UI\Imgui\FImguiPreviewEditorWindow.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Actors\AStaticMeshActor.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Rendering\FPreviewRenderTarget.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h">
@@ -609,6 +621,9 @@
     <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h">
       <Filter>Source\Runtime\Rendering</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiPreviewEditorWindow.h" />
+    <ClInclude Include="Source\Runtime\Actors\AStaticMeshActor.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FPreviewRenderTarget.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">

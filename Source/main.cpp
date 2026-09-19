@@ -39,7 +39,10 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 } // namespace
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,                    _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
-  HWND Window = CreateWindowHandle(hInstance);
+
+
+    
+    HWND Window = CreateWindowHandle(hInstance);
   if (!Window) {
     return -1;
   }
@@ -65,6 +68,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
   UClass::ResolveTypeBitsets();
   // 새씬 생성
   USceneManager SceneManager;
+
+
   SceneManager.SetScene(NewObject<UScene>());
 
   FEditorApplication &EditorApp = FEditorApplication::Get();
