@@ -24,21 +24,30 @@ struct FTextVertex {
 
 struct FObjMaterialInfo
 {
-    FString MaterialName;
+    FString MaterialName; // Name -> MaterialName으로 통일
 
-    FVector Ambient{ 0.2f, 0.2f, 0.2f };   // Ka
-    FVector Diffuse{ 0.8f, 0.8f, 0.8f };   // Kd
-    FVector Specular{ 0.0f, 0.0f, 0.0f };  // Ks
-    float SpecularExponent = 0.0f;         // Ns
-    float Opacity = 1.0f;                  // d
-    int32 IlluminationModel = 0;           // illum
+    FVector Ambient{ 0.2f, 0.2f, 0.2f };   // Ka 주변 색상
+    FVector Diffuse{ 0.8f, 0.8f, 0.8f };   // Kd 확산 색상
+    FVector Specular{ 0.0f, 0.0f, 0.0f };  // Ks 반사색
+    FVector Emissive{ 0.0f, 0.0f, 0.0f };  // Ke 발광
+    FVector TransmissionFilter{ 1.0f, 1.0f, 1.0f }; // Tf 투과 필터 색상
+    float SpecularExponent = 0.0f;         // Ns 반사율
+    float Opacity = 1.0f;                  // d  (Tr 는 1 - d) 투명성
+    float OpticalDensity = 1.0f;           // Ni 굴절률
+    int32 IlluminationModel = 0;           // illum 조명 모델
 
-    FString DiffuseTextureName;   // map_Kd
-    FString AmbientTextureName;   // map_Ka
-    FString SpecularTextureName;  // map_Ks
-    FString AlphaTextureName;     // map_d
-    FString NormalTextureName;    // map_bump
+    FString DiffuseTextureName;         // map_Kd 디퓨즈 컬러 맵
+    FString AmbientTextureName;         // map_Ka 주변 색상 맵
+    FString SpecularTextureName;        // map_Ks 반사 색상 맵
+    FString AlphaTextureName;           // map_d 알파 텍스처 맵
+    FString NormalTextureName;          // map_bump / bump 범프 맵
+    FString EmissiveTexture;            // map_Ke 발광 텍스처
+    FString SpecularExponentTexture;    // map_Ns 반사광 하이라이트 구성 요소
+    FString ReflectionTexture;          // refl 구형 반사 맵
+    FString DisplacementTexture;        // disp 변위 맵
+    FString DecalTexture;               // decal 스텐실 데칼 텍스처
 };
+
 
 class FRenderResourceLibrary final {
 public:
