@@ -130,8 +130,7 @@ void FImguiPropertyWindow::ShowComponentDetails(FEditor& Editor, AActor& Actor,
 	}
 }
 
-void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const
-{
+void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const {
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.6f, 1.0f), "Static Mesh Settings");
 
@@ -157,7 +156,7 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 		}
 		std::sort(SortedKeys.begin(), SortedKeys.end(), [](const FName& A, const FName& B) {
 			return A.ToString() < B.ToString();
-		});
+			});
 
 		for (const FName& MeshKey : SortedKeys)
 		{
@@ -180,6 +179,10 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 		}
 		ImGui::EndCombo();
 	}
+
+	// UV 애니메이션 토글 체크박스 추가
+	ImGui::Spacing();
+	ImGui::Checkbox("Animate UV (bIsMovingUV)", &StaticMeshComp.bIsMovingUV);
 }
 
 void FImguiPropertyWindow::ShowTransform(FEditor& Editor, USceneComponent& Comp, bool bIsRoot) const
