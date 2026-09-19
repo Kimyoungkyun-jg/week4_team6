@@ -10,6 +10,19 @@
 #include "Runtime/Math/FVector4.h"
 #include <string_view>
 
+#define EXPLICIT 0
+#define SMOOTH 1
+#define FLAT 2
+
+struct FTriangleIndices {
+    int32 Index[3] = {-1,-1,-1};
+
+    FTriangleIndices() = default;
+    FTriangleIndices(int A, int B, int C) : Index{ A, B, C } {}
+};
+
+struct FCorner { int32 V, VT, VN; };
+
 struct FObjMaterialInfo
 {
     FString Name;
@@ -47,6 +60,8 @@ struct FSectionKey
     // 예시 if ((A <=> B) < 0) -> A가 작다
 };
 
+
+
 struct FMeshSection
 {
     uint32 FirstIndex = 0; // Indices 배열에서 이 그룹이 시작하는 위치
@@ -70,24 +85,27 @@ struct FObjObjectInfo
     FString Name;
 };
 
+struct FSmoothingInfo
+{
+    FString Name;
+};
 
 // Cooked Data
-struct FObjModelData // 이름바꿔야됨
+struct FObjModelData
 {
+    FName TextureName{ "None" };
     std::string PathFileName;
 
     TArray<FVertexData> Vertices; // 정점들 (큐브기준 24)
     TArray<uint32> Indices; // 사용할 인덱스 순서 (큐브기준 36)
-
-
-    FName TextureName{ "None" };
-    bool bIsValid = false;
 
     TArray<FMeshSection> Sections;
 
     TArray<FObjMaterialInfo> Materials;
     TArray<FObjGroupInfo> Groups;
     TArray<FObjObjectInfo> ObjectNames;    
+
+    bool bIsValid = false;
 };
 
 // Raw Data
@@ -99,21 +117,23 @@ struct FObjInfo
     TArray<FVector> UVList;
     TArray<FVector> NormalList;
 
-    TArray<FVector> VertexIndexList;
-    TArray<FVector> ColorIndexList;
-    TArray<FVector> UVIndexList;
-    TArray<FVector> NormalIndexList;
+    TArray<FTriangleIndices> VertexIndexList;
+    TArray<FTriangleIndices> ColorIndexList;
+    TArray<FTriangleIndices> UVIndexList;
+    TArray<FTriangleIndices> NormalIndexList;
 
     TArray<int32> MaterialList;
     TArray<int32> GroupList;
     TArray<int32> ObjectNamesList;
     TArray<int32> TextureList;
+    TArray<int32> SmoothingGroupsList;
 
     TArray<FString> MaterialLibs;
     TArray<FObjMaterialInfo> Materials;
 
-    TArray<FObjGroupInfo> Groups;
+    TArray<FObjGroupInfo>  Groups;
     TArray<FObjObjectInfo> ObjectNames;
+    TArray<FSmoothingInfo>  SmoothingGroups;
 };
 
 class FObjDecoder
@@ -128,6 +148,7 @@ private:
 
     int32 CurrentGroup = -1;
     int32 CurrentObjectName = -1;
+    int32 CurrentSmoothingGroup = 0; // 0 or off 사용안함
 
     // obj
     void AddVertexList(std::string_view Line);
@@ -143,6 +164,10 @@ private:
     void UseGroup(std::string_view Line);
     int32 FindOrAddGroup(std::string_view Name);
 
+    void UseSmoothingGroup(std::string_view Line);
+
+    void SetSmoothingGroup(std::string_view Line);
+
     void UseObjectName(std::string_view Line);
     int32 FindOrAddObjectName(std::string_view Name);
 
@@ -153,6 +178,10 @@ private:
     void ParseMtlFile(const FString& File);
     void ParseMtlLine(std::string_view Line);
     int32 FindOrAddMaterial(std::string_view Name);
+
+    bool IsConvexDot(FVector PrevVertexPosition, FVector EarVertexPosition, FVector NextVertexPosition, FVector Normal);
+    bool IsPointInTriangle(FVector A, FVector B, FVector C, FVector Q, FVector Normal);
+    void StartEarClipping(const TArray<FCorner>& Corners);
 
     static bool CookStaticMesh(const FObjInfo& Info, FObjModelData& Out);
 
