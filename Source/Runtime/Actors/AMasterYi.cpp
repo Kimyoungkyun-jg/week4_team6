@@ -13,6 +13,8 @@ AMasterYi::AMasterYi()
 
 	if (auto* MeshComp = GetStaticMeshComponent())
 	{
+
+
 		MeshComp->SetStaticMesh(NewObject<UStaticMesh>(FName("MasterYi"), FName("Textured")));
 		MeshComp->SetTextureID(FName("MasterYi_Head"));
 	}

@@ -13,7 +13,7 @@ ABillboardActor::ABillboardActor()
 	
 	if (auto* PrimComp = GetRootComponent()->Cast<UBillBoardComp>())
 	{
-		PrimComp->SetTextureID(FName("masteryi"));
+		PrimComp->SetTextureID(FString("masteryi"));
 	}
 }
 

@@ -3,7 +3,9 @@
 #include "Runtime/Core/Log.h"
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Utility/EngineUtil.h"
-
+#include "Runtime/Rendering/FRenderResourceLibrary.h"
+#include "Runtime/Core/TSortedMap.h"
+#include "Runtime/Core/TArray.h"
 #include <algorithm>
 #include <charconv>
 #include <filesystem>
@@ -223,7 +225,18 @@ namespace
 			Line = Trim(Line);
 		}
 
-		return FString(Line);
+		if (Line.empty())
+		{
+			return FString();
+		}
+
+		// 파일 경로 및 확장자(.png 등)를 제거하고 순수 파일명(stem)만 추출
+		std::string Stem = std::filesystem::path(Line).stem().string();
+
+		// 대소문자 불일치 방지를 위해 소문자로 변환
+		std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
+
+		return FString(Stem);
 	}
 }
 
@@ -340,6 +353,10 @@ void FObjDecoder::ParseFace(std::string_view Line)
 		ObjInfo.MaterialList.push_back(CurrentMaterial);
 		ObjInfo.GroupList.push_back(CurrentGroup);
 		ObjInfo.ObjectNamesList.push_back(CurrentObjectName);
+
+
+
+
 	}
 }
 
@@ -441,14 +458,14 @@ int32 FObjDecoder::FindOrAddMaterial(std::string_view Name)
 {
 	for (size_t i = 0; i < ObjInfo.Materials.size(); ++i)
 	{
-		if (ObjInfo.Materials[i].Name == Name)
+		if (ObjInfo.Materials[i].MaterialName == Name)
 		{
 			return static_cast<int32>(i);
 		}
 	}
 
 	FObjMaterialInfo Material{};
-	Material.Name = FString(Name);
+	Material.MaterialName = FString(Name);
 	ObjInfo.Materials.push_back(Material);
 	return static_cast<int32>(ObjInfo.Materials.size() - 1);
 }
@@ -462,8 +479,15 @@ void FObjDecoder::ParseMtlFile(const FString& File)
 	{
 		ParseMtlLine(NextLine(Remaining));
 	}
-
+	
+	auto& ResLib = FRenderResourceLibrary::Get();
+	for (const auto& MatInfo : ObjInfo.Materials)
+	{
+		ResLib.CreateAndRegisterMaterialFromInfo(MatInfo);
+	}
+	
 	DefiningMaterial = -1;
+
 }
 
 void FObjDecoder::ParseMtlLine(std::string_view Line)
@@ -542,23 +566,23 @@ void FObjDecoder::ParseMtlLine(std::string_view Line)
 	}
 	else if (LowerKeyword == "map_kd")
 	{
-		Material.DiffuseTexture = ParseTexturePath(Line);
+		Material.DiffuseTextureName = ParseTexturePath(Line);
 	}
 	else if (LowerKeyword == "map_ka")
 	{
-		Material.AmbientTexture = ParseTexturePath(Line);
+		Material.AmbientTextureName = ParseTexturePath(Line);
 	}
 	else if (LowerKeyword == "map_ks")
 	{
-		Material.SpecularTexture = ParseTexturePath(Line);
+		Material.SpecularTextureName = ParseTexturePath(Line);
 	}
 	else if (LowerKeyword == "map_d")
 	{
-		Material.AlphaTexture = ParseTexturePath(Line);
+		Material.AlphaTextureName = ParseTexturePath(Line);
 	}
 	else if (LowerKeyword == "map_bump" || LowerKeyword == "bump" || LowerKeyword == "norm")
 	{
-		Material.NormalTexture = ParseTexturePath(Line);
+		Material.NormalTextureName = ParseTexturePath(Line);
 	}
 	// 기타 속성 처리 생략
 }
@@ -726,7 +750,7 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 {
 	Out.Vertices.clear();
 	Out.Indices.clear();
-	//Out.TriangleMaterials.clear();
+	Out.Sections.clear();
 	Out.Materials = Info.Materials;
 	Out.Groups = Info.Groups;
 	Out.ObjectNames = Info.ObjectNames;
@@ -745,7 +769,6 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 	}
 
 	TSortedMap<FSectionKey, TArray<size_t>> Bucket;
-
 	for (size_t Index = 0; Index < TriangleCount; ++Index)
 	{
 		FSectionKey Key;
@@ -759,47 +782,33 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 	UniqueVertices.reserve(TriangleCount * 3);
 	Out.Indices.reserve(TriangleCount * 3);
 
+	uint32 CurrentIndex = 0;
+	int32 SlotCounter = 0;
 
-	uint32 CurrnetIndex = 0;
 	for (const auto& [SectionKey, Triangles] : Bucket)
 	{
 		FMeshSection CurrentSection;
-		CurrentSection.FirstIndex = CurrnetIndex;
-		CurrentSection.Object = SectionKey.Object;
-		CurrentSection.Group = SectionKey.Group;
+		CurrentSection.FirstIndex = CurrentIndex;
+
+
+		// 머티리얼 인덱스 유효성 검사 및 슬롯 지정
 		int32 MatIdx = SectionKey.Material;
 		if (MatIdx < 0 && !Info.Materials.empty())
 		{
 			MatIdx = 0;
 		}
+
 		if (MatIdx >= 0 && MatIdx < static_cast<int32>(Info.Materials.size()))
 		{
-			const auto& Mat = Info.Materials[MatIdx];
-			CurrentSection.Opacity = Mat.Opacity;
-			CurrentSection.bIsAlpha = !Mat.AlphaTexture.empty() || (Mat.Opacity < 0.99f);
-			CurrentSection.MaterialName = Mat.Name;
-			CurrentSection.IlluminationModel = Mat.IlluminationModel;
-
-			if (!Mat.DiffuseTexture.empty())
-			{
-				FString Stem = std::filesystem::path(Mat.DiffuseTexture).stem().string();
-				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
-				CurrentSection.DiffuseTextureName = FName(Stem);
-			}
-			if (!Mat.NormalTexture.empty())
-			{
-				FString Stem = std::filesystem::path(Mat.NormalTexture).stem().string();
-				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
-				CurrentSection.NormalTextureName = FName(Stem);
-			}
-			if (!Mat.SpecularTexture.empty())
-			{
-				FString Stem = std::filesystem::path(Mat.SpecularTexture).stem().string();
-				std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
-				CurrentSection.SpecularTextureName = FName(Stem);
-			}
+			CurrentSection.MaterialName = Info.Materials[MatIdx].MaterialName;
 		}
-		uint32 EndIndex = CurrnetIndex;
+		else
+		{
+			CurrentSection.MaterialName = "DefaultMaterial";
+		}
+		++SlotCounter;
+
+		uint32 EndIndex = CurrentIndex;
 
 		for (auto Triangle : Triangles)
 		{
@@ -813,7 +822,6 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 				{ static_cast<int32>(V.Z), static_cast<int32>(VT.Z), static_cast<int32>(VN.Z) },
 			};
 
-			// 범위 밖 인덱스가 하나라도 있으면 이 삼각형은 버린다.
 			bool bValid = true;
 			for (const FCornerKey& Corner : Corners)
 			{
@@ -832,7 +840,6 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 
 			for (const FCornerKey& Corner : Corners)
 			{
-				
 				Out.Indices.push_back(GetOrAddVertex(Info, Corner, UniqueVertices, Out));
 
 				for (int i = 0; i < 3; i++)
@@ -846,9 +853,15 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 
 			EndIndex += 3;
 		}
-		CurrentSection.IndexCount = EndIndex - CurrnetIndex;
-		CurrnetIndex = EndIndex;
-		Out.Sections.push_back(CurrentSection);
+
+		CurrentSection.IndexCount = EndIndex - CurrentIndex;
+		CurrentIndex = EndIndex;
+
+		// 유효한 인덱스가 채워진 섹션만 등록
+		if (CurrentSection.IndexCount > 0)
+		{
+			Out.Sections.push_back(CurrentSection);
+		}
 	}
 
 	// 정점별 탄젠트 및 바이탄젠트 누적 계산
@@ -945,21 +958,21 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 	Out.SpecularTextureName = FName("None");
 	if (!Out.Materials.empty())
 	{
-		if (!Out.Materials.front().DiffuseTexture.empty())
+		if (!Out.Materials.front().DiffuseTextureName.empty())
 		{
-			FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTexture).stem().string();
+			FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
 			Out.TextureName = FName(TextureKey);
 		}
-		if (!Out.Materials.front().NormalTexture.empty())
+		if (!Out.Materials.front().NormalTextureName.empty())
 		{
-			FString TextureKey = std::filesystem::path(Out.Materials.front().NormalTexture).stem().string();
+			FString TextureKey = std::filesystem::path(Out.Materials.front().NormalTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
 			Out.NormalTextureName = FName(TextureKey);
 		}
-		if (!Out.Materials.front().SpecularTexture.empty())
+		if (!Out.Materials.front().SpecularTextureName.empty())
 		{
-			FString TextureKey = std::filesystem::path(Out.Materials.front().SpecularTexture).stem().string();
+			FString TextureKey = std::filesystem::path(Out.Materials.front().SpecularTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
 			Out.SpecularTextureName = FName(TextureKey);
 		}
@@ -968,13 +981,7 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 	UE_LOG("FObjDecoder : %s  cooked  vertices=%zu indices=%zu materials=%zu",
 		AbsolutePath.c_str(), Out.Vertices.size(), Out.Indices.size(), Out.Materials.size());
 
-	for (const FObjMaterialInfo& Material : Out.Materials)
-	{
-		UE_LOG("FObjDecoder :   material '%s'  Kd=(%.2f %.2f %.2f)  map_Kd='%s'",
-			Material.Name.c_str(),
-			Material.Diffuse.X, Material.Diffuse.Y, Material.Diffuse.Z,
-			Material.DiffuseTexture.c_str());
-	}
+
 
 	return true;
 }

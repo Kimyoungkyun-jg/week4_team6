@@ -9,25 +9,10 @@
 #include "Runtime/Math/FVector2.h"
 #include "Runtime/Math/FVector4.h"
 #include <string_view>
+#include "FRenderResourceLibrary.h"
 
 // 재질 속성 정보
-struct FObjMaterialInfo
-{
-    FString Name;
 
-    FVector Ambient{ 0.2f, 0.2f, 0.2f };   // Ka
-    FVector Diffuse{ 0.8f, 0.8f, 0.8f };   // Kd
-    FVector Specular{ 0.0f, 0.0f, 0.0f };  // Ks
-    float SpecularExponent = 0.0f;         // Ns
-    float Opacity = 1.0f;                  // d
-    int32 IlluminationModel = 0;           // illum
-
-    FString DiffuseTexture;   // map_Kd
-    FString AmbientTexture;   // map_Ka
-    FString SpecularTexture;  // map_Ks
-    FString AlphaTexture;     // map_d
-    FString NormalTexture;    // map_bump
-};
 
 // 섹션 그룹화 키
 struct FSectionKey

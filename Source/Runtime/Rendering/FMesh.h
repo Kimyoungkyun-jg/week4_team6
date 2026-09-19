@@ -18,18 +18,10 @@ struct FMeshSection
 	uint32 FirstIndex = 0;
 	uint32 IndexCount = 0;
 
-	int32 Object = -1;
-	int32 Group = -1;
-	int32 MaterialIndex = -1;
-
-	FName DiffuseTextureName{ "None" };
-	FName NormalTextureName{ "None" };
-	FName SpecularTextureName{ "None" };
-
 	float Opacity = 1.0f;
 	bool bIsAlpha = false;
 	int32 IlluminationModel = 0;
-	FName MaterialName{ "None" };
+	FString MaterialName;
 
 	FAxisAlignedBoundingBox LocalBounds;
 };
@@ -55,7 +47,7 @@ public:
 	[[nodiscard]] const FName& GetDefaultNormalTextureId() const { return DefaultNormalTextureId; }
 	[[nodiscard]] const FName& GetDefaultSpecularTextureId() const { return DefaultSpecularTextureId; }
 	[[nodiscard]] const FString& GetPathFileName() const { return PathFileName; }
-	[[nodiscard]] bool HasTexture() const { return !DefaultTextureId.IsNone() && DefaultTextureId != FName("None"); }
+	[[nodiscard]] bool HasTexture() const { return !DefaultTextureId.empty() && DefaultTextureId != "None"; }
 	[[nodiscard]] bool HasNormalMap() const { return !DefaultNormalTextureId.IsNone() && DefaultNormalTextureId != FName("None"); }
 	[[nodiscard]] bool HasSpecularMap() const { return !DefaultSpecularTextureId.IsNone() && DefaultSpecularTextureId != FName("None"); }
 
@@ -64,7 +56,7 @@ public:
 
 	// 공개 에셋 속성
 	FName MeshId{ "None" };
-	FName DefaultTextureId{ "None" };
+	FString DefaultTextureId{ "None" };
 	FName DefaultNormalTextureId{ "None" };
 	FName DefaultSpecularTextureId{ "None" };
 

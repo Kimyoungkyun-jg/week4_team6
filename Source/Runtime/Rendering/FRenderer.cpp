@@ -957,7 +957,7 @@ void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCa
   SetRenderMode(EViewModeIndex::VMI_Lit);
   UpdateLightConstants(LightConstants, EViewModeIndex::VMI_Lit);
 
-  TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->GetDefaultMaterialID(0));
+  TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[0]);
   auto& Sections = MeshAsset->GetSections();
 
   FObjectConstants ObjConstants = {};
@@ -969,32 +969,39 @@ void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCa
 
   if (!Sections.empty())
   {
-      for (int i = 0; i < TargetMesh->StaticMaterials.size(); i++)
+      for (int i = 0; i < TargetMesh->Materials.size(); i++)
       {
-          // 머티리얼 조회 및 메시 드로우
-          Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->GetDefaultMaterialID(i));
+          // 머티리얼 조회 및 폴백
+          auto Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[i]);
           if (!Material)
           {
               Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
           }
 
-          if (Material)
+          if (Material && i < static_cast<int>(Sections.size()))
           {
-              // 상수 버퍼 구성
-
-
               Draw(*MeshAsset, *Material, ObjConstants, Sections.at(i).FirstIndex, Sections.at(i).IndexCount, 0, false);
           }
       }
   }
   else
   {
-      Draw(*MeshAsset, *Material, ObjConstants, 0, -1, 0 ,false );
+      // 기본 도형(Cube, Sphere 등)은 0번 슬롯 머티리얼 또는 메시 이름으로 조회
+      FName MatKey = (!TargetMesh->Materials.empty()) ? TargetMesh->Materials[0] : TargetMesh->MeshId;
+      auto Material = FRenderResourceLibrary::Get().GetMaterial(MatKey);
+
+      // 없으면 기본 Simple 머티리얼로 폴백
+      if (!Material)
+      {
+          Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+      }
+
+      if (Material)
+      {
+          // 전체 인덱스 드로우 (-1 또는 전체 인덱스 수)
+          Draw(*MeshAsset, *Material, ObjConstants, 0, -1, 0, false);
+      }
   }
-
-
-
-
 
   // 그리드 렌더링
   if (bDrawGrid)

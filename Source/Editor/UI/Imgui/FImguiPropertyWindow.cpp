@@ -166,7 +166,7 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 
 			if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
 			{
-				auto it = AllUStaticMeshMap.find(MeshKey);
+				auto it = AllUStaticMeshMap.find(MeshKey.ToString());
 				if (it != AllUStaticMeshMap.end())
 				{
 					StaticMeshComp.SetStaticMesh(it->second);

@@ -8,13 +8,6 @@
 class FStaticMesh;
 
 // 머티리얼 슬롯 정보
-struct FStaticMaterial
-{
-    FName MaterialId{ "Simple" };
-    FName DiffuseTextureId{ "None" };
-    FName NormalTextureId{ "None" };
-    FName SpecularTextureId{ "None" };
-};
 
 class UStaticMesh : public UObject
 {
@@ -30,7 +23,7 @@ public:
     TSharedPtr<FStaticMesh> StaticMeshAsset = nullptr;
 
     // 슬롯 목록
-    TArray<FStaticMaterial> StaticMaterials;
+    TArray<FString> Materials;
 
 
     // 바운딩 박스
@@ -44,18 +37,6 @@ public:
     TSharedPtr<FStaticMesh> GetStaticMeshAsset() const { return StaticMeshAsset; }
     int32 GetMaterialSlotCount() const;
 
-    const FName& GetDefaultMaterialID(int32 Slot = 0) const;
-    const FName& GetDefaultTextureID(int32 Slot = 0) const;
-    const FName& GetDefaultNormalTextureID(int32 Slot = 0) const;
-    const FName& GetDefaultSpecularTextureID(int32 Slot = 0) const;
-
-    // 슬롯 설정 메서드
-    void SetMaterialSlot(int32 Slot, const FName& InMaterialId, const FName& InDiffuse = FName("None"), const FName& InNormal = FName("None"), const FName& InSpecular = FName("None"));
-    void SetDefaultMaterialID(int32 Slot, const FName& InMaterialId);
-    void SetDefaultTextureID(int32 Slot, const FName& InTextureId);
-    void SetDefaultNormalTextureID(int32 Slot, const FName& InTextureId);
-    void SetDefaultSpecularTextureID(int32 Slot, const FName& InTextureId);
-
     // 에셋 정보 조회
     const FString& GetAssetPathFileName() const;
 
@@ -64,6 +45,6 @@ public:
     void SetStaticMeshAsset(FStaticMesh* InStaticMesh);
 
 private:
-    void InitializeFromAsset(const FName& InMaterialId);
+    void InitializeFromAsset(const FString& InMaterialId);
     static FName DetermineMaterialId(const FName& FallbackMaterialId, const FName& Diffuse, const FName& Normal, const FName& Specular);
 };

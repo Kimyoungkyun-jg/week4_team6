@@ -12,9 +12,7 @@ struct FRenderData
 {
     FName MeshId{"None"};
     FName MaterialId{"None"};
-    FName TextureId{"None"};
-    FName NormalTextureId{"None"};
-    FName SpecularTextureId{"None"};
+    FName TextureId{ "None" };
     FObjectConstants Constants;
     int32 startidx = 0;
     int32 indicesCount = -1;

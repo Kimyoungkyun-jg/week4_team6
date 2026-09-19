@@ -15,9 +15,29 @@
 class FRenderer;
 class FTexture;
 class UStaticMesh;
+
+
 struct FTextVertex {
   FVector Pos;
   float u, v;
+};
+
+struct FObjMaterialInfo
+{
+    FString MaterialName;
+
+    FVector Ambient{ 0.2f, 0.2f, 0.2f };   // Ka
+    FVector Diffuse{ 0.8f, 0.8f, 0.8f };   // Kd
+    FVector Specular{ 0.0f, 0.0f, 0.0f };  // Ks
+    float SpecularExponent = 0.0f;         // Ns
+    float Opacity = 1.0f;                  // d
+    int32 IlluminationModel = 0;           // illum
+
+    FString DiffuseTextureName;   // map_Kd
+    FString AmbientTextureName;   // map_Ka
+    FString SpecularTextureName;  // map_Ks
+    FString AlphaTextureName;     // map_d
+    FString NormalTextureName;    // map_bump
 };
 
 class FRenderResourceLibrary final {
@@ -30,11 +50,11 @@ public:
   // 파이프라인 보관 맵
   TMap<FName, TSharedPtr<FRenderPipeline>> AllPipelineMap;
   // 저수준 렌더 정적 메시 보관 맵
-  TMap<FName, TSharedPtr<FStaticMesh>> AllFStaticMeshMap;
+  TMap<FString, TSharedPtr<FStaticMesh>> AllFStaticMeshMap;
   // 게임 및 에디터용 UStaticMesh 에셋 보관 맵
-  TMap<FName, UStaticMesh*> AllUStaticMeshMap;
+  TMap<FString, UStaticMesh*> AllUStaticMeshMap;
   // 머티리얼 보관 맵 (FName 기반)
-  TMap<FName, TSharedPtr<FMaterial>> AllMaterialMap;
+  TMap<FString, TSharedPtr<FMaterial>> AllMaterialMap;
   // 텍스쳐 보관 맵 (FName 기반)
   TMap<FName, TSharedPtr<FTexture>> AllTextureMap;
   // 폰트 보관 맵
@@ -75,9 +95,9 @@ public:
     return nullptr;
   }
 
-  // 머티리얼 조회
+  // 머티리얼 조회TSharedPtr
   [[nodiscard]] TSharedPtr<FMaterial> GetMaterial(const FName& Id) const {
-    auto it = AllMaterialMap.find(Id);
+    auto it = AllMaterialMap.find(Id.ToString());
     if (it != AllMaterialMap.end())
       return it->second;
     return nullptr;
@@ -85,7 +105,7 @@ public:
 
   // 편집용 머티리얼 조회
   [[nodiscard]] TSharedPtr<FMaterial> GetEditMaterial(const FName& Id) const {
-      auto it = AllMaterialMap.find(Id);
+      auto it = AllMaterialMap.find(Id.ToString());
       if (it != AllMaterialMap.end())
           return it->second;
       return nullptr;
@@ -93,7 +113,7 @@ public:
 
   // 메쉬 조회
   TSharedPtr<FStaticMesh> GetMesh(const FName &ID) const {
-    auto it = AllFStaticMeshMap.find(ID);
+    auto it = AllFStaticMeshMap.find(ID.ToString());
     if (it != AllFStaticMeshMap.end())
       return it->second;
     return nullptr;
@@ -102,19 +122,17 @@ public:
   // 메쉬 등록
   TSharedPtr<FStaticMesh> RegisterMesh(const FName &ID, TSharedPtr<FStaticMesh> inMesh) {
     inMesh->MeshId = ID;
-    AllFStaticMeshMap[ID] = inMesh;
+    AllFStaticMeshMap[ID.ToString()] = inMesh;
     return inMesh;
   }
 
+
+  TSharedPtr<FMaterial> CreateAndRegisterMaterialFromInfo(const FObjMaterialInfo& Info);
+  UStaticMesh* CreateAndRegisterUStaticMesh(FName Key, TArray<FString>&& materials, TSharedPtr<FStaticMesh> fstaticmesh);
+
   // UStaticMesh 맵 조회
-  [[nodiscard]] UStaticMesh* GetUStaticMesh(const FName& ID) const {
-    auto it = AllUStaticMeshMap.find(ID);
-    if (it != AllUStaticMeshMap.end())
-      return it->second;
-    return nullptr;
-  }
-  [[nodiscard]] const TMap<FName, UStaticMesh*>& GetAllUStaticMeshMap() const {
-    return AllUStaticMeshMap;
+  [[nodiscard]] const TMap<FString, UStaticMesh*>& GetAllUStaticMeshMap() const {
+      return AllUStaticMeshMap;
   }
 
   // UStaticMesh 맵 생성 함수
@@ -170,12 +188,9 @@ public:
   [[nodiscard]] TSharedPtr<FStaticMesh> GetMasterYiMesh() const {
     return GetMesh(FName("MasterYi"));
   }
-  [[nodiscard]] TSharedPtr<FStaticMesh> GetMasteryMesh() const {
-    return GetMesh(FName("MasterYi"));
-  }
 
   // 머티리얼 등록
-  TSharedPtr<FMaterial> RegisterMaterial(const FName& Id, TSharedPtr<FMaterial> inMaterial);
+  TSharedPtr<FMaterial> RegisterMaterial(const FString& Id, TSharedPtr<FMaterial> inMaterial);
 
   void RegisterTexture(const FName &name, TSharedPtr<FTexture> texture) {
     AllTextureMap[name] = texture;
@@ -200,6 +215,19 @@ public:
     return nullptr;
   }
 
+
+  [[nodiscard]] UStaticMesh* GetUStaticMesh(const FName& name) const
+  {
+      auto it = AllUStaticMeshMap.find(name.ToString());
+      if (it != AllUStaticMeshMap.end())
+          return it->second;
+      return nullptr;
+  }
+
+
+
+
+
   // 메쉬 전체 해제
   void DestroyAllMeshes() {
     AllFStaticMeshMap.clear();
@@ -215,7 +243,7 @@ public:
   void DestroyAllInstancingArray() { AllInstancingArrayMap.clear(); }
 
   // 전체 머티리얼 맵 조회
-  const TMap<FName, TSharedPtr<FMaterial>> &GetAllMaterials() const {
+  const TMap<FString, TSharedPtr<FMaterial>> &GetAllMaterials() const {
     return AllMaterialMap;
   }
 

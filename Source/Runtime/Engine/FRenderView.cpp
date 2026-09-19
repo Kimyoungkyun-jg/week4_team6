@@ -356,38 +356,17 @@ void FRenderView::DrawRenderData(const FRenderData& Data)
     auto& ResLib = FRenderResourceLibrary::Get();
     auto Mesh = ResLib.GetMesh(Data.MeshId);
     auto Material = ResLib.GetMaterial(Data.MaterialId);
-    if (!Mesh || !Material) return;
 
-    // 텍스처 오버라이드 처리
-    const bool bHasDiffuse = !Data.TextureId.IsNone() && Data.TextureId != FName("None");
-    const bool bHasNormal = !Data.NormalTextureId.IsNone() && Data.NormalTextureId != FName("None");
-    const bool bHasSpecular = !Data.SpecularTextureId.IsNone() && Data.SpecularTextureId != FName("None");
-
-    if (bHasDiffuse || bHasNormal || bHasSpecular)
+    if (!Material)
     {
-        auto MatInst = TSharedPtr<FMaterial>(new FMaterial(*Material));
-        if (bHasDiffuse)
-        {
-            auto Tex = ResLib.GetTexture(Data.TextureId);
-            if (Tex) MatInst->SetDiffuseMap(Tex);
-        }
-        if (bHasNormal)
-        {
-            auto Tex = ResLib.GetTexture(Data.NormalTextureId);
-            if (Tex) MatInst->SetNormalMap(Tex);
-        }
-        if (bHasSpecular)
-        {
-            auto Tex = ResLib.GetTexture(Data.SpecularTextureId);
-            if (Tex) MatInst->SetSpecularMap(Tex);
-        }
-        Renderer.Draw(*Mesh, *MatInst, Data.Constants, Data.startidx, Data.indicesCount);
-        return;
+        Material = ResLib.GetMaterial(FName("Simple"));
     }
 
+    if (!Mesh || !Material) return;
+
+    // FMaterial 자체에 연결된 파이프라인 및 텍스처로 바로 드로우
     Renderer.Draw(*Mesh, *Material, Data.Constants, Data.startidx, Data.indicesCount);
 }
-
 
 
 void FRenderView::FlushQueue(const FCamera& Camera)
