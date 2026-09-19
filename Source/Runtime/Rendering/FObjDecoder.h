@@ -85,11 +85,6 @@ struct FObjObjectInfo
     FString Name;
 };
 
-struct FSmoothingInfo
-{
-    FString Name;
-};
-
 // Cooked Data
 struct FObjModelData
 {
@@ -118,14 +113,12 @@ struct FObjInfo
     TArray<FVector> NormalList;
 
     TArray<FTriangleIndices> VertexIndexList;
-    TArray<FTriangleIndices> ColorIndexList;
     TArray<FTriangleIndices> UVIndexList;
     TArray<FTriangleIndices> NormalIndexList;
 
     TArray<int32> MaterialList;
     TArray<int32> GroupList;
     TArray<int32> ObjectNamesList;
-    TArray<int32> TextureList;
     TArray<int32> SmoothingGroupsList;
 
     TArray<FString> MaterialLibs;
@@ -133,7 +126,6 @@ struct FObjInfo
 
     TArray<FObjGroupInfo>  Groups;
     TArray<FObjObjectInfo> ObjectNames;
-    TArray<FSmoothingInfo>  SmoothingGroups;
 };
 
 class FObjDecoder

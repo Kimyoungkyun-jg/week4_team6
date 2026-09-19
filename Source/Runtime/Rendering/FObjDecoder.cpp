@@ -336,7 +336,7 @@ void FObjDecoder::StartEarClipping(const TArray<FCorner>& Corners)
 	FVector			Normal;
 	const TArray<FVector4>& Vertex = ObjInfo.VertexList;
 
-	int32 N = Corners.size();
+	int32 N = static_cast<int32>(Corners.size());
 
 	for (int i = 0; i < N; i++)
 	{
@@ -350,8 +350,6 @@ void FObjDecoder::StartEarClipping(const TArray<FCorner>& Corners)
 		Normal.Y += (P.Z - Q.Z) * (P.X + Q.X);
 		Normal.Z += (P.X - Q.X) * (P.Y + Q.Y);
 	}
-
-	UE_LOG("EarClip: N=%d Normal=(%.3f %.3f %.3f)", N, Normal.X, Normal.Y, Normal.Z);
 
 	Prev[0] = static_cast<int32>(N - 1);
 	Next[static_cast<int32>(N - 1)] = 0;
@@ -479,20 +477,6 @@ void FObjDecoder::ParseFace(std::string_view Line)
 	{
 		StartEarClipping(Corners);
 	}
-	//for (size_t i = 1; i + 1 < Corners.size(); ++i)
-	//{
-	//	const FCorner& A = Corners[0];
-	//	const FCorner& B = Corners[i];
-	//	const FCorner& C = Corners[i + 1];
-
-	//	ObjInfo.VertexIndexList.push_back(FTriangleIndices(A.V, B.V, C.V));
-	//	ObjInfo.UVIndexList.push_back(FTriangleIndices(A.VT, B.VT, C.VT));
-	//	ObjInfo.NormalIndexList.push_back(FTriangleIndices(A.VN, B.VN, C.VN));
-	//	ObjInfo.MaterialList.push_back(CurrentMaterial);
-	//	ObjInfo.GroupList.push_back(CurrentGroup);
-	//	ObjInfo.ObjectNamesList.push_back(CurrentObjectName);
-	//	ObjInfo.SmoothingGroupsList.push_back(CurrentSmoothingGroup);
-	//}
 }
 
 int32 FObjDecoder::FindOrAddGroup(std::string_view Name)
@@ -513,7 +497,7 @@ int32 FObjDecoder::FindOrAddGroup(std::string_view Name)
 
 void FObjDecoder::UseGroup(std::string_view Line)
 {
-	const std::string_view Name = Trim(Line);
+	const std::string_view Name = NextWord(Line);
 	if (Name.empty())
 	{
 		CurrentGroup = -1;
@@ -826,7 +810,7 @@ void FObjDecoder::ParseLine(std::string_view Line)
 		AddMaterialLib(Line);
 	else if (Keyword == "usemtl")
 		UseMaterial(Line);
-	// 아직 처리하지 않는 키워드: vp(파라미터 공간 정점), s(스무딩그룹), l(선), p(점)
+	// 아직 처리하지 않는 키워드: vp(파라미터 공간 정점), l(선), p(점)
 }
 
 FObjInfo FObjDecoder::ParseObjFile(const FString& File)
