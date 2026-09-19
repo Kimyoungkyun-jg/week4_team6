@@ -2,6 +2,8 @@
 
 #include "UMeshComponent.h"
 #include "UStaticMesh.h"
+#include <Runtime\Core\TArray.h>
+#include <Runtime\Core\TArray.h>
 
 class UStaticMeshComponent : public UMeshComponent {
     GENERATED_BODY()
@@ -19,7 +21,7 @@ public:
     const FName& GetMaterialID() const override;
     FAxisAlignedBoundingBox CalcLocalBounds() override;
 
-    const FRenderData& GetRenderData(const FCamera& Camera) override;
+    TArray<FRenderData> GetRenderDatas(const FCamera& Camera) override;
     const FRenderData& GetPureRenderData() const override;
 
     // 머티리얼 오버라이드

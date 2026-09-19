@@ -775,6 +775,11 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 		if (MatIdx >= 0 && MatIdx < static_cast<int32>(Info.Materials.size()))
 		{
 			const auto& Mat = Info.Materials[MatIdx];
+			CurrentSection.Opacity = Mat.Opacity;
+			CurrentSection.bIsAlpha = !Mat.AlphaTexture.empty() || (Mat.Opacity < 0.99f);
+			CurrentSection.MaterialName = Mat.Name;
+			CurrentSection.IlluminationModel = Mat.IlluminationModel;
+
 			if (!Mat.DiffuseTexture.empty())
 			{
 				FString Stem = std::filesystem::path(Mat.DiffuseTexture).stem().string();

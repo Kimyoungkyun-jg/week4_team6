@@ -9,7 +9,7 @@ class AActor;
 class FGizmo;
 class FGrid;
 class FVisualizerRegistry;
-class UPrimitiveComponent;
+class UMeshComponent;
 class UTextInstanceComponent;
 
 // 뷰포트 렌더링 명세
@@ -28,7 +28,7 @@ struct FSceneView
 struct FEditorRenderContext
 {
 	const AActor* SelectedActor = nullptr;
-	UPrimitiveComponent* SelectedPrimitive = nullptr;
+	UMeshComponent* SelectedMeshComp = nullptr;
 	FGrid* Grid = nullptr;
 	FVisualizerRegistry* VisualizerRegistry = nullptr;
 	FTransform SelectedTransform;

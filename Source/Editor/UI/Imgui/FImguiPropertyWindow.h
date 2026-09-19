@@ -39,10 +39,10 @@ private:
 	void ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const;
 	void ShowTextSettings(UTextInstanceComponent& TextComp) const;
 	void ShowSpotLightSettings(USpotLightComponent& LightComp) const;
-	void ShowPrimitiveSettings(AActor& Actor, UPrimitiveComponent& PrimComp, bool bIsRoot) const;
+	void ShowPrimitiveSettings(AActor& Actor, UMeshComponent& MeshComp, bool bIsRoot) const;
 
 	// 머티리얼의 텍스처 미리보기 겸 드롭 타깃.
-	void ShowTextureSlot(UPrimitiveComponent& PrimComp) const;
+	void ShowTextureSlot(UMeshComponent& MeshComp) const;
 
 	// 창 하단의 기즈모 모드/공간 선택.
 	void ShowGizmoSettings(FEditor& Editor) const;

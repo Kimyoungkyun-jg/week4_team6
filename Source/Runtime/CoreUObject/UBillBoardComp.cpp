@@ -55,7 +55,7 @@ void UBillBoardComp::SetTexture(
   }
 
   // TextureId를 RenderData에 기록
-  RenderData.TextureId = TextureId;
+  RenderDatas.at(0).TextureId = TextureId;
 }
 
 FMatrix UBillBoardComp::GetRenderMatrix(const FCamera& Camera) const

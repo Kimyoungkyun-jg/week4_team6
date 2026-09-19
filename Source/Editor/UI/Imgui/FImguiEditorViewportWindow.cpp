@@ -9,6 +9,7 @@
 #include "Runtime/Actors/AActor.h"
 #include "ThirdParty/Imgui/imgui.h"
 #include "ThirdParty/Imgui/imgui_internal.h"
+#include <Runtime\CoreUObject\UMeshComponent.h>
 
 void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
 {
@@ -551,9 +552,9 @@ void FImguiEditorViewportWindow::HandlePicking(FEditor &Editor,
         }
     }
 
-    TArray<UPrimitiveComponent *> Components = Editor.GetPrimitiveComponents();
+    TArray<UMeshComponent*> Components = Editor.GetMeshComponents();
 
-    UPrimitiveComponent *HitComponent = nullptr;
+    UMeshComponent* HitComponent = nullptr;
     FVector ImpactPoint;
 
     const bool bHit = FRayCastingManager::RayIntersectsMeshes(

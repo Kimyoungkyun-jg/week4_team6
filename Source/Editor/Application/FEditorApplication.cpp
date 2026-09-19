@@ -121,6 +121,7 @@ void FEditorApplication::Tick(float DeltaTime) {
 
 #include "ThirdParty/Imgui/imgui.h"
 #include "ThirdParty/Imgui/imgui_internal.h"
+#include <Runtime\CoreUObject\UMeshComponent.h>
 
 void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh) {
   if (!InMesh)
@@ -213,7 +214,7 @@ void FEditorApplication::Render() {
     if (EditorCtx.SelectedActor) {
       if (USceneComponent *RootComp =
               EditorCtx.SelectedActor->GetRootComponent()) {
-        EditorCtx.SelectedPrimitive = RootComp->Cast<UPrimitiveComponent>();
+        EditorCtx.SelectedMeshComp = RootComp->Cast<UMeshComponent>();
       }
     }
 

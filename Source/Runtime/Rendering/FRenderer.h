@@ -144,65 +144,58 @@ public:
   // bApplyViewMode=false면 뷰모드(와이어프레임) 오버라이드를 건너뛴다
   template <typename TConstants>
   void Draw(
-      const FStaticMesh &Mesh,
-      const FMaterial &Material,
-      const TConstants &Constants,
+      const FStaticMesh& Mesh,
+      const FMaterial& Material,
+      const TConstants& Constants,
+      int32 startidx = 0,
+      int32 indicesCount = -1,
       uint32 Slot = 0,
       bool bApplyViewMode = true
   )
   {
-    UpdateBuffer(Constants, Slot);
+      UpdateBuffer(Constants, Slot);
 
-    TSharedPtr<FRenderPipeline> Pipeline = Material.Pipeline;
-    if (bApplyViewMode && CurrentRenderMode == EViewModeIndex::VMI_Wireframe) {
-      Pipeline = GetPipeline(FName("Simple_Wireframe"));
-    }
-    if (Pipeline) {
-      Pipeline->Bind(*Context.Get());
-    }
+      TSharedPtr<FRenderPipeline> Pipeline = Material.Pipeline;
+      if (bApplyViewMode && CurrentRenderMode == EViewModeIndex::VMI_Wireframe) {
+          Pipeline = GetPipeline(FName("Simple_Wireframe"));
+      }
+      if (Pipeline) {
+          Pipeline->Bind(*Context.Get());
+      }
 
-    Material.BindResources(*Context.Get());
-    Mesh.BindResources(*Context.Get());
+      Material.BindResources(*Context.Get());
+      Mesh.BindResources(*Context.Get());
 
+      // 외부에서 특정 인덱스 개수를 지정해서 넘겨준 경우 (단일 섹션 드로우)
+      if (indicesCount > 0)
+      {
+          Context->DrawIndexed(static_cast<UINT>(indicesCount), static_cast<UINT>(startidx), 0);
+          return;
+      }
 
-    if (Mesh.GetSections().empty())
-    {
-        if (Mesh.HasIndices()) {
-            Context->DrawIndexed(Mesh.IndexCount, 0, 0);
-        }
-        else {
-            Context->Draw(Mesh.VertexCount, 0);
-        }
-    }
-    else
-    {
-        // 섹션별 머티리얼 바인딩 및 드로우
-        for (const auto& Section : Mesh.GetSections())
-        {
-            FMaterial SectionMat = Material;
-            const FName& DiffuseName = Section.DiffuseTextureName;
-            if (!DiffuseName.IsNone() && DiffuseName != FName("None"))
-            {
-                SectionMat.SetDiffuseMapByName(DiffuseName);
-            }
-            if (!Section.NormalTextureName.IsNone() && Section.NormalTextureName != FName("None"))
-            {
-                SectionMat.SetNormalMapByName(Section.NormalTextureName);
-            }
-            if (!Section.SpecularTextureName.IsNone() && Section.SpecularTextureName != FName("None"))
-            {
-                SectionMat.SetSpecularMapByName(Section.SpecularTextureName);
-            }
-
-            SectionMat.BindResources(*Context.Get());
-            Context->DrawIndexed(Section.IndexCount, Section.FirstIndex, 0);
-        }
-    }
-
-
-
+      //전체를 그리라고 요청한 경우 (indicesCount == -1)
+      if (Mesh.HasIndices())
+      {
+          // 섹션 정보가 있다면 각 섹션의 오프셋으로 순회 드로우
+          if (!Mesh.GetSections().empty())
+          {
+              for (const auto& Section : Mesh.GetSections())
+              {
+                  Context->DrawIndexed(Section.IndexCount, Section.FirstIndex, 0);
+              }
+          }
+          else
+          {
+              // 섹션이 없으면 인덱스 버퍼 전체 드로우
+              Context->DrawIndexed(Mesh.GetIndexCount(), 0, 0);
+          }
+      }
+      else
+      {
+          // 인덱스 버퍼가 없는 정점 배열 드로우
+          Context->Draw(Mesh.VertexCount, static_cast<UINT>(startidx));
+      }
   }
-
 
 private:
   // 어느 상수 타입이든 b0 버퍼 하나에 써 넣는다.

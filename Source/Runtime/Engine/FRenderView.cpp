@@ -40,42 +40,56 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
             bSelected = true;
         }
 
-        FRenderData Data = MeshComponent->GetRenderData(View.Camera);
-        Data.bSelected = bSelected;
 
-        // 인스턴스 데이터가 있으면 인스턴싱 큐로 분류
-        if (!Data.Instances.empty())
-        {
-            RenderQueue.PushInstancing(Data);
-            continue;
-        }
+        const auto& RenderDatas = MeshComponent->GetRenderDatas(View.Camera);
 
+        // 공통 Matrix 및 Color 계산 (루프 밖 1회 수행)
         const FMatrix World = MeshComponent->GetRenderMatrix(View.Camera);
-        Data.Constants.MVP   = World * View.ViewProj;
-        Data.Constants.World = World;
-        Data.Constants.ColorOverride       = MeshComponent->GetColor();
-        Data.Constants.ColorOverrideAmount = MeshComponent->GetColorAmount();
-        Data.Constants.DisableShading      = View.ViewMode == EViewModeIndex::VMI_Unlit ? 1.0f : 0.0f;
+        const FMatrix MVP = World * View.ViewProj;
 
-        if (bSelected && Data.Constants.ColorOverrideAmount > 0.0f)
+        FVector FinalColorOverride = MeshComponent->GetColor();
+        float   FinalColorOverrideAmount = MeshComponent->GetColorAmount();
+
+        if (bSelected && FinalColorOverrideAmount > 0.0f)
         {
-            Data.Constants.ColorOverride = Data.Constants.ColorOverride * 0.7f + FVector{ 0.3f, 0.3f, 0.3f };
+            FinalColorOverride = FinalColorOverride * 0.7f + FVector{ 0.3f, 0.3f, 0.3f };
         }
         else if (bSelected)
         {
-            Data.Constants.ColorOverride = FVector{ 1.0f, 1.0f, 1.0f };
-            Data.Constants.ColorOverrideAmount = 0.5f;
+            FinalColorOverride = FVector{ 1.0f, 1.0f, 1.0f };
+            FinalColorOverrideAmount = 0.5f;
         }
 
-        // 머티리얼의 블렌드 모드에 따라 불투명 및 반투명 패스 자동 분기
-        auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
-        if (Material && (Material->GetBlendMode() == EBlendMode::Additive || Material->GetBlendMode() == EBlendMode::Translucent))
+        const float DisableShading = (View.ViewMode == EViewModeIndex::VMI_Unlit) ? 1.0f : 0.0f;
+
+        // 슬롯별 RenderData 순회 처리
+        for (FRenderData Data : RenderDatas)
         {
-            RenderQueue.PushTranslucent(Data);
-        }
-        else
-        {
-            RenderQueue.PushOpaque(Data);
+            Data.bSelected = bSelected;
+
+            // 인스턴스 데이터가 있으면 인스턴싱 큐로 분류
+            if (!Data.Instances.empty())
+            {
+                RenderQueue.PushInstancing(Data);
+                continue;
+            }
+
+            Data.Constants.MVP = MVP;
+            Data.Constants.World = World;
+            Data.Constants.ColorOverride = FinalColorOverride;
+            Data.Constants.ColorOverrideAmount = FinalColorOverrideAmount;
+            Data.Constants.DisableShading = DisableShading;
+
+            // 머티리얼의 블렌드 모드에 따라 불투명 및 반투명 패스 자동 분기
+            auto Material = ResLib.GetMaterial(Data.MaterialId);
+            if (Material && (Material->GetBlendMode() == EBlendMode::Additive || Material->GetBlendMode() == EBlendMode::Translucent))
+            {
+                RenderQueue.PushTranslucent(Data);
+            }
+            else
+            {
+                RenderQueue.PushOpaque(Data);
+            }
         }
     }
 }
@@ -96,9 +110,9 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
         DrawGrid(View.Camera, *EditorCtx.Grid);
     }
 
-    if (EditorCtx.SelectedPrimitive && EditorCtx.VisualizerRegistry) {
+    if (EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
 
-        UClass* ClassType = EditorCtx.SelectedPrimitive->GetClass();
+        UClass* ClassType = EditorCtx.SelectedMeshComp->GetClass();
         FVisualizerRegistry& Registry = *EditorCtx.VisualizerRegistry;
 
         IVisualizer* Visualizer = Registry.FindVisualizer(ClassType);
@@ -106,7 +120,7 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
         if (Visualizer)
         {
             Visualizer->Draw(
-                *EditorCtx.SelectedPrimitive,
+                *EditorCtx.SelectedMeshComp,
                 *this,
                 View.Camera,
                 FVector4{0.0f, 1.0f, 0.0f, 1.0f}
@@ -176,7 +190,7 @@ void FRenderView::RenderOverlayPass(const FCamera& Camera, const FSceneView& Sce
     if (TextComp && (SceneView.ShowFlags & static_cast<uint64>(EEngineShowFlags::SF_BillboardText)))
     {
         Renderer.ClearDepth();
-        FRenderData Data = TextComp->GetRenderData(Camera);
+        FRenderData Data = TextComp->GetPureRenderData();
         if (!Data.Instances.empty())
         {
             Renderer.AddTextInstanceArray(Data.Instances, Data.MeshId, Data.MaterialId);
@@ -253,7 +267,7 @@ void FRenderView::RenderUUIDText(const FCamera& Camera, FVector2 TopLeftUV,
     Renderer.ClearDepth();
 
     // BuildRenderData()로 Font 기반 인스턴스 데이터 획득 후 드로우
-    FRenderData Data = textcomp->GetRenderData(Camera);
+    FRenderData Data = textcomp->GetPureRenderData();
     if (!Data.Instances.empty())
     {
         Renderer.AddTextInstanceArray(Data.Instances, Data.MeshId, Data.MaterialId);
@@ -277,15 +291,15 @@ void FRenderView::DrawStencilMask(const FCamera& Camera,
     USceneComponent* RootComp = SelectedActor->GetRootComponent();
     if (!RootComp) return;
 
-    UPrimitiveComponent* PrimComp = RootComp->Cast<UPrimitiveComponent>();
-    if (!PrimComp) return;
+    UMeshComponent* MeshComp = RootComp->Cast<UMeshComponent>();
+    if (!MeshComp) return;
 
     // FRenderData에서 MeshId 읽어 ResLib로 실제 Mesh 획득
-    const FRenderData& RD = PrimComp->GetPureRenderData();
+    const FRenderData& RD = MeshComp->GetPureRenderData();
     auto Mesh = FRenderResourceLibrary::Get().GetMesh(RD.MeshId);
     if (!Mesh) return;
 
-    const FMatrix ModelMatrix = PrimComp->GetRenderMatrix(Camera);
+    const FMatrix ModelMatrix = MeshComp->GetRenderMatrix(Camera);
     FObjectConstants Constants{};
     Constants.World = ModelMatrix;
     Constants.MVP   = Constants.World * Camera.CreateViewProjectionMatrix();
@@ -294,7 +308,7 @@ void FRenderView::DrawStencilMask(const FCamera& Camera,
     auto OutlineMaterial = FRenderResourceLibrary::Get().GetMaterial(FName("Outline"));
     if (OutlineMaterial) {
         OutlineMaterial->GetPipeline()->SetStencilRef(1);
-        Renderer.Draw(*Mesh, *OutlineMaterial, Constants, 0, false);
+        Renderer.Draw(*Mesh, *OutlineMaterial, Constants, 0, -1, 0, false);
     }
 }
 
@@ -341,7 +355,7 @@ void FRenderView::DrawRenderData(const FRenderData& Data)
 {
     auto& ResLib = FRenderResourceLibrary::Get();
     auto Mesh = ResLib.GetMesh(Data.MeshId);
-    auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
+    auto Material = ResLib.GetMaterial(Data.MaterialId);
     if (!Mesh || !Material) return;
 
     // 텍스처 오버라이드 처리
@@ -367,11 +381,14 @@ void FRenderView::DrawRenderData(const FRenderData& Data)
             auto Tex = ResLib.GetTexture(Data.SpecularTextureId);
             if (Tex) MatInst->SetSpecularMap(Tex);
         }
-        Renderer.Draw(*Mesh, *MatInst, Data.Constants);
+        Renderer.Draw(*Mesh, *MatInst, Data.Constants, Data.startidx, Data.indicesCount);
         return;
     }
-    Renderer.Draw(*Mesh, *Material, Data.Constants);
+
+    Renderer.Draw(*Mesh, *Material, Data.Constants, Data.startidx, Data.indicesCount);
 }
+
+
 
 void FRenderView::FlushQueue(const FCamera& Camera)
 {

@@ -103,15 +103,7 @@ void UPrimitiveComponent::Deserialize(const FArchive& Archive)
     RelativeTransform.Scale3D = Archive.GetVector("Scale");
 }
 
-const FRenderData& UPrimitiveComponent::GetRenderData(const FCamera& Camera)
-{
-    return GEmptyRenderData;
-}
 
-const FRenderData& UPrimitiveComponent::GetPureRenderData() const
-{
-    return GEmptyRenderData;
-}
 
 FAxisAlignedBoundingBox UPrimitiveComponent::CalcLocalBounds()
 {

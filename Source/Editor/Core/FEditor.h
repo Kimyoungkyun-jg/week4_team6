@@ -66,7 +66,7 @@ public:
   void SpawnActorToCurrentScene(UClass* Type, int Count = 1);
   void SpawnInstancingToCurrentScene(int Count);
   // 피킹 등에서 현재 씬의 렌더링 대상 컴포넌트가 필요할 때 사용
-  [[nodiscard]] TArray<UPrimitiveComponent *> GetPrimitiveComponents() const;
+  [[nodiscard]] TArray<UMeshComponent*> GetMeshComponents() const;
   FGizmo &GetGizmo() { return Gizmo; }
   FGrid &GetGrid() { return Grid; }
   FRenderResourceLibrary *GetRendererLibrary();

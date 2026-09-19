@@ -184,12 +184,12 @@ void FEditor::UnSelectActor() {
   }
 }
 
-TArray<UPrimitiveComponent *> FEditor::GetPrimitiveComponents() const {
+TArray<UMeshComponent*> FEditor::GetMeshComponents() const {
   if (!SceneManager || !SceneManager->CurrentScene) {
     return {};
   }
   const auto& Meshes = SceneManager->CurrentScene->GetRenderComponents();
-  TArray<UPrimitiveComponent*> Result;
+  TArray<UMeshComponent*> Result;
   Result.reserve(Meshes.size());
   for (auto* Mesh : Meshes) {
     Result.push_back(Mesh);

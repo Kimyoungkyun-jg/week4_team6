@@ -5,7 +5,9 @@
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include <limits>
 #include "Runtime/CoreUObject/UPrimitiveComponent.h"
+#include "Runtime/CoreUObject/UMeshComponent.h"
 #include "Runtime/Core/Log.h"
+#include <Runtime\Core\TArray.h>
 
 constexpr float Epsilon = 0.000001f;
 
@@ -35,21 +37,15 @@ FRay FRayCastingManager::CreateRayFromScreenPosition(const FCamera& Camera, cons
 	return Ray;
 }
 
-
-bool FRayCastingManager::RayIntersectsMeshes(
-	const FRay& Ray,
-	const FCamera& Camera,
-	const TArray<UPrimitiveComponent*>& Components,
-	UPrimitiveComponent*& HitComponent,
-	FVector& OutImpactPoint)
+bool FRayCastingManager::RayIntersectsMeshes(const FRay& Ray, const FCamera& Camera, const TArray<UMeshComponent*>& Components, UMeshComponent*& HitComponent, FVector& OutImpactPoint)
 {
 	HitComponent = nullptr;
 
 	float ClosestHit = (std::numeric_limits<float>::max)();
-	UPrimitiveComponent* ClosestComponent = nullptr;
+	UMeshComponent* ClosestComponent = nullptr;
 	FVector ClosestImpactPoint;
 
-	for (UPrimitiveComponent* Component : Components)
+	for (UMeshComponent* Component : Components)
 	{
 		if (!Component)
 		{
@@ -74,12 +70,14 @@ bool FRayCastingManager::RayIntersectsMeshes(
 			ClosestImpactPoint = ImpactPoint;
 		}
 	}
-	
+
 	HitComponent = ClosestComponent;
 	OutImpactPoint = ClosestImpactPoint;
 
 	return ClosestComponent != nullptr;
 }
+
+
 
 bool FRayCastingManager::RayIntersectsAABB(const FRay& Ray, const FAxisAlignedBoundingBox& AABB)
 {

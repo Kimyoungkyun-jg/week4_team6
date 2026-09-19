@@ -957,50 +957,44 @@ void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCa
   SetRenderMode(EViewModeIndex::VMI_Lit);
   UpdateLightConstants(LightConstants, EViewModeIndex::VMI_Lit);
 
-  // 머티리얼 조회 및 메시 드로우
   TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->GetDefaultMaterialID(0));
-  if (!Material)
+  auto& Sections = MeshAsset->GetSections();
+
+  FObjectConstants ObjConstants = {};
+  ObjConstants.World = FMatrix::GetIdentity();
+  ObjConstants.MVP = ObjConstants.World * Camera.CreateViewProjectionMatrix();
+  ObjConstants.UVScale = FVector2(1.0f, 1.0f);
+  ObjConstants.ColorOverride = FVector(1.0f, 1.0f, 1.0f);
+  ObjConstants.ColorOverrideAmount = 0.0f;
+
+  if (!Sections.empty())
   {
-    Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+      for (int i = 0; i < TargetMesh->StaticMaterials.size(); i++)
+      {
+          // 머티리얼 조회 및 메시 드로우
+          Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->GetDefaultMaterialID(i));
+          if (!Material)
+          {
+              Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+          }
+
+          if (Material)
+          {
+              // 상수 버퍼 구성
+
+
+              Draw(*MeshAsset, *Material, ObjConstants, Sections.at(i).FirstIndex, Sections.at(i).IndexCount, 0, false);
+          }
+      }
+  }
+  else
+  {
+      Draw(*MeshAsset, *Material, ObjConstants, 0, -1, 0 ,false );
   }
 
-  if (Material)
-  {
-    // 텍스처 머티리얼인 경우 기본 텍스처 바인딩 보정
-    if (!MeshAsset->DefaultTextureId.IsNone() && MeshAsset->DefaultTextureId != FName("None"))
-    {
-      if (auto DefaultTex = FRenderResourceLibrary::Get().GetTexture(MeshAsset->DefaultTextureId))
-      {
-        Material->SetTexture(DefaultTex);
-      }
-    }
-    // 프리뷰 노멀맵 바인딩
-    if (!MeshAsset->DefaultNormalTextureId.IsNone() && MeshAsset->DefaultNormalTextureId != FName("None"))
-    {
-      if (auto DefaultNorm = FRenderResourceLibrary::Get().GetTexture(MeshAsset->DefaultNormalTextureId))
-      {
-        Material->SetNormalMap(DefaultNorm);
-      }
-    }
-    // 프리뷰 스펙큘러맵 바인딩
-    if (!MeshAsset->DefaultSpecularTextureId.IsNone() && MeshAsset->DefaultSpecularTextureId != FName("None"))
-    {
-      if (auto DefaultSpec = FRenderResourceLibrary::Get().GetTexture(MeshAsset->DefaultSpecularTextureId))
-      {
-        Material->SetSpecularMap(DefaultSpec);
-      }
-    }
 
-    // 상수 버퍼 구성
-    FObjectConstants ObjConstants = {};
-    ObjConstants.World = FMatrix::GetIdentity();
-    ObjConstants.MVP = ObjConstants.World * Camera.CreateViewProjectionMatrix();
-    ObjConstants.UVScale = FVector2(1.0f, 1.0f);
-    ObjConstants.ColorOverride = FVector(1.0f, 1.0f, 1.0f);
-    ObjConstants.ColorOverrideAmount = 0.0f;
 
-    Draw(*MeshAsset, *Material, ObjConstants, 0, false);
-  }
+
 
   // 그리드 렌더링
   if (bDrawGrid)

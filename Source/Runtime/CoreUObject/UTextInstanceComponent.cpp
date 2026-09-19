@@ -37,13 +37,13 @@ FMatrix GetRenderMatrix(const FTransform &Transform, const FCamera &Camera) {
 void UTextInstanceComponent::Initialize() {
   
   SetFont("bazziotf");
-
-  RenderData.MeshId = FName("Rect");
-  RenderData.MaterialId = FName("Instance_Text_Bazzi");
-  RenderData.TextureId = FName("bazziotf");
-
   RebuildTextMesh();
   Super::Initialize();
+
+  RenderDatas.at(0).MeshId = FName("Rect");
+  RenderDatas.at(0).MaterialId = FName("Instance_Text_Bazzi");
+  RenderDatas.at(0).TextureId = FName("bazziotf");
+
 }
 
 void UTextInstanceComponent::Update(float delta) {}
@@ -184,23 +184,24 @@ FMatrix UTextInstanceComponent::GetRenderMatrix(const FCamera &Camera) const {
   return ScaleTransform * ModelMatrix;
 }
 
-const FRenderData& UTextInstanceComponent::GetRenderData(const FCamera &Camera) {
+TArray<FRenderData> UTextInstanceComponent::GetRenderDatas(const FCamera& Camera)
+{
 
-  TArray<FInstanceData> Built;
+    TArray<FInstanceData> Built;
 
-  FTransform Transform = GetGlobalTransform();
-  FMatrix ModelMatrix = ::GetRenderMatrix(Transform, Camera);
+    FTransform Transform = GetGlobalTransform();
+    FMatrix ModelMatrix = ::GetRenderMatrix(Transform, Camera);
 
-  // 글자별 FInstanceData에 빌보드 월드 행렬 적용
-  for (const FInstanceData &Inst : Instances) {
-    FInstanceData WorldInst = Inst;
-    WorldInst.World *= ModelMatrix;
-    Built.push_back(WorldInst);
-  }
+    // 글자별 FInstanceData에 빌보드 월드 행렬 적용
+    for (const FInstanceData& Inst : Instances) {
+        FInstanceData WorldInst = Inst;
+        WorldInst.World *= ModelMatrix;
+        Built.push_back(WorldInst);
+    }
 
-  RenderData.Instances = std::move(Built);
+    RenderDatas.at(0).Instances = std::move(Built);
 
-  return RenderData;
+    return RenderDatas;
 }
 
 void UTextInstanceComponent::Serialize(FArchive &Archive) const {

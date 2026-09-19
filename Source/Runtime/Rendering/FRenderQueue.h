@@ -5,6 +5,7 @@
 #include "ShaderConstants.h"
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Core/PointerTypes.h"
+#include <Runtime\Core\IntTypes.h>
 
 // 렌더링에 필요한 드로우 정보
 struct FRenderData
@@ -14,8 +15,9 @@ struct FRenderData
     FName TextureId{"None"};
     FName NormalTextureId{"None"};
     FName SpecularTextureId{"None"};
-    TSharedPtr<FMaterial> MaterialOverride = nullptr;
     FObjectConstants Constants;
+    int32 startidx = 0;
+    int32 indicesCount = -1;
     bool bSelected = false;
     TArray<FInstanceData> Instances;
 };

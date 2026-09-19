@@ -7,6 +7,14 @@ IMPLEMENT_UCLASS(UMeshComponent, UPrimitiveComponent)
 
 void UMeshComponent::Initialize()
 {
+    RenderDatas.reserve(1);
+    RenderDatas.push_back({
+        .MeshId = FName("None"),
+        .MaterialId = FName("None"),
+        .TextureId = FName("None"),
+        .bSelected = false
+        });
+
     Super::Initialize();
 }
 
@@ -27,6 +35,6 @@ void UMeshComponent::Unregister()
 
 bool UMeshComponent::SetTextureByName(const FName& InTextureName)
 {
-    RenderData.TextureId = InTextureName;
+    RenderDatas.at(0).TextureId = InTextureName;
     return true;
 }

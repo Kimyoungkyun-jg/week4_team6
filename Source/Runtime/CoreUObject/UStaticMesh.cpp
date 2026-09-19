@@ -24,7 +24,6 @@ void UStaticMesh::InitializeFromAsset(const FName& InMaterialId)
 
     if (!StaticMeshAsset)
     {
-        SynchronizeCompatibilityArrays();
         return;
     }
 
@@ -53,8 +52,6 @@ void UStaticMesh::InitializeFromAsset(const FName& InMaterialId)
 
         StaticMaterials.push_back(FStaticMaterial{ MatId, Diffuse, Normal, Specular });
     }
-
-    SynchronizeCompatibilityArrays();
 }
 
 FName UStaticMesh::DetermineMaterialId(const FName& FallbackMaterialId, const FName& Diffuse, const FName& Normal, const FName& Specular)
@@ -69,22 +66,6 @@ FName UStaticMesh::DetermineMaterialId(const FName& FallbackMaterialId, const FN
                                 (!Specular.IsNone() && Specular != FName("None"));
 
     return bHasAnyTexture ? FName("Textured") : FName("Simple");
-}
-
-void UStaticMesh::SynchronizeCompatibilityArrays()
-{
-    DefaultMaterialIds.clear();
-    DefaultTextureIds.clear();
-    DefaultNormalTextureIds.clear();
-    DefaultSpecularTextureIds.clear();
-
-    for (const auto& Mat : StaticMaterials)
-    {
-        DefaultMaterialIds.push_back(Mat.MaterialId);
-        DefaultTextureIds.push_back(Mat.DiffuseTextureId);
-        DefaultNormalTextureIds.push_back(Mat.NormalTextureId);
-        DefaultSpecularTextureIds.push_back(Mat.SpecularTextureId);
-    }
 }
 
 int32 UStaticMesh::GetMaterialSlotCount() const
@@ -143,7 +124,6 @@ void UStaticMesh::SetMaterialSlot(int32 Slot, const FName& InMaterialId, const F
         StaticMaterials.resize(Slot + 1);
     }
     StaticMaterials[Slot] = FStaticMaterial{ InMaterialId, InDiffuse, InNormal, InSpecular };
-    SynchronizeCompatibilityArrays();
 }
 
 void UStaticMesh::SetDefaultMaterialID(int32 Slot, const FName& InMaterialId)
@@ -154,7 +134,6 @@ void UStaticMesh::SetDefaultMaterialID(int32 Slot, const FName& InMaterialId)
         StaticMaterials.resize(Slot + 1);
     }
     StaticMaterials[Slot].MaterialId = InMaterialId;
-    SynchronizeCompatibilityArrays();
 }
 
 void UStaticMesh::SetDefaultTextureID(int32 Slot, const FName& InTextureId)
@@ -165,7 +144,6 @@ void UStaticMesh::SetDefaultTextureID(int32 Slot, const FName& InTextureId)
         StaticMaterials.resize(Slot + 1);
     }
     StaticMaterials[Slot].DiffuseTextureId = InTextureId;
-    SynchronizeCompatibilityArrays();
 }
 
 void UStaticMesh::SetDefaultNormalTextureID(int32 Slot, const FName& InTextureId)
@@ -176,7 +154,6 @@ void UStaticMesh::SetDefaultNormalTextureID(int32 Slot, const FName& InTextureId
         StaticMaterials.resize(Slot + 1);
     }
     StaticMaterials[Slot].NormalTextureId = InTextureId;
-    SynchronizeCompatibilityArrays();
 }
 
 void UStaticMesh::SetDefaultSpecularTextureID(int32 Slot, const FName& InTextureId)
@@ -187,7 +164,6 @@ void UStaticMesh::SetDefaultSpecularTextureID(int32 Slot, const FName& InTexture
         StaticMaterials.resize(Slot + 1);
     }
     StaticMaterials[Slot].SpecularTextureId = InTextureId;
-    SynchronizeCompatibilityArrays();
 }
 
 const FString& UStaticMesh::GetAssetPathFileName() const
@@ -208,7 +184,6 @@ void UStaticMesh::SetStaticMeshAsset(TSharedPtr<FStaticMesh> InStaticMesh)
     {
         LocalBounds = FAxisAlignedBoundingBox{};
         StaticMaterials.clear();
-        SynchronizeCompatibilityArrays();
     }
 }
 

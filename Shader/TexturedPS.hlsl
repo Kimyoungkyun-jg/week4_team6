@@ -33,7 +33,6 @@ float4 MainPS(PS_INPUT Input) : SV_Target
     // 노멀맵 샘플링 및 요철 보정
     float4 NormalSample = NormalTexture.Sample(DiffuseSampler, Input.UV);
     float3 MapNormal = NormalSample.rgb * 2.0f - 1.0f;
-    MapNormal.xy *= 4.0f;
     float3 PerturbedN = normalize(mul(MapNormal, TBN));
     float HasNormal = step(0.01f, dot(NormalSample.rgb, NormalSample.rgb));
     N = normalize(lerp(N, PerturbedN, HasNormal));

@@ -9,7 +9,7 @@
 #include "Runtime/Math/FMatrix.h"
 
 void FSpotlightVisualizer::Draw(
-	const UPrimitiveComponent& Component,
+	const UMeshComponent& Component,
 	FRenderView& RenderView,
 	const FCamera& Camera,
 	const FVector4& Color

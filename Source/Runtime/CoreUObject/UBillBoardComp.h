@@ -31,11 +31,16 @@ public:
   // Object -> World 변환 행렬 생성
   virtual FMatrix GetRenderMatrix(const FCamera& Camera) const override;
   
-  virtual const FRenderData& GetRenderData(const FCamera& Camera) override {
-      RenderData.Constants.UVScale = UVScale;
-      RenderData.Constants.UVOffset = UVOffset;
-      return RenderData;
+
+  virtual TArray<FRenderData> GetRenderDatas(const FCamera& Camera) {
+      RenderDatas.at(0).Constants.UVScale = UVScale;
+      RenderDatas.at(0).Constants.UVOffset = UVOffset;
+      return RenderDatas;
   }
+  virtual const FRenderData& GetPureRenderData() const {
+      return RenderDatas.at(0);
+  }
+
 
 
   virtual EEngineShowFlags GetShowFlag() const { return EEngineShowFlags::SF_BillboardText; }

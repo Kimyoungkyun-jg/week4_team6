@@ -28,9 +28,6 @@ public:
     virtual void Serialize(FArchive& Archive) const override;
     virtual void Deserialize(const FArchive& Archive) override;
 
-    // FRenderData 가상 접근자
-    virtual const FRenderData& GetRenderData(const FCamera& Camera);
-    virtual const FRenderData& GetPureRenderData() const;
 
     // 충돌 판정용 바운드 계산
     virtual FAxisAlignedBoundingBox CalcLocalBounds();

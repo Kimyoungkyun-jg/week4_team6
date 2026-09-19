@@ -124,9 +124,9 @@ void FImguiPropertyWindow::ShowComponentDetails(FEditor& Editor, AActor& Actor,
 	{
 		ShowSpotLightSettings(static_cast<USpotLightComponent&>(Comp));
 	}
-	else if (Comp.IsA<UPrimitiveComponent>())
+	else if (Comp.IsA<UMeshComponent>())
 	{
-		ShowPrimitiveSettings(Actor, static_cast<UPrimitiveComponent&>(Comp), bIsRoot);
+		ShowPrimitiveSettings(Actor, static_cast<UMeshComponent&>(Comp), bIsRoot);
 	}
 }
 
@@ -272,29 +272,29 @@ void FImguiPropertyWindow::ShowSpotLightSettings(USpotLightComponent& LightComp)
 	}
 }
 
-void FImguiPropertyWindow::ShowPrimitiveSettings(AActor& Actor, UPrimitiveComponent& PrimComp,
+void FImguiPropertyWindow::ShowPrimitiveSettings(AActor& Actor, UMeshComponent& MeshComp,
 	bool bIsRoot) const
 {
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "Primitive Settings");
 
-	FVector CurrentColor = PrimComp.GetColor();
+	FVector CurrentColor = MeshComp.GetColor();
 	if (ImGui::ColorEdit3("Color", &CurrentColor.X))
 	{
-		PrimComp.SetColor(CurrentColor);
+		MeshComp.SetColor(CurrentColor);
 		if (bIsRoot)
 		{
 			Actor.SetColor(CurrentColor);
 		}
 	}
 
-	ShowTextureSlot(PrimComp);
+	ShowTextureSlot(MeshComp);
 }
 
-void FImguiPropertyWindow::ShowTextureSlot(UPrimitiveComponent& PrimComp) const
+void FImguiPropertyWindow::ShowTextureSlot(UMeshComponent& MeshComp) const
 {
 	constexpr float SlotSize = 64.0f;
-	TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(PrimComp.GetPureRenderData().MaterialId);
+	TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(MeshComp.GetPureRenderData().MaterialId);
 	TSharedPtr<FTexture> CurrentTexture = Material ? Material->GetTexture() : nullptr;
 
 	ImGui::Spacing();

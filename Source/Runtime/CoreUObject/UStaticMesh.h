@@ -32,11 +32,6 @@ public:
     // 슬롯 목록
     TArray<FStaticMaterial> StaticMaterials;
 
-    // 하위 호환 배열
-    TArray<FName> DefaultMaterialIds;
-    TArray<FName> DefaultTextureIds;
-    TArray<FName> DefaultNormalTextureIds;
-    TArray<FName> DefaultSpecularTextureIds;
 
     // 바운딩 박스
     FAxisAlignedBoundingBox LocalBounds{};
@@ -70,6 +65,5 @@ public:
 
 private:
     void InitializeFromAsset(const FName& InMaterialId);
-    void SynchronizeCompatibilityArrays();
     static FName DetermineMaterialId(const FName& FallbackMaterialId, const FName& Diffuse, const FName& Normal, const FName& Specular);
 };

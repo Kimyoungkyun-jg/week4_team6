@@ -26,6 +26,11 @@ struct FMeshSection
 	FName NormalTextureName{ "None" };
 	FName SpecularTextureName{ "None" };
 
+	float Opacity = 1.0f;
+	bool bIsAlpha = false;
+	int32 IlluminationModel = 0;
+	FName MaterialName{ "None" };
+
 	FAxisAlignedBoundingBox LocalBounds;
 };
 
@@ -65,7 +70,6 @@ public:
 
 	FString PathFileName;
 	TArray<FMeshSection> Sections;
-
 private:
 	void BindResources(ID3D11DeviceContext& Context) const;
 

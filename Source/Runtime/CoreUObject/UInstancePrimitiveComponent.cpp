@@ -65,11 +65,12 @@ void UInstancePrimitiveComponent::BuildRenderData() {
     }
   }
 
-  RenderData.Instances = std::move(Built);
+  RenderDatas.at(0).Instances = std::move(Built);
 }
 
-const FRenderData &
-UInstancePrimitiveComponent::GetRenderData(const FCamera &Camera) {
-  BuildRenderData();
-  return RenderData;
+TArray<FRenderData> UInstancePrimitiveComponent::GetRenderDatas(const FCamera& Camera)
+{
+    BuildRenderData();
+    return RenderDatas;
 }
+

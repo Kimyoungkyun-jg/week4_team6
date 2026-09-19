@@ -1,7 +1,7 @@
 #pragma once
 #include "Runtime/Math/FVector4.h"
 
-class UPrimitiveComponent;
+class UMeshComponent;
 class FRenderView;
 struct FCamera;
 
@@ -14,7 +14,7 @@ public:
 	virtual ~IVisualizer() = default;
 
     virtual void Draw(
-        const UPrimitiveComponent& Component,
+        const UMeshComponent& Component,
         FRenderView& RenderView,
         const FCamera& Camera,
         const FVector4& Color = FVector4{ 1.0f, 1.0f, 1.0f, 1.0f }

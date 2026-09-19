@@ -6,15 +6,16 @@
 #include "Runtime/Rendering/FMesh.h"
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include "Runtime/Math/FMatrix.h"
+#include <Runtime\CoreUObject\UMeshComponent.h>
 
 void FPrimitiveVisualizer::Draw(
-	const UPrimitiveComponent& Component,
+	const UMeshComponent& Component,
 	FRenderView& RenderView,
 	const FCamera& Camera,
 	const FVector4& Color
 ) const
 {
-    if (Component.IsA<UPrimitiveComponent>() == false) { return; }
+    if (Component.IsA<UMeshComponent>() == false) { return; }
 
     auto Mesh = FRenderResourceLibrary::Get().GetMesh(Component.GetPureRenderData().MeshId);
     if (!Mesh) return;

@@ -66,7 +66,7 @@ const FPipelineEntry pipelineTable[] = {
         .Id = FName("Textured"),
         .VertexShader = L"ExampleVS.cso",
         .PixelShader = L"TexturedPS.cso",
-        .BlendMode = EBlendMode::Translucent,
+        .BlendMode = EBlendMode::Opaque,
     },
     {
         .Id = FName("Billboard"),
@@ -131,6 +131,12 @@ const FPipelineEntry pipelineTable[] = {
         .bDepthWrite = false,
         .BlendMode = EBlendMode::Translucent,
         .bIsInstancing = true,
+    },
+    {
+        .Id = FName("Texture_Translucent"),
+        .VertexShader = L"ExampleVS.cso",
+        .PixelShader = L"TexturedPS.cso",
+        .BlendMode = EBlendMode::Translucent,
     },
 };
 
@@ -524,92 +530,153 @@ bool FRenderResourceLibrary::Initialize(FRenderer &Renderer) {
   return true;
 }
 
+//TODO 재반복 되는 코드가 너무 많음. 리팩토링을 하거나 구조를 고쳐야될듯....
 bool FRenderResourceLibrary::CreateUStaticMeshMap() {
   UE_LOG("[UStaticMeshMap] 생성 시작 (등록된 FStaticMesh 개수: %zu)", AllFStaticMeshMap.size());
 
   for (const auto &[Key, Mesh] : AllFStaticMeshMap) {
-    FName MaterialName = FName("Simple");
+    FName pipelinename = FName("Simple_Solid");
 
     // 메시별 기본 머티리얼 및 텍스처 설정
     if (Key == FName("MasterYi")) {
-      MaterialName = FName("Textured");
+        pipelinename = FName("Textured");
       if (Mesh && Mesh->DefaultTextureId.IsNone()) {
         Mesh->DefaultTextureId = FName("MasterYi_Head");
       }
     } else if (Key == FName("SpotlightCone") || Key == FName("Spotlight")) {
-      MaterialName = FName("Spotlight");
-    } else if (Mesh) {
-      // 텍스처 존재 여부 확인
-      bool bHasTexture = (!Mesh->DefaultTextureId.IsNone() && Mesh->DefaultTextureId != FName("None")) ||
-                         (!Mesh->DefaultNormalTextureId.IsNone() && Mesh->DefaultNormalTextureId != FName("None")) ||
-                         (!Mesh->DefaultSpecularTextureId.IsNone() && Mesh->DefaultSpecularTextureId != FName("None"));
+        pipelinename = FName("Spotlight");
+    } 
 
-      if (!bHasTexture) {
-        for (const auto& Section : Mesh->GetSections()) {
-          const FName& DiffuseName = Section.DiffuseTextureName;
-          if ((!DiffuseName.IsNone() && DiffuseName != FName("None")) ||
-              (!Section.NormalTextureName.IsNone() && Section.NormalTextureName != FName("None")) ||
-              (!Section.SpecularTextureName.IsNone() && Section.SpecularTextureName != FName("None"))) {
-            bHasTexture = true;
-            break;
-          }
+    UStaticMesh *StaticMeshObj = NewObject<UStaticMesh>(Key);
+
+    if (!Mesh->Sections.empty()) // obj를 파싱한 fstaticmesh
+    {
+        for (int32 i = 0; i < static_cast<int32>(Mesh->Sections.size()); ++i)
+        {
+            const auto& Section = Mesh->Sections[i];
+            const FName& MatName = Section.MaterialName.IsNone() ? FName("DefaultMaterial") : Section.MaterialName;
+
+            TSharedPtr<FMaterial> Material = GetMaterial(MatName);
+            if (!Material)
+            {
+                Material = std::make_shared<FMaterial>();
+
+                const bool bHasDiffuse = !Section.DiffuseTextureName.IsNone() && Section.DiffuseTextureName != FName("None");
+                const bool bIsTranslucent = (Section.Opacity < 0.99f || Section.bIsAlpha ||
+                    Section.IlluminationModel == 4 || Section.IlluminationModel == 6 || Section.IlluminationModel == 7);
+
+                // 텍스처 유무와 반투명 여부에 따라 파이프라인 결정
+                FName PipelineName = FName("Simple_Solid");
+                if (bHasDiffuse)
+                {
+                    PipelineName = bIsTranslucent ? FName("Texture_Translucent") : FName("Textured");
+                }
+                else
+                {
+                    PipelineName = FName("Simple_Solid");
+                }
+
+                Material->SetPipeLine(GetPipeline(PipelineName));
+
+                if (bHasDiffuse)
+                    Material->SetDiffuseMap(GetTexture(Section.DiffuseTextureName));
+
+                if (!Section.NormalTextureName.IsNone() && Section.NormalTextureName != FName("None"))
+                    Material->SetNormalMap(GetTexture(Section.NormalTextureName));
+
+                if (!Section.SpecularTextureName.IsNone() && Section.SpecularTextureName != FName("None"))
+                    Material->SetSpecularMap(GetTexture(Section.SpecularTextureName));
+
+                RegisterMaterial(MatName, Material);
+            }
+
+            StaticMeshObj->SetDefaultMaterialID(i, MatName);
+            StaticMeshObj->SetDefaultTextureID(i, Section.DiffuseTextureName);
+            StaticMeshObj->SetDefaultNormalTextureID(i, Section.NormalTextureName);
+            StaticMeshObj->SetDefaultSpecularTextureID(i, Section.SpecularTextureName);
         }
-      }
+    }
+    else // 일반 staticmesh (기본 도형 등)
+    {
+        if (Mesh)
+        {
+            // InitializeMaterials() 등에서 이미 등록된 머티리얼이 있는지 조회
+            TSharedPtr<FMaterial> Material = GetMaterial(Key);
 
-      if (bHasTexture) {
-        MaterialName = FName("Textured");
-      }
+            // 등록된 적이 없다면 새로 동적 생성
+            if (!Material)
+            {
+                Material = std::make_shared<FMaterial>();
+
+                if (!Mesh->DefaultTextureId.IsNone() && Mesh->DefaultTextureId != FName("None"))
+                {
+                    Material->SetDiffuseMap(GetTexture(Mesh->DefaultTextureId));
+                    pipelinename = FName("Textured");
+                }
+                if (!Mesh->DefaultNormalTextureId.IsNone() && Mesh->DefaultNormalTextureId != FName("None"))
+                {
+                    Material->SetNormalMap(GetTexture(Mesh->DefaultNormalTextureId));
+                    pipelinename = FName("Textured");
+                }
+                if (!Mesh->DefaultSpecularTextureId.IsNone() && Mesh->DefaultSpecularTextureId != FName("None"))
+                {
+                    Material->SetSpecularMap(GetTexture(Mesh->DefaultSpecularTextureId));
+                    pipelinename = FName("Textured");
+                }
+
+                Material->SetPipeLine(GetPipeline(pipelinename));
+                RegisterMaterial(Key, Material);
+            }
+
+            //  UStaticMesh 에셋에 0번 슬롯 텍스처 기본값 동기화
+            StaticMeshObj->SetDefaultMaterialID(0,Key);
+            if (!Mesh->DefaultTextureId.IsNone() && Mesh->DefaultTextureId != FName("None"))
+                StaticMeshObj->SetDefaultTextureID(0, Mesh->DefaultTextureId);
+
+            if (!Mesh->DefaultNormalTextureId.IsNone() && Mesh->DefaultNormalTextureId != FName("None"))
+                StaticMeshObj->SetDefaultNormalTextureID(0, Mesh->DefaultNormalTextureId);
+
+            if (!Mesh->DefaultSpecularTextureId.IsNone() && Mesh->DefaultSpecularTextureId != FName("None"))
+                StaticMeshObj->SetDefaultSpecularTextureID(0, Mesh->DefaultSpecularTextureId);
+        }
     }
 
-    UStaticMesh *StaticMeshObj = NewObject<UStaticMesh>(Key, MaterialName);
-    if (StaticMeshObj) {
-      if (Mesh) {
-        if (!Mesh->DefaultTextureId.IsNone() && Mesh->DefaultTextureId != FName("None")) {
-          StaticMeshObj->SetDefaultTextureID(0, Mesh->DefaultTextureId);
-        }
-        if (!Mesh->DefaultNormalTextureId.IsNone() && Mesh->DefaultNormalTextureId != FName("None")) {
-          StaticMeshObj->SetDefaultNormalTextureID(0, Mesh->DefaultNormalTextureId);
-        }
-        if (!Mesh->DefaultSpecularTextureId.IsNone() && Mesh->DefaultSpecularTextureId != FName("None")) {
-          StaticMeshObj->SetDefaultSpecularTextureID(0, Mesh->DefaultSpecularTextureId);
-        }
+    AllUStaticMeshMap[Key] = StaticMeshObj;
+
+
+    // 텍스처 및 노멀맵 매핑 상태 로깅
+    const FName& DefDiff = StaticMeshObj->GetDefaultTextureID(0);
+    const FName& DefNorm = StaticMeshObj->GetDefaultNormalTextureID(0);
+    const FName& DefSpec = StaticMeshObj->GetDefaultSpecularTextureID(0);
+    bool bDiffLoaded = !DefDiff.IsNone() && DefDiff != FName("None") && GetTexture(DefDiff) != nullptr;
+    bool bNormLoaded = !DefNorm.IsNone() && DefNorm != FName("None") && GetTexture(DefNorm) != nullptr;
+    bool bSpecLoaded = !DefSpec.IsNone() && DefSpec != FName("None") && GetTexture(DefSpec) != nullptr;
+
+    UE_LOG("[UStaticMeshMap] Mesh: %s | Mat: %s | Diff: %s (%s) | Norm: %s (%s) | Spec: %s (%s) | Slots: %d",
+           Key.ToString().c_str(),
+           pipelinename.ToString().c_str(),
+           DefDiff.ToString().c_str(), bDiffLoaded ? "LOADED" : "MISSING",
+           DefNorm.ToString().c_str(), bNormLoaded ? "LOADED" : "MISSING",
+           DefSpec.ToString().c_str(), bSpecLoaded ? "LOADED" : "MISSING",
+           StaticMeshObj->GetMaterialSlotCount());
+
+    // 섹션별 텍스처 매핑 상태 로깅
+    if (Mesh && !Mesh->GetSections().empty()) {
+      int32 SecIdx = 0;
+      for (const auto& Sec : Mesh->GetSections()) {
+        const FName& SDiff = Sec.DiffuseTextureName;
+        bool bSDiffLoaded = !SDiff.IsNone() && SDiff != FName("None") && GetTexture(SDiff) != nullptr;
+        bool bSNormLoaded = !Sec.NormalTextureName.IsNone() && Sec.NormalTextureName != FName("None") && GetTexture(Sec.NormalTextureName) != nullptr;
+        bool bSSpecLoaded = !Sec.SpecularTextureName.IsNone() && Sec.SpecularTextureName != FName("None") && GetTexture(Sec.SpecularTextureName) != nullptr;
+
+        UE_LOG("[UStaticMeshMap]   Sec %d: Diff=%s (%s), Norm=%s (%s), Spec=%s (%s)",
+               SecIdx++,
+               SDiff.ToString().c_str(), bSDiffLoaded ? "LOADED" : "MISSING",
+               Sec.NormalTextureName.ToString().c_str(), bSNormLoaded ? "LOADED" : "MISSING",
+               Sec.SpecularTextureName.ToString().c_str(), bSSpecLoaded ? "LOADED" : "MISSING");
       }
-
-      AllUStaticMeshMap[Key] = StaticMeshObj;
-
-      // 텍스처 및 노멀맵 매핑 상태 로깅
-      const FName& DefDiff = StaticMeshObj->GetDefaultTextureID(0);
-      const FName& DefNorm = StaticMeshObj->GetDefaultNormalTextureID(0);
-      const FName& DefSpec = StaticMeshObj->GetDefaultSpecularTextureID(0);
-      bool bDiffLoaded = !DefDiff.IsNone() && DefDiff != FName("None") && GetTexture(DefDiff) != nullptr;
-      bool bNormLoaded = !DefNorm.IsNone() && DefNorm != FName("None") && GetTexture(DefNorm) != nullptr;
-      bool bSpecLoaded = !DefSpec.IsNone() && DefSpec != FName("None") && GetTexture(DefSpec) != nullptr;
-
-      UE_LOG("[UStaticMeshMap] Mesh: %s | Mat: %s | Diff: %s (%s) | Norm: %s (%s) | Spec: %s (%s) | Slots: %d",
-             Key.ToString().c_str(),
-             MaterialName.ToString().c_str(),
-             DefDiff.ToString().c_str(), bDiffLoaded ? "LOADED" : "MISSING",
-             DefNorm.ToString().c_str(), bNormLoaded ? "LOADED" : "MISSING",
-             DefSpec.ToString().c_str(), bSpecLoaded ? "LOADED" : "MISSING",
-             StaticMeshObj->GetMaterialSlotCount());
-
-      // 섹션별 텍스처 매핑 상태 로깅
-      if (Mesh && !Mesh->GetSections().empty()) {
-        int32 SecIdx = 0;
-        for (const auto& Sec : Mesh->GetSections()) {
-          const FName& SDiff = Sec.DiffuseTextureName;
-          bool bSDiffLoaded = !SDiff.IsNone() && SDiff != FName("None") && GetTexture(SDiff) != nullptr;
-          bool bSNormLoaded = !Sec.NormalTextureName.IsNone() && Sec.NormalTextureName != FName("None") && GetTexture(Sec.NormalTextureName) != nullptr;
-          bool bSSpecLoaded = !Sec.SpecularTextureName.IsNone() && Sec.SpecularTextureName != FName("None") && GetTexture(Sec.SpecularTextureName) != nullptr;
-
-          UE_LOG("[UStaticMeshMap]   Sec %d: Diff=%s (%s), Norm=%s (%s), Spec=%s (%s)",
-                 SecIdx++,
-                 SDiff.ToString().c_str(), bSDiffLoaded ? "LOADED" : "MISSING",
-                 Sec.NormalTextureName.ToString().c_str(), bSNormLoaded ? "LOADED" : "MISSING",
-                 Sec.SpecularTextureName.ToString().c_str(), bSSpecLoaded ? "LOADED" : "MISSING");
-        }
-      }
-    } else {
+    }
+    else {
       UE_LOG_WARN("[UStaticMeshMap] %s UStaticMesh 생성 실패", Key.ToString().c_str());
     }
   }
@@ -1447,8 +1514,10 @@ bool FRenderResourceLibrary::CreateEditTextures() {
 }
 
 TSharedPtr<FMaterial>
-FRenderResourceLibrary::RegisterMaterial(const FName &Id,
-                                         TSharedPtr<FMaterial> inMaterial) {
+FRenderResourceLibrary::RegisterMaterial(const FName &Id, TSharedPtr<FMaterial> inMaterial) {
+  if (AllMaterialMap[Id]) 
+      return AllMaterialMap[Id];
+    
   if (inMaterial) {
     inMaterial->MaterialId = Id;
   }
@@ -1580,6 +1649,7 @@ bool FRenderResourceLibrary::CreateObjMeshes() {
         StaticMesh->DefaultNormalTextureId = ModelData.NormalTextureName;
         StaticMesh->DefaultSpecularTextureId = ModelData.SpecularTextureName;
         StaticMesh->Sections = std::move(ModelData.Sections);
+        
         RegisterMesh(MeshKey, StaticMesh);
         UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u, 섹션: %zu)",
                StemName.c_str(), ModelData.Vertices.size(),
