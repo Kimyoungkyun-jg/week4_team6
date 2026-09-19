@@ -14,7 +14,7 @@
 #include <Windows.h>
 #include <windowsx.h>
 
-
+#include "ThirdParty/stb/stb_image.h"
 #include "Runtime/Rendering/FObjDecoder.h"
 
 
@@ -31,7 +31,7 @@ static UINT ResizeHeight = 0u;
 namespace {
 constexpr LPCWSTR WindowName = L"My Engine";
 
-HWND CreateWindowHandle(HINSTANCE Instance);
+HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd);
 bool ProcessWindowMessage();
 
 LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
@@ -39,10 +39,8 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 } // namespace
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,                    _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
-
-
-    
-    HWND Window = CreateWindowHandle(hInstance);
+  HWND SplashWindow = nullptr;
+  HWND Window = CreateWindowHandle(hInstance, SplashWindow);
   if (!Window) {
     return -1;
   }
@@ -81,6 +79,15 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
   }
   EditorApp.Initialize_Runtime(&SceneManager, &RenderView);
 
+  // 초기화가 끝났으니 로딩 화면을 닫고 메인 창을 띄운다
+  if (SplashWindow) {
+      DestroyWindow(SplashWindow);
+      SplashWindow = nullptr;
+  }
+  ShowWindow(Window, nShowCmd);
+  SetForegroundWindow(Window);
+
+
   bool bQuit = false;
   while (!bQuit) {
     FTimeManager::Get().Update();
@@ -116,8 +123,73 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 }
 
 namespace {
+
+
+HWND ShowLoadingWindow(HINSTANCE& hInstance)
+{
+    int ImageW = 0, ImageH = 0, Channels = 0;
+    stbi_uc* Pixels = stbi_load("./Resources/Textures/LoadingImage.png",
+        &ImageW, &ImageH, &Channels, 4);
+    if (!Pixels)
+    {
+        return nullptr;
+    }
+
+    // stb 는 RGBA 순서, Windows DIB 는 BGRA 순서라 R/B 를 맞바꾼다.
+    // 알파가 있는 PNG 는 흰 배경 위에 미리 합성해 둔다.
+    for (int i = 0; i < ImageW * ImageH; ++i)
+    {
+        stbi_uc* P = Pixels + i * 4;
+        const int A = P[3];
+        const stbi_uc R = static_cast<stbi_uc>((P[0] * A + 255 * (255 - A)) / 255);
+        const stbi_uc G = static_cast<stbi_uc>((P[1] * A + 255 * (255 - A)) / 255);
+        const stbi_uc B = static_cast<stbi_uc>((P[2] * A + 255 * (255 - A)) / 255);
+        P[0] = B; P[1] = G; P[2] = R; P[3] = 255;
+    }
+
+    const int w = GetSystemMetrics(SM_CXSCREEN);   // 화면 전체
+    const int h = GetSystemMetrics(SM_CYSCREEN);
+
+    WNDCLASSW splashClass = { 0, DefWindowProcW, 0, 0, 0, 0, 0, 0, 0, L"JungleSplash" };
+    RegisterClassW(&splashClass);
+    HWND splashWnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, L"JungleSplash", L"",
+        WS_POPUP | WS_VISIBLE, 0, 0, w, h, nullptr, nullptr, hInstance, nullptr);
+
+    HDC dc = GetDC(splashWnd);
+
+    // 1) 흰 배경
+    RECT full = { 0, 0, w, h };
+    FillRect(dc, &full, (HBRUSH)GetStockObject(WHITE_BRUSH));
+
+    // 2) 로딩이미지를 비율 유지해서 가운데. 화면 높이의 60% 로 맞춘다
+    const int drawH = static_cast<int>(h * 0.6f);
+    const int drawW = drawH * ImageW / ImageH;
+    const int drawX = (w - drawW) / 2;
+    const int drawY = (h - drawH) / 2;
+
+    BITMAPINFO Info{};
+    Info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    Info.bmiHeader.biWidth = ImageW;
+    Info.bmiHeader.biHeight = -ImageH;   // 음수 = 위에서 아래로 저장된 이미지
+    Info.bmiHeader.biPlanes = 1;
+    Info.bmiHeader.biBitCount = 32;
+    Info.bmiHeader.biCompression = BI_RGB;
+
+    SetStretchBltMode(dc, HALFTONE);
+    SetBrushOrgEx(dc, 0, 0, nullptr);
+    StretchDIBits(dc,
+        drawX, drawY, drawW, drawH,
+        0, 0, ImageW, ImageH,
+        Pixels, &Info, DIB_RGB_COLORS, SRCCOPY);
+
+    ReleaseDC(splashWnd, dc);
+    stbi_image_free(Pixels);
+
+    return splashWnd;
+}
+
 // TODO: Resizing 처리
-HWND CreateWindowHandle(HINSTANCE Instance) {
+HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
   WNDCLASS WindowClass{};
   WindowClass.lpfnWndProc = WindowCallback;
 
@@ -129,6 +201,7 @@ HWND CreateWindowHandle(HINSTANCE Instance) {
     return nullptr;
   }
 
+  OutSplashWnd = ShowLoadingWindow(Instance);
   HWND Window = CreateWindowExW(0, WindowClass.lpszClassName, WindowName,
                                 WS_POPUP | WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
                                 CW_USEDEFAULT, 1200, 800, nullptr, nullptr,
