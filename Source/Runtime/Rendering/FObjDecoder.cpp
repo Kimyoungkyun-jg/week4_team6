@@ -34,6 +34,25 @@ namespace
 		return !RelativePath.empty() && RelativePath.begin()->string() != "..";
 	}
 
+	bool ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath)
+	{
+		std::filesystem::path FilePath(FileName);
+
+		if (!FilePath.is_absolute())
+		{
+			FilePath = GetAssetDir() / FilePath;
+		}
+
+		std::error_code Ec;
+		if (!std::filesystem::is_regular_file(FilePath, Ec))
+		{
+			return false;
+		}
+
+		OutPath = FilePath;
+		return true;
+	}
+
 	FString ReadFileToString(std::string_view FileName)
 	{
 		
@@ -238,6 +257,9 @@ namespace
 
 		return FString(Stem);
 	}
+
+
+	
 }
 
 // v x y z [w] [r g b]
@@ -250,7 +272,7 @@ void FObjDecoder::AddVertexList(std::string_view Line)
 	{
 		// 인덱스가 밀리지 않도록 자리는 채우고 오류만 남긴다.
 		ObjInfo.VertexList.push_back(FVector4(0.0f, 0.0f, 0.0f, 1.0f));
-		UE_LOG("FObjDecoder : AddVertexList Error (least 3 floats)");
+		UE_LOG_WARN("FObjDecoder : AddVertexList Error (least 3 floats)");
 		return;
 	}
 
@@ -279,7 +301,7 @@ void FObjDecoder::AddUVList(std::string_view Line)
 	if (Count < 1)
 	{
 		ObjInfo.UVList.push_back(FVector(0.0f, 0.0f, 0.0f));
-		UE_LOG("FObjDecoder : AddUVList Error (need at least 1 float)");
+		UE_LOG_WARN("FObjDecoder : AddUVList Error (need at least 1 float)");
 		return;
 	}
 
@@ -295,18 +317,135 @@ void FObjDecoder::AddNormalList(std::string_view Line)
 	if (Count < 3)
 	{
 		ObjInfo.NormalList.push_back(FVector(0.0f, 0.0f, 0.0f));
-		UE_LOG("FObjDecoder : AddNormalList Error (need 3 floats)");
+		UE_LOG_WARN("FObjDecoder : AddNormalList Error (need 3 floats)");
 		return;
 	}
 
 	ObjInfo.NormalList.push_back(FVector(Values[0], Values[1], Values[2]));
 }
 
+
+bool FObjDecoder::IsConvexDot(FVector PrevVertexPosition, FVector EarVertexPosition, FVector NextVertexPosition, FVector Normal)
+{
+	FVector A = EarVertexPosition - PrevVertexPosition;
+	FVector B = NextVertexPosition - EarVertexPosition;
+
+	float result = (A.Cross(B)).Dot(Normal);
+
+	return (result > 0);
+}
+
+bool FObjDecoder::IsPointInTriangle(FVector A, FVector B, FVector C, FVector Q, FVector Normal)
+{
+	float d1;
+	float d2;
+	float d3;
+
+	d1 = ((B - A).Cross(Q - A)).Dot(Normal);
+	d2 = ((C - B).Cross(Q - B)).Dot(Normal);
+	d3 = ((A - C).Cross(Q - C)).Dot(Normal);
+
+	return (d1 >= 0 && d2 >= 0 && d3 >= 0);
+
+}
+
+void FObjDecoder::StartEarClipping(const TArray<FCorner>& Corners)
+{
+	TArray<int32>	Prev;
+	TArray<int32>	Next;
+	FVector			Normal;
+	const TArray<FVector4>& Vertex = ObjInfo.VertexList;
+
+	int32 N = static_cast<int32>(Corners.size());
+
+	for (int i = 0; i < N; i++)
+	{
+		Prev.push_back(i - 1);
+		Next.push_back(i + 1);
+
+		const FVector4& P = Vertex[Corners[i].V];
+		const FVector4& Q = Vertex[Corners[(i + 1) % N].V];
+
+		Normal.X += (P.Y - Q.Y) * (P.Z + Q.Z);
+		Normal.Y += (P.Z - Q.Z) * (P.X + Q.X);
+		Normal.Z += (P.X - Q.X) * (P.Y + Q.Y);
+	}
+
+	Prev[0] = static_cast<int32>(N - 1);
+	Next[static_cast<int32>(N - 1)] = 0;
+
+	int32 Remaining = static_cast<int32>(N);// 남은 정점 수
+	int32 FailCount = 0; // 연속으로 귀를 못 찾은 횟수
+	int32 Current = 0; // 지금 귀인지 검사 중인 정점
+
+	while (Remaining >= 3)
+	{
+		const int32 PrevIndex = Prev[Current];
+		const int32 NextIndex = Next[Current];
+
+		bool bIsEar = true;
+
+		if (Remaining > 3 && FailCount >= Remaining)
+		{
+			UE_LOG_WARN("FObjDecoder : EarClipping stuck, %d corners left", Remaining);
+			break;
+		}
+
+		if (Remaining > 3 && FailCount < Remaining)
+		{
+			FVector PrevVertexPosition = Vertex[Corners[PrevIndex].V];
+			FVector EarVertexPosition = Vertex[Corners[Current].V];
+			FVector NextVertexPosition = Vertex[Corners[NextIndex].V];
+			
+			if (IsConvexDot(PrevVertexPosition, EarVertexPosition, NextVertexPosition, Normal))
+			{
+				for (int32 j = Next[NextIndex]; j != PrevIndex; j = Next[j])
+				{
+					if (IsPointInTriangle(PrevVertexPosition, EarVertexPosition, NextVertexPosition, Vertex[Corners[j].V] , Normal))
+					{
+						bIsEar = false;
+						break;
+					}
+				}
+			}
+			else
+			{
+				bIsEar = false;
+			}	
+		}
+		if (bIsEar)
+		{
+			const FCorner& A = Corners[PrevIndex];
+			const FCorner& B = Corners[Current];
+			const FCorner& C = Corners[NextIndex];
+
+			ObjInfo.VertexIndexList.push_back(FTriangleIndices(A.V, B.V, C.V));
+			ObjInfo.UVIndexList.push_back(FTriangleIndices(A.VT, B.VT, C.VT));
+			ObjInfo.NormalIndexList.push_back(FTriangleIndices(A.VN, B.VN, C.VN));
+			ObjInfo.MaterialList.push_back(CurrentMaterial);
+			ObjInfo.GroupList.push_back(CurrentGroup);
+			ObjInfo.ObjectNamesList.push_back(CurrentObjectName);
+			ObjInfo.SmoothingGroupsList.push_back(CurrentSmoothingGroup);
+
+			Next[PrevIndex] = NextIndex;
+			Prev[NextIndex] = PrevIndex;
+			--Remaining;
+
+			Current = PrevIndex;
+			FailCount = 0;
+		}
+		else
+		{
+			Current = NextIndex;
+			FailCount++;
+		}
+	}
+}
+
 // f a b c [d ...]   (각 항목은 v | v/vt | v//vn | v/vt/vn)
 // 4각형 이상은 트라이앵글로 나눠 3개씩 저장한다.
 void FObjDecoder::ParseFace(std::string_view Line)
-{
-	struct FCorner { int32 V, VT, VN; };
+{	
 	TArray<FCorner> Corners;
 
 	while (true)
@@ -320,7 +459,7 @@ void FObjDecoder::ParseFace(std::string_view Line)
 		int32 V, VT, VN;
 		if (!ParseFaceToken(Token, V, VT, VN))
 		{
-			UE_LOG("FObjDecoder : ParseFace Error (bad token)");
+			UE_LOG_WARN("FObjDecoder : ParseFace Error (bad token)");
 			return;
 		}
 
@@ -333,30 +472,30 @@ void FObjDecoder::ParseFace(std::string_view Line)
 
 	if (Corners.size() < 3)
 	{
-		UE_LOG("FObjDecoder : ParseFace Error (need at least 3 corners)");
+		UE_LOG_WARN("FObjDecoder : ParseFace Error (need at least 3 corners)");
 		return;
 	}
 
+	
+
 	// 트라이앵글: (0,1,2), (0,2,3), (0,3,4) ...
-	for (size_t i = 1; i + 1 < Corners.size(); ++i)
+	if (Corners.size() == 3)
 	{
 		const FCorner& A = Corners[0];
-		const FCorner& B = Corners[i];
-		const FCorner& C = Corners[i + 1];
+		const FCorner& B = Corners[1];
+		const FCorner& C = Corners[2];
 
-		ObjInfo.VertexIndexList.push_back(FVector4(
-			static_cast<float>(A.V), static_cast<float>(B.V), static_cast<float>(C.V)));
-		ObjInfo.UVIndexList.push_back(FVector(
-			static_cast<float>(A.VT), static_cast<float>(B.VT), static_cast<float>(C.VT)));
-		ObjInfo.NormalIndexList.push_back(FVector(
-			static_cast<float>(A.VN), static_cast<float>(B.VN), static_cast<float>(C.VN)));
+		ObjInfo.VertexIndexList.push_back(FTriangleIndices(A.V, B.V, C.V));
+		ObjInfo.UVIndexList.push_back(FTriangleIndices(A.VT, B.VT, C.VT));
+		ObjInfo.NormalIndexList.push_back(FTriangleIndices(A.VN, B.VN, C.VN));
 		ObjInfo.MaterialList.push_back(CurrentMaterial);
 		ObjInfo.GroupList.push_back(CurrentGroup);
 		ObjInfo.ObjectNamesList.push_back(CurrentObjectName);
-
-
-
-
+		ObjInfo.SmoothingGroupsList.push_back(CurrentSmoothingGroup);
+	}
+	else
+	{
+		StartEarClipping(Corners);
 	}
 }
 
@@ -378,7 +517,7 @@ int32 FObjDecoder::FindOrAddGroup(std::string_view Name)
 
 void FObjDecoder::UseGroup(std::string_view Line)
 {
-	const std::string_view Name = Trim(Line);
+	const std::string_view Name = NextWord(Line);
 	if (Name.empty())
 	{
 		CurrentGroup = -1;
@@ -416,29 +555,70 @@ void FObjDecoder::UseObjectName(std::string_view Line)
 	CurrentObjectName = FindOrAddObjectName(Name);
 }
 
+void FObjDecoder::SetSmoothingGroup(std::string_view Line)
+{
+	const std::string_view Name = Trim(Line);
+	if (Name.empty() || !StringToInt(Name, CurrentSmoothingGroup))
+	{
+		CurrentSmoothingGroup = 0;
+		return;
+	}
+
+}
+
+// mtllib a.mtl [b.mtl ...]
+// 공백으로 나열된 여러 파일일 수도 있고, 공백이 든 파일명 하나일 수도 있다.
+// 쪼개서 열리는 것만 읽고, 하나도 못 열면 줄 전체를 파일명 하나로 다시 시도한다.
 void FObjDecoder::AddMaterialLib(std::string_view Line)
 {
+	const std::string_view FullLine = Trim(Line);
+	if (FullLine.empty())
+	{
+		return;
+	}
+
+	int32 LoadedCount = 0;
+
+	// 공백으로 쪼개서 각각 시도
+	std::string_view Remaining = FullLine;
 	while (true)
 	{
-		const std::string_view Name = NextWord(Line);
+		const std::string_view Name = NextWord(Remaining);
 		if (Name.empty())
 		{
 			break;
 		}
 
 		const FString LibPath = (std::filesystem::path(ObjDirectory) / Name).generic_string();
-		ObjInfo.MaterialLibs.push_back(LibPath);
 
-		try
+		std::filesystem::path ResolvedPath;
+		if (!ResolveExistingFile(LibPath, ResolvedPath))
 		{
-			const FString File = ReadFileToString(LibPath);
-			ParseMtlFile(File);
+			continue;
 		}
-		catch (const std::exception& e)
-		{
-			UE_LOG_WARN("FObjDecoder : mtllib - %s", e.what());
-		}
+
+		ObjInfo.MaterialLibs.push_back(LibPath);
+		ParseMtlFile(ReadFileToString(LibPath));
+		++LoadedCount;
 	}
+
+	if (LoadedCount > 0)
+	{
+		return;
+	}
+
+	// 하나도 못 열은 경우 전체 경로로 열어보기
+	const FString WholePath = (std::filesystem::path(ObjDirectory) / FullLine).generic_string();
+
+	std::filesystem::path ResolvedPath;
+	if (ResolveExistingFile(WholePath, ResolvedPath))
+	{
+		ObjInfo.MaterialLibs.push_back(WholePath);
+		ParseMtlFile(ReadFileToString(WholePath));
+		return;
+	}
+
+	UE_LOG_WARN("FObjDecoder : mtllib not found - %s", FString(FullLine).c_str());
 }
 
 // usemtl name
@@ -527,64 +707,98 @@ void FObjDecoder::ParseMtlLine(std::string_view Line)
 
 	float Values[3] = { 0.0f, 0.0f, 0.0f };
 
-	if (LowerKeyword == "ka")
+	if (Keyword == "Ka") // 주변 색상
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Ambient = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (LowerKeyword == "kd")
+	else if (Keyword == "Kd") // 확산 색상
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Diffuse = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (LowerKeyword == "ks")
+	else if (Keyword == "Ks") // 반사색
 	{
 		if (ReadFloats(Line, Values, 3) == 3)
 			Material.Specular = FVector(Values[0], Values[1], Values[2]);
 	}
-	else if (LowerKeyword == "ns")
+	else if (Keyword == "Ns") // 반사율
 	{
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.SpecularExponent = Values[0];
 	}
-	else if (LowerKeyword == "d")
+	else if (Keyword == "d") // 투명성
 	{
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.Opacity = Values[0];
 	}
-	else if (LowerKeyword == "tr")
+	else if (Keyword == "Tr") // 투명성
 	{
-		// 투명도 반전 계산
+		// Tr 은 d 와 반대
 		if (ReadFloats(Line, Values, 1) == 1)
 			Material.Opacity = 1.0f - Values[0];
 	}
-	else if (LowerKeyword == "illum")
+	else if (Keyword == "Ke") // 발광
+	{
+		if (ReadFloats(Line, Values, 3) == 3)
+			Material.Emissive = FVector(Values[0], Values[1], Values[2]);
+	}
+	else if (Keyword == "Tf") // 투과 필터 색상
+	{
+		if (ReadFloats(Line, Values, 3) == 3)
+			Material.TransmissionFilter = FVector(Values[0], Values[1], Values[2]);
+	}
+	else if (Keyword == "Ni") // 굴절률
+	{
+		if (ReadFloats(Line, Values, 1) == 1)
+			Material.OpticalDensity = Values[0];
+	}
+	else if (Keyword == "illum") // 조명 모델
 	{
 		int32 Model = 0;
 		if (StringToInt(Trim(Line), Model))
 			Material.IlluminationModel = Model;
 	}
-	else if (LowerKeyword == "map_kd")
+	else if (Keyword == "map_Kd") // 디퓨즈 컬러 맵
 	{
 		Material.DiffuseTextureName = ParseTexturePath(Line);
 	}
-	else if (LowerKeyword == "map_ka")
+	else if (Keyword == "map_Ka") // 주변 색상 맵
 	{
 		Material.AmbientTextureName = ParseTexturePath(Line);
 	}
-	else if (LowerKeyword == "map_ks")
+	else if (Keyword == "map_Ks") // 반사 색상 맵
 	{
 		Material.SpecularTextureName = ParseTexturePath(Line);
 	}
-	else if (LowerKeyword == "map_d")
+	else if (Keyword == "map_d") // 알파 택스쳐 맵
 	{
 		Material.AlphaTextureName = ParseTexturePath(Line);
 	}
-	else if (LowerKeyword == "map_bump" || LowerKeyword == "bump" || LowerKeyword == "norm")
+	else if (Keyword == "map_bump" || Keyword == "bump") // 범프 맵
 	{
 		Material.NormalTextureName = ParseTexturePath(Line);
 	}
-	// 기타 속성 처리 생략
+	else if (Keyword == "map_Ke") // 발광 텍스처
+	{
+		Material.EmissiveTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "map_Ns") // 반사광 하이라이트 구성 요소
+	{
+		Material.SpecularExponentTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "refl") // 구형 반사 맵
+	{
+		Material.ReflectionTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "disp") // 변위 맵
+	{
+		Material.DisplacementTexture = ParseTexturePath(Line);
+	}
+	else if (Keyword == "decal") // 스텐실 데칼 텍스처
+	{
+		Material.DecalTexture = ParseTexturePath(Line);
+	}
 }
 
 void FObjDecoder::ParseLine(std::string_view Line)
@@ -620,11 +834,13 @@ void FObjDecoder::ParseLine(std::string_view Line)
 		UseGroup(Line);
 	else if (Keyword == "o")
 		UseObjectName(Line);
+	else if (Keyword == "s")
+		SetSmoothingGroup(Line);
 	else if (Keyword == "mtllib")
 		AddMaterialLib(Line);
 	else if (Keyword == "usemtl")
 		UseMaterial(Line);
-	// 아직 처리하지 않는 키워드: vp, s, l, p
+	// 아직 처리하지 않는 키워드: vp(파라미터 공간 정점), l(선), p(점)
 }
 
 FObjInfo FObjDecoder::ParseObjFile(const FString& File)
@@ -653,11 +869,11 @@ FObjInfo FObjDecoder::StartObjFileParser(const FString& PathFileName)
 		ObjDirectory = std::filesystem::path(PathFileName).parent_path().generic_string();
 
 		const FString File = ReadFileToString(PathFileName);
-		return ParseObjFile(File);
+		return (ParseObjFile(File));
 	}
 	catch (const std::exception& e)
 	{
-		UE_LOG("FObjDecoder : %s", e.what());
+		UE_LOG_WARN("FObjDecoder : %s", e.what());
 	}
 	return FObjInfo{};
 }
@@ -667,7 +883,7 @@ namespace
 	// 한 코너를 식별하는 (v, vt, vn) 조합. 같은 조합은 같은 정점을 가리킨다.
 	struct FCornerKey
 	{
-		int32 V, VT, VN;
+		int32 V, VT, NormalKind, NormalId;
 		bool operator==(const FCornerKey&) const = default;
 	};
 
@@ -677,12 +893,32 @@ namespace
 		{
 			size_t Hash = std::hash<int32>{}(Key.V);
 			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VT));
-			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VN));
+			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.NormalKind));
+			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.NormalId));
 			return Hash;
 		}
 	};
 
-	using FUniqueVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
+	using FVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
+
+	struct FSmoothingKey
+	{
+		int32  VertexIndexNumber;
+		int32 SmoothingGroupNumber;
+		bool operator==(const FSmoothingKey&) const = default;
+	};
+
+	struct FSmoothingKeyHash
+	{
+		size_t operator()(const FSmoothingKey& Key) const noexcept
+		{
+			size_t Hash = std::hash<int32>{}(Key.SmoothingGroupNumber);
+			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VertexIndexNumber));
+			return Hash;
+		}
+	};
+
+	using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHash>;
 
 	//-1(없음)은 허용.
 	bool IsIndexValid(int32 Index, size_t ListSize)
@@ -691,7 +927,7 @@ namespace
 	}
 
 	// 정점 하나를 (v, vt, vn) 로 조립한다.
-	FVertexData MakeVertex(const FObjInfo& Info, const FCornerKey& Key)
+	FVertexData MakeVertex(const FObjInfo& Info, const FCornerKey& Key, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
 	{
 		FVertexData Vertex{};
 
@@ -717,12 +953,45 @@ namespace
 			Vertex.v = 1.0f - UV.Y;
 		}
 
-		if (Key.VN >= 0)
+		
+		if (Key.NormalKind == EXPLICIT)
 		{
-			const FVector& Normal = Info.NormalList[Key.VN];
+			const FVector& Normal = Info.NormalList[Key.NormalId];
 			Vertex.nx = Normal.X;
 			Vertex.ny = Normal.Y;
 			Vertex.nz = Normal.Z;
+		}
+		else if (Key.NormalKind == SMOOTH)
+		{
+			FSmoothingKey SmoothingKey;
+
+			SmoothingKey.SmoothingGroupNumber = Key.NormalId;
+			SmoothingKey.VertexIndexNumber = Key.V;
+
+			if (auto It = SmoothingMap.find(SmoothingKey); It != SmoothingMap.end())
+			{
+				FVector NormalVector = It->second;
+
+				if (NormalVector.SizeSquared() > 1e-12f) // 선이거나 면이 마주봐서 0이된 경우 나누는거 방지
+				{
+					NormalVector /= NormalVector.Size();
+					Vertex.nx = NormalVector.X;
+					Vertex.ny = NormalVector.Y;
+					Vertex.nz = NormalVector.Z;
+				}
+			}
+		}
+		else if (Key.NormalKind == FLAT)
+		{
+			FVector NormalVector = NormalVectorList[Key.NormalId];
+
+			if (NormalVector.SizeSquared() > 1e-12f)
+			{
+				NormalVector /= NormalVector.Size();
+				Vertex.nx = NormalVector.X;
+				Vertex.ny = NormalVector.Y;
+				Vertex.nz = NormalVector.Z;
+			}
 		}
 
 		return Vertex;
@@ -731,20 +1000,85 @@ namespace
 	uint32 GetOrAddVertex(
 		const FObjInfo& Info,
 		const FCornerKey& Key,
-		FUniqueVertexMap& UniqueVertices,
-		FObjModelData& Out)
+		FVertexMap& Vertices,
+		FObjModelData& Out,
+		TArray<FVector>& NormalVectorList,
+		FSmoothingMap& SmoothingMap)
 	{
-		if (auto It = UniqueVertices.find(Key); It != UniqueVertices.end())
+		if (auto It = Vertices.find(Key); It != Vertices.end())
 		{
 			return It->second;
 		}
 
 		const uint32 NewIndex = static_cast<uint32>(Out.Vertices.size());
-		Out.Vertices.push_back(MakeVertex(Info, Key));
-		UniqueVertices.emplace(Key, NewIndex);
+		Out.Vertices.push_back(MakeVertex(Info, Key, NormalVectorList, SmoothingMap));
+		Vertices.emplace(Key, NewIndex);
 		return NewIndex;
 	}
+
+	FCornerKey MakeCornerKey(int32 V, int32 VT, int32 VN, int32 S, int32 Triangle)
+	{
+		FCornerKey CornerKey;
+
+
+		CornerKey.V = V;
+		CornerKey.VT = VT;
+		if (VN >= 0)
+		{
+			CornerKey.NormalKind = EXPLICIT;
+			CornerKey.NormalId = VN;
+		}
+		else if (S > 0)
+		{
+			CornerKey.NormalKind = SMOOTH;
+			CornerKey.NormalId = S;
+		}
+		else
+		{
+			CornerKey.NormalKind = FLAT;
+			CornerKey.NormalId = Triangle;
+		}
+		return (CornerKey);
+	}
 }
+
+
+void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
+{
+	const size_t TriangleCount = Info.VertexIndexList.size();
+	for (size_t Index = 0; Index < TriangleCount; ++Index)
+	{
+		const FTriangleIndices& V = Info.VertexIndexList[Index];
+
+
+		if (!IsIndexValid(V.Index[0], Info.VertexList.size())
+			|| !IsIndexValid(V.Index[1], Info.VertexList.size())
+			|| !IsIndexValid(V.Index[2], Info.VertexList.size()))
+		{			
+			NormalVectorList.push_back(FVector(0, 0, 0));
+			continue;
+		}
+
+		const FVector VertexA = Info.VertexList[V.Index[0]];
+		const FVector VertexB = Info.VertexList[V.Index[1]];
+		const FVector VertexC = Info.VertexList[V.Index[2]];
+		const int32 SmoothingGroupNumber = Info.SmoothingGroupsList[Index];
+		
+		NormalVectorList.push_back((VertexB - VertexA).Cross(VertexC - VertexA));
+
+		if (SmoothingGroupNumber > 0)
+		{
+			FSmoothingKey SmoothingKey;
+			for (int i = 0; i < 3; i++)
+			{
+				SmoothingKey.SmoothingGroupNumber = SmoothingGroupNumber;
+				SmoothingKey.VertexIndexNumber = static_cast<int>(V.Index[i]);
+				SmoothingMap[SmoothingKey] += NormalVectorList.back();
+			}
+		}
+	}
+}
+
 
 bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 {
@@ -755,21 +1089,30 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 	Out.Groups = Info.Groups;
 	Out.ObjectNames = Info.ObjectNames;
 
-	const size_t TriangleCount = Info.VertexIndexList.size();
+	const int32 TriangleCount = static_cast<int32>(Info.VertexIndexList.size());
 	if (TriangleCount == 0)
 	{
-		UE_LOG("FObjDecoder : CookStaticMesh - no faces");
+		UE_LOG_WARN("FObjDecoder : CookStaticMesh - no faces");
 		return false;
 	}
 
 	if (Info.UVIndexList.size() != TriangleCount || Info.NormalIndexList.size() != TriangleCount)
 	{
-		UE_LOG("FObjDecoder : CookStaticMesh - index list size mismatch)");
+		UE_LOG_WARN("FObjDecoder : CookStaticMesh - index list size mismatch)");
 		return false;
 	}
 
-	TSortedMap<FSectionKey, TArray<size_t>> Bucket;
-	for (size_t Index = 0; Index < TriangleCount; ++Index)
+	TArray<FVector> NormalVectorList;
+
+	FSmoothingMap SmoothingMap;
+
+	CalculateNormalVector(Info, NormalVectorList, SmoothingMap);
+
+
+
+	TSortedMap<FSectionKey, TArray<int32>> Bucket;
+
+	for (int32 Index = 0; Index < TriangleCount; ++Index)
 	{
 		FSectionKey Key;
 		Key.Object = Info.ObjectNamesList[Index];
@@ -778,8 +1121,8 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 		Bucket[Key].push_back(Index);
 	}
 
-	FUniqueVertexMap UniqueVertices;
-	UniqueVertices.reserve(TriangleCount * 3);
+	FVertexMap Vertices;
+	Vertices.reserve(TriangleCount * 3);
 	Out.Indices.reserve(TriangleCount * 3);
 
 	uint32 CurrentIndex = 0;
@@ -810,24 +1153,20 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 
 		uint32 EndIndex = CurrentIndex;
 
-		for (auto Triangle : Triangles)
+		for (int32 Triangle : Triangles)
 		{
-			const FVector& V = Info.VertexIndexList[Triangle];
-			const FVector& VT = Info.UVIndexList[Triangle];
-			const FVector& VN = Info.NormalIndexList[Triangle];
+			const FTriangleIndices& V = Info.VertexIndexList[Triangle];
+			const FTriangleIndices& VT = Info.UVIndexList[Triangle];
+			const FTriangleIndices& VN = Info.NormalIndexList[Triangle];
+			const int32& S = Info.SmoothingGroupsList[Triangle];
 
-			const FCornerKey Corners[3] = {
-				{ static_cast<int32>(V.X), static_cast<int32>(VT.X), static_cast<int32>(VN.X) },
-				{ static_cast<int32>(V.Y), static_cast<int32>(VT.Y), static_cast<int32>(VN.Y) },
-				{ static_cast<int32>(V.Z), static_cast<int32>(VT.Z), static_cast<int32>(VN.Z) },
-			};
 
 			bool bValid = true;
-			for (const FCornerKey& Corner : Corners)
+			for (uint32 i = 0; i < 3; i++)
 			{
-				if (Corner.V < 0 || !IsIndexValid(Corner.V, Info.VertexList.size())
-					|| !IsIndexValid(Corner.VT, Info.UVList.size())
-					|| !IsIndexValid(Corner.VN, Info.NormalList.size()))
+				if (V.Index[i] < 0 || !IsIndexValid(V.Index[i], Info.VertexList.size())
+					|| !IsIndexValid(VT.Index[i], Info.UVList.size())
+					|| !IsIndexValid(VN.Index[i], Info.NormalList.size()))
 				{
 					bValid = false;
 					break;
@@ -838,9 +1177,15 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 				continue;
 			}
 
+			const FCornerKey Corners[3] = {
+				MakeCornerKey(static_cast<int32>(V.Index[0]), static_cast<int32>(VT.Index[0]), static_cast<int32>(VN.Index[0]), S, Triangle),
+				MakeCornerKey(static_cast<int32>(V.Index[1]), static_cast<int32>(VT.Index[1]), static_cast<int32>(VN.Index[1]), S, Triangle),
+				MakeCornerKey(static_cast<int32>(V.Index[2]), static_cast<int32>(VT.Index[2]), static_cast<int32>(VN.Index[2]), S, Triangle)
+			};
+
 			for (const FCornerKey& Corner : Corners)
 			{
-				Out.Indices.push_back(GetOrAddVertex(Info, Corner, UniqueVertices, Out));
+				Out.Indices.push_back(GetOrAddVertex(Info, Corner, Vertices, Out, NormalVectorList, SmoothingMap));
 
 				for (int i = 0; i < 3; i++)
 				{
@@ -940,12 +1285,6 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 
 	FObjDecoder Decoder;
 	const FObjInfo Info = Decoder.StartObjFileParser(AbsolutePath);
-
-	UE_LOG("FObjDecoder : %s  v=%zu vt=%zu vn=%zu tri=%zu",
-		AbsolutePath.c_str(),
-		Info.VertexList.size(), Info.UVList.size(),
-		Info.NormalList.size(), Info.VertexIndexList.size());
-
 	Out.PathFileName = AbsolutePath;
 
 	if (!CookStaticMesh(Info, Out))
@@ -977,11 +1316,6 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 			Out.SpecularTextureName = FName(TextureKey);
 		}
 	}
-
-	UE_LOG("FObjDecoder : %s  cooked  vertices=%zu indices=%zu materials=%zu",
-		AbsolutePath.c_str(), Out.Vertices.size(), Out.Indices.size(), Out.Materials.size());
-
-
-
+	// ObjStaticMeshMap.emplace(AbsolutePath, Out);
 	return true;
 }
