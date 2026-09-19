@@ -26,6 +26,10 @@ public:
     void SetMaterial(int32 Slot, const FName& InMaterialId);
     FName GetMaterial(int32 Slot = 0) const;
 
+private:
+    // 머티리얼 슬롯 채우기
+    const void FillMaterialIDs(FRenderData& Out) const;
+
 protected:
     UStaticMeshComponent() = default;
 

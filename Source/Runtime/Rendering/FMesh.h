@@ -9,6 +9,16 @@
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Geometry/FAxisAlignedBoundingBox.h"
 
+struct FMeshSection
+{
+	static constexpr int32 DEFAULT_INDEX = 0;
+
+	uint32 StartIndex = 0;
+	uint32 IndexCount = 0;
+	int32 MaterialIndex = DEFAULT_INDEX;
+	FName GroupName{ "None" };
+};
+
 class FRenderer;
 
 class FStaticMesh final
@@ -25,11 +35,14 @@ public:
 
 	// 버퍼 데이터 갱신
 	bool UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Context, const struct FMeshDesc& Desc);
+
 	FName MeshId{"None"};
 	FName DefaultTextureId{"None"};
 
 	FString PathFileName;
 
+	TArray<FMeshSection> Sections = {};
+	TArray<FName> ObjMaterialIdList = {};
 private:
 
 	void BindResources(ID3D11DeviceContext& Context) const;
@@ -45,6 +58,7 @@ private:
 
 	TArray<FVector> Positions;
 	TArray<uint32> Indices;
+
 
 
 	FString MtlFileName;

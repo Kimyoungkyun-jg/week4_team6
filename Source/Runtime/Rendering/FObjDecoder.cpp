@@ -41,8 +41,10 @@ bool FObjDecoder::DecodeObjFile(const FString& FileContent, const FString& BaseD
 	MaterialNameToIndex["Default"] = DEFAULT_INDEX;
 	VertexInfoOut.Vertices.clear();
 	VertexInfoOut.Indices.clear();
+	VertexInfoOut.Sections.clear();
 	MaterialInfoOut.clear();
 	MaterialInfoOut.push_back(FObjMaterialInfo{});
+	int32 TotalIndexCount = 0;
 
 	// Start Parse
 	std::istringstream File(FileContent);
@@ -138,6 +140,7 @@ bool FObjDecoder::DecodeObjFile(const FString& FileContent, const FString& BaseD
 					CheckSection(VertexInfoOut, CurrentMaterialIndex, CurrentGroupName);
 					VertexInfoOut.Indices.push_back(It->second);
 					VertexInfoOut.Sections.back().IndexCount++;
+					TotalIndexCount++;
 				}
 			}
 		}
@@ -198,6 +201,7 @@ bool FObjDecoder::DecodeObjFile(const FString& FileContent, const FString& BaseD
 	}
 	// Parse Ended
 
+	MergeSectionsByMaterial(VertexInfoOut);
 
 	if (VertexInfoOut.Vertices.empty() || VertexInfoOut.Indices.empty())
 	{
@@ -208,6 +212,7 @@ bool FObjDecoder::DecodeObjFile(const FString& FileContent, const FString& BaseD
 	ComputeStaticBounds(VertexInfoOut);
 
 	UE_LOG("%s.OBJ 파일 열기 성공: 버텍스 %d개, 인덱스%d개", VertexInfoOut.ObjectName.ToString().c_str(), VertexInfoOut.Vertices.size(), VertexInfoOut.Indices.size());
+	assert(VertexInfoOut.Indices.size() == TotalIndexCount);
 
 	return true;
 }
@@ -243,7 +248,7 @@ FVertexData FObjDecoder::MakeVertex(const FVertexKey& Key, const TArray<FVector>
 	if (Key.UVIndex != INVALID_INDEX)
 	{
 		VertexData.u = UVs[Key.UVIndex].X;
-		VertexData.v = UVs[Key.UVIndex].Y;
+		VertexData.v = 1 - UVs[Key.UVIndex].Y;
 	}
 	if (Key.NormalIndex != INVALID_INDEX)
 	{
@@ -387,16 +392,83 @@ void FObjDecoder::CheckSection(FObjVertexInfo& OutData, int32 InMaterialIndex, F
 {
 	if (!OutData.Sections.empty())
 	{
-		FObjMeshSection& LastSection = OutData.Sections.back();
+		FMeshSection& LastSection = OutData.Sections.back();
 		if (LastSection.MaterialIndex == InMaterialIndex)
 		{
 			return;
 		}
 	}
-	FObjMeshSection NewSection = {};
-	NewSection.StartIndex = OutData.Indices.size();
+	FMeshSection NewSection = {};
+	NewSection.StartIndex = static_cast<uint32>(OutData.Indices.size());
 	NewSection.IndexCount = 0;
 	NewSection.MaterialIndex = InMaterialIndex;
 	NewSection.GroupName = InGroupName;
+	if (!OutData.Sections.empty())
+	{
+		FMeshSection& LastSection = OutData.Sections.back();
+		assert(LastSection.StartIndex + LastSection.IndexCount == NewSection.StartIndex);
+	}
 	OutData.Sections.push_back(NewSection);
+}
+
+void FObjDecoder::MergeSectionsByMaterial(FObjVertexInfo& VertexInfo)
+{
+	if (VertexInfo.Sections.size() <= 1)
+	{
+		return;
+	}
+
+	TArray<uint32> MaterialOrder;
+	for (const FMeshSection& Section : VertexInfo.Sections)
+	{
+		bool bFound = false;
+		for (uint32 Mat : MaterialOrder)
+		{
+			if (Mat == Section.MaterialIndex) 
+			{ 
+				bFound = true; break; 
+			}
+		}
+		if (!bFound)
+		{
+			MaterialOrder.push_back(Section.MaterialIndex);
+		}
+	}
+
+	TArray<uint32> NewIndices;
+	NewIndices.reserve(VertexInfo.Indices.size());
+
+	TArray<FMeshSection> NewSections;
+	NewSections.reserve(MaterialOrder.size());
+
+	for (uint32 Mat : MaterialOrder)
+	{
+		FMeshSection NewSection;
+		NewSection.MaterialIndex = Mat;
+		NewSection.StartIndex = static_cast<uint32>(NewIndices.size());
+
+		for (const FMeshSection& Section : VertexInfo.Sections)
+		{
+			if (Section.MaterialIndex != Mat)
+			{
+				continue;
+			}
+			const size_t Begin = Section.StartIndex;
+			const size_t End = Begin + Section.IndexCount;
+			assert(End <= VertexInfo.Indices.size());
+
+			NewIndices.insert(NewIndices.end(), VertexInfo.Indices.begin() + Begin, VertexInfo.Indices.begin() + End);
+		}
+
+		NewSection.IndexCount =
+			static_cast<uint32>(NewIndices.size()) - NewSection.StartIndex;
+
+		if (NewSection.IndexCount > 0)
+		{
+			NewSections.push_back(NewSection);
+		}
+	}
+	assert(NewIndices.size() == VertexInfo.Indices.size());
+	VertexInfo.Indices = std::move(NewIndices);
+	VertexInfo.Sections = std::move(NewSections);
 }

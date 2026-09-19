@@ -11,10 +11,10 @@
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Geometry/Sphere.h"
 #include "Runtime/Math/FVector.h"
-#include "Runtime/Rendering/FRenderer.h"
 #include <cmath>
 #include <d3dcompiler.h>
 #include <numbers>
+#include <algorithm>
 
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -32,7 +32,7 @@ struct FPipelineEntry {
   const wchar_t *VertexShader;
   const wchar_t *PixelShader;
   bool bDepthWrite = true;
-  D3D11_CULL_MODE CullMode = D3D11_CULL_BACK;
+  D3D11_CULL_MODE CullMode = D3D11_CULL_NONE;
   EBlendMode BlendMode = EBlendMode::Opaque;
   bool bIsInstancing = false;
 };
@@ -525,6 +525,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
 
     UStaticMesh *StaticMeshObj = NewObject<UStaticMesh>(Key, MaterialName);
     if (StaticMeshObj) {
+      StaticMeshObj->InitMaterialIds();
       AllUStaticMeshMap[Key] = StaticMeshObj;
     }
   }
@@ -1362,8 +1363,10 @@ bool FRenderResourceLibrary::CreateTextures(FRenderer &Renderer) {
       TSharedPtr<FTexture> Texture =
           Renderer.CreateTexture(Entry.path().wstring().c_str());
 
-      if (!Texture)
+      if (!Texture) {
+        UE_LOG_WARN("[Texture] 로드 실패: %s", Entry.path().string().c_str());
         continue;
+      }
 
       RegisterTexture(TextureKey, Texture);
     }
@@ -1405,44 +1408,88 @@ bool FRenderResourceLibrary::CreateObjMeshes(FRenderer &Renderer) {
       FName MeshKey(StemName);
 
       // FObjDecoder로 파일 파싱
-      FObjVertexInfo VertexInfo;
-      TArray<FObjMaterialInfo> MaterialInfoList;
-      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), VertexInfo, MaterialInfoList)) {
+      FObjVertexInfo VertexInfoOut;
+      TArray<FObjMaterialInfo> MaterialInfoListOut;
+      if (!FObjDecoder::DecodeFromFile(Entry.path().string(), VertexInfoOut, MaterialInfoListOut)) {
         UE_LOG_WARN("[OBJ Loader] 파싱 실패: %s",
                     Entry.path().string().c_str());
         continue;
       }
 
       FMeshDesc Desc{
-          .VertexData = VertexInfo.Vertices.data(),
+          .VertexData = VertexInfoOut.Vertices.data(),
           .VertexDataSize = static_cast<uint32>(sizeof(FVertexData) *
-                                                VertexInfo.Vertices.size()),
+                                                VertexInfoOut.Vertices.size()),
           .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
-          .VertexCount = static_cast<uint32>(VertexInfo.Vertices.size()),
+          .VertexCount = static_cast<uint32>(VertexInfoOut.Vertices.size()),
 
-          .IndexData = VertexInfo.Indices.data(),
+          .IndexData = VertexInfoOut.Indices.data(),
           .IndexDataSize =
-              static_cast<uint32>(sizeof(uint32) * VertexInfo.Indices.size()),
-          .IndexCount = static_cast<uint32>(VertexInfo.Indices.size()),
-          .bIsLine = false};
+              static_cast<uint32>(sizeof(uint32) * VertexInfoOut.Indices.size()),
+          .IndexCount = static_cast<uint32>(VertexInfoOut.Indices.size()),
+          .bIsLine = false,
+      };
 
       TSharedPtr<FStaticMesh> StaticMesh = Renderer.CreateMesh(Desc);
       if (StaticMesh) {
         StaticMesh->PathFileName = Entry.path().string();
         StaticMesh->MeshId = MeshKey;
-        if (MaterialInfoList.size() > 0)
+        StaticMesh->Sections = VertexInfoOut.Sections;
+        if (MaterialInfoListOut.size() > 0 && VertexInfoOut.Sections.size())
         {
-            StaticMesh->DefaultTextureId = MaterialInfoList[0].TextureName;
+            FName DefaultTextureName = MaterialInfoListOut[VertexInfoOut.Sections[0].MaterialIndex].TextureName;
+            if (!DefaultTextureName.IsNone() && DefaultTextureName != FName("None"))
+            {
+                FString TextureNameString = DefaultTextureName.ToString();
+                std::transform(TextureNameString.begin(), TextureNameString.end(), TextureNameString.begin(), ::tolower);
+                StaticMesh->DefaultTextureId = FName(TextureNameString);
+            }
+            else
+            {
+                StaticMesh->DefaultTextureId = FName("None");
+            }
         }
         RegisterMesh(MeshKey, StaticMesh);
+        for (const auto& Info : MaterialInfoListOut)
+        {
+            StaticMesh->ObjMaterialIdList.push_back(RegisterObjMaterial(Info, MeshKey));
+        }
         UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u)",
-               StemName.c_str(), VertexInfo.Vertices.size(),
-            VertexInfo.Indices.size());
+               StemName.c_str(), VertexInfoOut.Vertices.size(),
+            VertexInfoOut.Indices.size());
       }
     }
   }
 
   return true;
+}
+
+FName FRenderResourceLibrary::RegisterObjMaterial(const FObjMaterialInfo& InMaterialInfo, const FName& MeshKey)
+{
+    FName MaterialID(MeshKey.ToString() + '_' + InMaterialInfo.MaterialName.ToString());
+    if (GetMaterial(MaterialID))
+    {
+        return MaterialID;
+    }
+    TSharedPtr<FMaterial> NewMaterial = MakeShared<FMaterial>();
+
+    bool bHasTextureName = !InMaterialInfo.TextureName.IsNone() && InMaterialInfo.TextureName != FName("None");
+
+    if (bHasTextureName)
+    {
+        FString TextureName = InMaterialInfo.TextureName.ToString();
+        std::transform(TextureName.begin(), TextureName.end(), TextureName.begin(), ::tolower);
+        bool bIsTextured = NewMaterial->SetTextureByName(FName(TextureName));
+        FString PipelineFString = bIsTextured ? "Textured" : "Simple_Solid";
+        NewMaterial->SetPipeLine(GetPipeline(FName(PipelineFString)));
+    }
+    else
+    {
+        NewMaterial->SetPipeLine(GetPipeline(FName("Simple_Solid")));
+    }
+    NewMaterial->MaterialId = MaterialID;
+    RegisterMaterial(MaterialID, NewMaterial);
+    return MaterialID;
 }
 
 TSharedPtr<FStaticMesh>

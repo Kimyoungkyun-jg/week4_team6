@@ -66,6 +66,7 @@ public:
                        EViewModeIndex RenderMode = EViewModeIndex::VMI_Lit);
   [[nodiscard]]
   TSharedPtr<FTexture> CreateTexture(const wchar_t* path);
+  TSharedPtr<FTexture> CreateTextureFromImageFile(const wchar_t* path);
   // 파이프라인 조회
   [[nodiscard]]
   TSharedPtr<FRenderPipeline> GetPipeline(const FName& Id) const;
@@ -164,6 +165,55 @@ public:
     } else {
       Context->Draw(Mesh.VertexCount, 0);
     }
+  }
+
+  template<typename TConstants>
+  void DrawSections(
+      const FStaticMesh& Mesh,
+      const TArray<TSharedPtr<FMaterial>>& MaterialList,
+      const TConstants& Constants,
+      uint32 Slot = 0,
+      bool bApplyViewMode = true
+  )
+  {
+      UpdateBuffer(Constants, Slot);
+
+      if (Mesh.Sections.empty() || MaterialList.empty())
+      {
+          Draw(Mesh, FMaterial(), Constants);
+          return;
+      }
+
+      Mesh.BindResources(*Context.Get());
+
+      for (size_t i = 0; i < Mesh.Sections.size(); ++i)
+      {
+          const FMeshSection Section = Mesh.Sections[i];
+          if (Section.IndexCount <= 0)
+          {
+              continue;
+          }
+          const TSharedPtr<FMaterial>& Mat = MaterialList[std::min(i, MaterialList.size() - 1)];
+          if (!Mat)
+          {
+              continue;
+          }
+
+          TSharedPtr<FRenderPipeline> Pipeline = Mat->Pipeline;
+          if (bApplyViewMode && CurrentRenderMode == EViewModeIndex::VMI_Wireframe)
+          {
+              Pipeline = GetPipeline(FName("Simple_Wireframe"));
+          }
+          if (Pipeline)
+          {
+              Pipeline->Bind(*Context.Get());
+          }
+
+          Mat->BindResources(*Context.Get());
+
+          Context->DrawIndexed(Section.IndexCount, Section.StartIndex, 0);
+      }
+      
   }
 
 

@@ -11,6 +11,8 @@
 #include "Runtime/Rendering/FTexture.h"
 #include "ShaderConstants.h"
 #include "ThirdParty/DirectXTK/Inc/DDSTextureLoader.h"
+#include "ThirdParty/stb/stb_image.h"
+#include <cstdio>
 #include "Vertices.h"
 #include <Windows.h>
 #include <d3d11.h>
@@ -448,7 +450,8 @@ TSharedPtr<FTexture> FRenderer::CreateTexture(const wchar_t *path) {
       Device.Get(), path, TempResource.GetAddressOf(),
       Texture->TextureSRV.GetAddressOf());
   if (FAILED(hr)) {
-    return nullptr;
+    // DDS가 아니거나(png/jpg) 로드 실패 시 stb_image로 RGBA8 텍스처 생성
+    return CreateTextureFromImageFile(path);
   }
 
   hr = TempResource.As(&Texture->Texture2D);
@@ -461,6 +464,51 @@ TSharedPtr<FTexture> FRenderer::CreateTexture(const wchar_t *path) {
   Texture->Width = desc.Width;
   Texture->Height = desc.Height;
 
+  return Texture;
+}
+
+// png/jpg 등 일반 이미지 파일을 비압축 RGBA8 텍스처로 로드 (밉맵 없음)
+TSharedPtr<FTexture> FRenderer::CreateTextureFromImageFile(const wchar_t *path) {
+  FILE *File = nullptr;
+  if (_wfopen_s(&File, path, L"rb") != 0 || !File) {
+    return nullptr;
+  }
+  int Width = 0, Height = 0, Channels = 0;
+  stbi_uc *Pixels = stbi_load_from_file(File, &Width, &Height, &Channels, 4);
+  fclose(File);
+  if (!Pixels) {
+    return nullptr;
+  }
+
+  auto Texture = TSharedPtr<FTexture>{new FTexture()};
+  D3D11_TEXTURE2D_DESC Desc{
+      .Width = static_cast<UINT>(Width),
+      .Height = static_cast<UINT>(Height),
+      .MipLevels = 1u,
+      .ArraySize = 1u,
+      .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+      .SampleDesc = {.Count = 1u},
+      .Usage = D3D11_USAGE_IMMUTABLE,
+      .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+  };
+  D3D11_SUBRESOURCE_DATA Data{
+      .pSysMem = Pixels,
+      .SysMemPitch = static_cast<UINT>(Width) * 4u,
+  };
+  HRESULT hr = Device->CreateTexture2D(&Desc, &Data, &Texture->Texture2D);
+  stbi_image_free(Pixels);
+  if (FAILED(hr)) {
+    return nullptr;
+  }
+
+  hr = Device->CreateShaderResourceView(Texture->Texture2D.Get(), nullptr,
+                                        &Texture->TextureSRV);
+  if (FAILED(hr)) {
+    return nullptr;
+  }
+
+  Texture->Width = static_cast<uint32>(Width);
+  Texture->Height = static_cast<uint32>(Height);
   return Texture;
 }
 

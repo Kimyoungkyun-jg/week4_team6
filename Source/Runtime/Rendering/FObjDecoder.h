@@ -6,9 +6,9 @@
 #include "Runtime/Core/FName.h"
 #include "Runtime/Rendering/Vertices.h"
 #include "Runtime/Geometry/FAxisAlignedBoundingBox.h"
+#include "Runtime/Rendering/FMesh.h"
 
-constexpr int32 INVALID_INDEX = -1;
-constexpr int32 DEFAULT_INDEX = 0;
+static constexpr int32 INVALID_INDEX = -1;
 
 struct FVertexKey
 {
@@ -65,15 +65,7 @@ struct FObjMaterialInfo
 	float NsShininess = 32.f;
 	float DOpacity = 1.f;
 	int32 Illumination = 2;
-	FName TextureName{ "uv-test" };
-};
-
-struct FObjMeshSection
-{
-	uint32 StartIndex = 0;
-	uint32 IndexCount = 0;
-	int32 MaterialIndex = DEFAULT_INDEX;
-	FName GroupName;
+	FName TextureName{ "None" };
 };
 
 struct FObjVertexInfo
@@ -86,14 +78,14 @@ struct FObjVertexInfo
 	FName ObjectName{ "None" };
 	TArray<FVertexData> Vertices;
 	TArray<uint32> Indices;
-	//TArray<FObjMaterialInfo> Materials;
-	TArray<FObjMeshSection> Sections;
+	TArray<FMeshSection> Sections;
 	FAxisAlignedBoundingBox LocalBounds;
 	bool bIsValid = false;
 };
 
 class FObjDecoder
 {
+	static constexpr int32 DEFAULT_INDEX = 0;
 public:
 	static bool DecodeFromFile(const FString& FilePath, FObjVertexInfo& VetexInfoOut, TArray<FObjMaterialInfo>& MaterialInfoOut);
 
@@ -111,4 +103,5 @@ private:
 
 	static void CheckSection(FObjVertexInfo& OutData, int32 InMaterialIndex, FName InGroupName);
 
+	static void MergeSectionsByMaterial(FObjVertexInfo& VertexInfo);
 };

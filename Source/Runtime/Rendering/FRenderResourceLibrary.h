@@ -11,7 +11,7 @@
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Core/TMap.h"
 #include "Vertices.h"
-#include "FFont.h"
+#include "FObjDecoder.h"
 
 class FRenderer;
 class FTexture;
@@ -90,6 +90,9 @@ public:
     AllFStaticMeshMap[ID] = inMesh;
     return inMesh;
   }
+
+  // 머티리얼 등록
+  FName RegisterObjMaterial(const FObjMaterialInfo& InMaterialInfo, const FName& MeshKey);
 
   // UStaticMesh 맵 조회
   [[nodiscard]] UStaticMesh* GetUStaticMesh(const FName& ID) const {

@@ -339,8 +339,21 @@ void FRenderView::DrawRenderData(const FRenderData& Data)
     auto Material = Data.MaterialOverride ? Data.MaterialOverride : ResLib.GetMaterial(Data.MaterialId);
     if (!Mesh || !Material) return;
 
+    // 섹션 렌더링
+    if (!Data.MaterialIdList.empty() && !Mesh->Sections.empty())
+    {
+        TArray<TSharedPtr<FMaterial>> MaterialList;
+        MaterialList.reserve(Data.MaterialIdList.size());
+        for (const FName& MatName : Data.MaterialIdList)
+        {
+            auto Mat = ResLib.GetMaterial(MatName);
+            MaterialList.push_back(Mat ? Mat : ResLib.GetMaterial(FName("Simple")));
+        }
+        Renderer.DrawSections(*Mesh, MaterialList, Data.Constants);
+        return;
+    }
     // 텍스처 오버라이드 처리
-    if (!Data.TextureId.IsNone() && Data.TextureId != FName("None"))
+    else if (!Data.TextureId.IsNone() && Data.TextureId != FName("None"))
     {
         auto Tex = ResLib.GetTexture(Data.TextureId);
         if (Tex && Material->GetTexture() != Tex)

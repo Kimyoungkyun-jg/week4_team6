@@ -12,6 +12,7 @@ struct FRenderData
     FName MeshId{"None"};
     FName MaterialId{"None"};
     FName TextureId{"None"};
+    TArray<FName> MaterialIdList;
     TSharedPtr<FMaterial> MaterialOverride = nullptr;
     FObjectConstants Constants;
     bool bSelected = false;

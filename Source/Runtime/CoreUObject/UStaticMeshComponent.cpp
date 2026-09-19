@@ -67,7 +67,7 @@ const FRenderData& UStaticMeshComponent::GetRenderData(const FCamera& Camera)
         FName TexId = StaticMesh->GetDefaultTextureID();
         RenderData.TextureId = !TexId.IsNone() ? TexId : FName("None");
     }
-
+    FillMaterialIDs(RenderData);
     return RenderData;
 }
 
@@ -82,7 +82,7 @@ const FRenderData& UStaticMeshComponent::GetPureRenderData() const
         FName TexId = StaticMesh->GetDefaultTextureID();
         MutableData.TextureId = !TexId.IsNone() ? TexId : FName("None");
     }
-
+    FillMaterialIDs(MutableData);
     return RenderData;
 }
 
@@ -94,7 +94,6 @@ void UStaticMeshComponent::SetMaterial(int32 Slot, const FName& InMaterialId)
         OverrideMaterials.resize(Slot + 1, FName("None"));
     }
     OverrideMaterials[Slot] = InMaterialId;
-    RenderData.MaterialId = InMaterialId;
 }
 
 FName UStaticMeshComponent::GetMaterial(int32 Slot) const
@@ -108,4 +107,23 @@ FName UStaticMeshComponent::GetMaterial(int32 Slot) const
         return StaticMesh->GetDefaultMaterialID(Slot);
     }
     return FName("None");
+}
+
+const void UStaticMeshComponent::FillMaterialIDs(FRenderData& Out) const
+{
+    Out.MaterialIdList.clear();
+
+    if (!StaticMesh)
+    {
+        return;
+    }
+    const int32 MaterialCount = StaticMesh->GetMaterialIdCount();
+    if (MaterialCount <= 1)
+    {
+        return;
+    }
+    for (int32 i = 0; i < MaterialCount; ++i)
+    {
+        Out.MaterialIdList.push_back(GetMaterial(i));
+    }
 }

@@ -21,8 +21,8 @@ public:
     FName MeshId{"None"};
     TSharedPtr<FStaticMesh> StaticMeshAsset = nullptr;
 
-    // 기본 머티리얼 슬롯
-    TArray<FName> DefaultMaterialIds;
+    // 머티리얼 리스트
+    TArray<FName> MaterialIds;
 
     // 바운딩 박스
     FAxisAlignedBoundingBox LocalBounds{};
@@ -39,11 +39,18 @@ public:
 
     const FName& GetDefaultMaterialID(int32 Slot = 0) const {
         static const FName SimpleMat("Simple");
-        if (Slot >= 0 && Slot < static_cast<int32>(DefaultMaterialIds.size()) && !DefaultMaterialIds[Slot].IsNone())
+        if (Slot >= 0 && Slot < static_cast<int32>(MaterialIds.size()) && !MaterialIds[Slot].IsNone())
         {
-            return DefaultMaterialIds[Slot];
+            return MaterialIds[Slot];
         }
         return SimpleMat;
+    }
+
+    void InitMaterialIds();
+
+    const int32 GetMaterialIdCount() const
+    {
+        return MaterialIds.size();
     }
 
 
