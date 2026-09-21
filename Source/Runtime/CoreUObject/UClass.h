@@ -43,6 +43,8 @@ public:
 
 	[[nodiscard]] const FString& GetUClassName() const { return className; }
 	[[nodiscard]] static bool AreTypeBitsetsResolved() { return bTypeBitsetsResolved; }
+	[[nodiscard]] static uint32 GetRegisteredCount() { return registeredCount; }
+
 
 	static UClass* FindClassWithDisplayName(const FString& name)
 	{

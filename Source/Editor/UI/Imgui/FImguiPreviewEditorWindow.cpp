@@ -161,7 +161,8 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 			TArray<UStaticMesh*> Meshes;
 			for (TObjectIterator<UStaticMesh> It; It; ++It)
 			{
-				Meshes.push_back(*It);
+				if (UStaticMesh* Mesh = *It)
+					Meshes.push_back(Mesh);
 			}
 			std::sort(Meshes.begin(), Meshes.end(),
 				[](const UStaticMesh* A, const UStaticMesh* B)

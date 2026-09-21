@@ -6,106 +6,98 @@
 #include "Runtime/CoreUObject/FUObjectArray.h"
 #include "Runtime/CoreUObject/UObject.h"
 #include "Runtime/CoreUObject/UClass.h"
-
-class FObjectIterator
-{
-private:
-    uint32  CurrentIndex;
-    UClass* TargetClass;
-
-
-    void AdvanceToNextValidObject() {
-        while (true)
-        {
-            FUObjectArray& ObjectArray = FUObjectArray::Get();
-            if (CurrentIndex >= ObjectArray.GetMaxIndex())
-                return;
-            UObject* Object = ObjectArray.GetObjectByIndex(CurrentIndex);
-            if (Object && Object->IsA(TargetClass))
-                return;
-            ++CurrentIndex;
-        }
-    }
-
-public:
-
-    explicit FObjectIterator(UClass* Class = UObject::StaticClass()) : CurrentIndex(0), TargetClass(Class)
-    {
-        assert(UClass::AreTypeBitsetsResolved() && "UClass::ResolveTypeBitsets() not call");
-        AdvanceToNextValidObject();
-    }
-
-    FObjectIterator& operator++()
-    {
-        ++CurrentIndex;
-        AdvanceToNextValidObject();
-        return *this;
-    }
-
-    UObject* operator*() const
-    {
-        return FUObjectArray::Get().GetObjectByIndex(CurrentIndex);
-    }
-
-    bool operator==(const FObjectIterator& ref) const
-    {
-        return (this->CurrentIndex == ref.CurrentIndex && 
-            this->TargetClass == ref.TargetClass);
-    }
-
-    bool operator!=(const FObjectIterator& ref) const
-    {
-        return (!(*this == ref));
-    }
-
-    UObject* operator->() const
-    {
-        return FUObjectArray::Get().GetObjectByIndex(CurrentIndex);
-    }
-
-    explicit operator bool() const
-    {
-        return (CurrentIndex < FUObjectArray::Get().GetMaxIndex());
-    }
-};
-
+#include "Runtime/Core/TSet.h"
+#include "Runtime/Core/TArray.h"
 
 template<typename TObject>
-class TObjectIterator
+class TObjectIterator // UClass가 동일한 버킷 기반 탐색
 {
+private:
+    struct FSnapshotEntry
+    {
+        uint32 UUID;
+        uint32 Index;
+    };
+    TArray<FSnapshotEntry> Snapshot;
+    size_t Cursor = 0;
+
+    TObject* Resolve() const
+    {
+        if (Cursor >= Snapshot.size())
+            return nullptr;
+
+        const FSnapshotEntry SnapshotEntry = Snapshot.at(Cursor);
+        UObject* Object = FUObjectArray::Get().GetObjectByIndex(SnapshotEntry.Index);
+
+        if (!Object || SnapshotEntry.UUID != Object->GetUUID())
+            return nullptr;
+
+        return (static_cast<TObject*>(Object));
+    }
+
 public:
-    TObjectIterator() : Inner(TObject::StaticClass()) {}
+    TObjectIterator()
+    {
+        assert(UClass::AreTypeBitsetsResolved() && "UClass::ResolveTypeBitsets() not call");
+
+        UClass* TargetClass = TObject::StaticClass();
+        FUObjectArray& ObjectArray = FUObjectArray::Get();
+
+        // 등록 클래스를 훑으며 파생 클래스 버킷을 합친다.
+        // FClassIdSet을 이용해 비트 테스트만으로 판정된다.
+        const uint32 ClassCount = UClass::GetRegisteredCount();
+        for (uint32 Id = 0; Id < ClassCount; ++Id)
+        {
+            UClass* ClassType = UClass::GetClassById(Id);
+            if (!ClassType || !ClassType->IsChildOrSelfOf(TargetClass))
+            {
+                continue;
+            }
+
+            const TSet<UObject*>* Bucket = ObjectArray.GetBucket(ClassType);
+            if (!Bucket)
+            {
+                continue;
+            }
+
+            Snapshot.reserve(Snapshot.size() + Bucket->size());
+            for (UObject* Object : *Bucket)
+            {
+                Snapshot.push_back({ Object->GetUUID(), Object->GetInternalIndex() });
+            }
+        }
+
+    }
 
     explicit operator bool() const 
     { 
-        return static_cast<bool>(Inner); 
+        return (Cursor < Snapshot.size()); 
     }
 
     TObject* operator*() const 
     {
-        return static_cast<TObject*>(*Inner); 
+        return (Resolve());
     }
 
     TObject* operator->() const 
     {
-        return static_cast<TObject*>(*Inner); 
+        return (Resolve());
     }
 
     TObjectIterator& operator++() 
     { 
-        ++Inner; return *this; 
+        ++Cursor;
+        return (*this); 
     }
 
-    bool operator==(const TObjectIterator& o) const 
+    bool operator==(const TObjectIterator& Other) const 
     { 
-        return Inner == o.Inner; 
+        return (Resolve() == Other.Resolve());
     }
 
-    bool operator!=(const TObjectIterator& o) const 
+    bool operator!=(const TObjectIterator& Other) const 
     { 
-        return Inner != o.Inner; 
+        return (!(*this == Other));
     }
 
-private:
-    FObjectIterator Inner;
 };

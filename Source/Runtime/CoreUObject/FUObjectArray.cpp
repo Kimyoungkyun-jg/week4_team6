@@ -8,6 +8,12 @@ void FUObjectArray::SetNextUUID(uint32 UUID)
 	NextUUID = UUID;
 }
 
+const TSet<UObject*>* FUObjectArray::GetBucket(UClass* ClassType) const
+{
+	auto It = ClassToObjects.find(ClassType);
+	return (It != ClassToObjects.end()) ? &It->second : nullptr;
+}
+
 void FUObjectArray::AddObject(UObject* Object)
 {
 	if (!FreeIndices.empty())
@@ -18,12 +24,15 @@ void FUObjectArray::AddObject(UObject* Object)
 		Object->InternalIndex = Index;
 		Object->UUID = AcquireUUID();
 		Objects.at(Index) = Object;
-		return;
+	}
+	else
+	{
+		Object->InternalIndex = static_cast<uint32>(Objects.size());
+		Object->UUID = AcquireUUID();
+		Objects.push_back(Object);
 	}
 
-	Object->InternalIndex = static_cast<uint32>(Objects.size());
-	Object->UUID = AcquireUUID();
-	Objects.push_back(Object);
+	ClassToObjects[Object->GetClass()].insert(Object);
 }
 
 void FUObjectArray::RemoveObject(UObject* Object)
@@ -33,6 +42,13 @@ void FUObjectArray::RemoveObject(UObject* Object)
 
 	FreeIndices.push_back(Index);
 	Objects.at(Index) = nullptr;
+
+	auto It = ClassToObjects.find(Object->GetClass());
+	if (It != ClassToObjects.end())
+	{
+		It->second.erase(Object);
+	}
+
 }
 
 void FUObjectArray::DestroyObject(UObject* Object) {

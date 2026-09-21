@@ -16,7 +16,8 @@
 #include "Runtime/CoreUObject/UStaticMeshComponent.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include <algorithm>
-#include <Runtime/Core/TObjectIterator.h>
+#include "Runtime/Core/FObjectIterator.h"
+#include "Runtime/Core/TObjectIterator.h"
 
 void FImguiPropertyWindow::Process(FEditor& Editor)
 {
@@ -137,7 +138,7 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 	// 드래그 앤 드롭은 이름(Key) 기반이라 등록 맵이 그대로 필요하다.
 	const auto& AllUStaticMeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
 
-	TObjectIterator<UStaticMesh> AnyMesh;
+	FObjectIterator AnyMesh(UStaticMesh::StaticClass());
 	if (!AnyMesh)
 	{
 		ImGui::TextDisabled("No Static Meshes available");
@@ -215,7 +216,8 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 		TArray<UStaticMesh*> Meshes;
 		for (TObjectIterator<UStaticMesh> It; It; ++It)
 		{
-			Meshes.push_back(*It);
+			if (UStaticMesh* Mesh = *It)
+				Meshes.push_back(Mesh);
 		}
 
 		// FName::Compare 는 대소문자를 구분하지 않는다.
