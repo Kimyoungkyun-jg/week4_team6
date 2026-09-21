@@ -46,14 +46,8 @@ struct FObjObjectInfo
     FString Name;
 };
 
-// Todo: Bin - Materials.bin의 데이터 항목. 정의는 메시 캐시와 분리한다.
+// Todo: Bin - 바이너리 직렬화에 사용하는 바이트 저장소.
 class FBinArchive;
-
-struct FMaterialBinaryEntry
-{
-    FString MaterialLibraryPath;
-    FObjMaterialInfo Material;
-};
 
 // Cooked Data
 struct FObjModelData
@@ -115,12 +109,11 @@ struct FObjInfo
 class FObjDecoder
 {
 private:
-    // Todo: Bin - 한 디코더가 먼저 로딩한 공유 머티리얼을 모든 OBJ가 참조한다.
-    TArray<FMaterialBinaryEntry> MaterialEntries;
-    TMap<FString, TArray<FObjMaterialInfo>> ParsedMaterialsByLibrary;
-    TMap<FString, FObjMaterialInfo> ParsedMaterialsById;
-    const FObjDecoder* MaterialLibraryOwner = nullptr;
+    // Todo: Bin - 이름이 전역적으로 유일한 공유 머티리얼 목록.
+    TArray<FObjMaterialInfo> CachedMaterials;
+
     bool bMaterialsLoaded = false;
+    const FObjMaterialInfo* FindCachedMaterial(std::string_view MaterialName) const;
     void ResolveSectionMaterials(FObjModelData& Model) const;
     FObjInfo ObjInfo;
 
@@ -179,14 +172,14 @@ public:
     bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
     bool LoadMaterials(const FString& AssetRoot, const TArray<FString>& SearchRoots);
     bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
-    const TArray<FMaterialBinaryEntry>& GetMaterials() const { return MaterialEntries; }
+    const TArray<FObjMaterialInfo>& GetMaterials() const { return CachedMaterials; }
 
     static bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
     static bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
     static bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
     static bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
-    static bool SerializeMaterials(FBinArchive& Archive, const TArray<FMaterialBinaryEntry>& Materials);
-    static bool DeserializeMaterials(FBinArchive& Archive, TArray<FMaterialBinaryEntry>& OutMaterials);
-    static bool SaveMaterialsBinary(const FString& Path, const TArray<FMaterialBinaryEntry>& Materials);
-    static bool LoadMaterialsBinary(const FString& Path, TArray<FMaterialBinaryEntry>& OutMaterials);
+    static bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
+    static bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
+    static bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
+    static bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
 };

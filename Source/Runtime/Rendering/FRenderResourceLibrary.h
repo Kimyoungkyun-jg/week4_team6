@@ -24,8 +24,7 @@ struct FTextVertex {
 
 struct FObjMaterialInfo
 {
-    // Todo: Bin - 실행 중 등록 키. MTL 상대 경로와 원래 이름으로 재구성한다.
-    FString MaterialId;
+    // Todo: Bin - 모든 OBJ 머티리얼 이름은 전역적으로 유일하므로 이름을 등록 키로 사용한다.
     FString MaterialName; // Name -> MaterialName으로 통일
 
     FVector Ambient{ 0.2f, 0.2f, 0.2f };   // Ka 주변 색상

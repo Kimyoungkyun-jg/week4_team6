@@ -535,11 +535,10 @@ bool FRenderResourceLibrary::Initialize(FRenderer& Renderer) {
 
 
 TSharedPtr<FMaterial> FRenderResourceLibrary::CreateAndRegisterMaterialFromInfo(const FObjMaterialInfo& Info) {
-    // Todo: Bin - MTL 경로를 포함한 ID로 같은 이름의 머티리얼 충돌을 방지한다.
-    const FString& MaterialKey = Info.MaterialId.empty() ? Info.MaterialName : Info.MaterialId;
+    // Todo: Bin - 모든 OBJ 머티리얼 이름은 전역적으로 유일하므로 이름을 등록 키로 사용한다.
+    const FString& MaterialKey = Info.MaterialName;
     if (auto ExistingMat = GetMaterial(MaterialKey))
     {
-
         return ExistingMat;
     }
 
@@ -557,7 +556,6 @@ TSharedPtr<FMaterial> FRenderResourceLibrary::CreateAndRegisterMaterialFromInfo(
 
     // 파이프라인 및 텍스처 설정
     FName PipelineName = FName("Simple_Solid");
-
     if (DiffuseTex)
     {
         const bool bIsTranslucent = (Info.Opacity < 0.99f || !Info.AlphaTextureName.empty() ||
@@ -571,6 +569,7 @@ TSharedPtr<FMaterial> FRenderResourceLibrary::CreateAndRegisterMaterialFromInfo(
     {
         Material->SetNormalMap(NormalTex);
     }
+
     if (SpecularTex)
     {
         Material->SetSpecularMap(SpecularTex);
@@ -1561,136 +1560,125 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     const std::filesystem::path ExeDir(GetExecutableDirectory());
     const std::filesystem::path ProjectRoot = ExeDir.parent_path().parent_path().parent_path();
 
-    // Todo: Bin - OBJ를 어느 검색 경로에서 찾더라도 캐시는 Resources/Assets에 모은다.
-    std::filesystem::path BinaryRoot = ProjectRoot / L"Resources" / L"Assets";
-    std::error_code CacheError;
-    const auto WorkingAssets = std::filesystem::current_path() / L"Resources" / L"Assets";
-    if (!std::filesystem::exists(BinaryRoot, CacheError)
-        && std::filesystem::exists(WorkingAssets, CacheError)) 
+    // Todo: Bin - OBJ, MTL, bin 파일은 모두 Resources/Assets에 위치한다.
+    const std::filesystem::path AssetRoot = ProjectRoot / L"Resources" / L"Assets";
+    std::error_code Error;
+    /*
+    if (!std::filesystem::exists(AssetRoot, Error)
+        || Error
+        || !std::filesystem::is_directory(AssetRoot, Error)
+        || Error)
     {
-        BinaryRoot = WorkingAssets;
+        UE_LOG_WARN("[OBJ Loader] Assets 폴더를 찾을 수 없습니다: %s", AssetRoot.string().c_str());
+        return false;
     }
-
-    std::filesystem::create_directories(BinaryRoot, CacheError);
-
-    TArray<std::filesystem::path> SearchRoots = 
-    {
-        ProjectRoot / L"Resources" / L"Assets",
-        std::filesystem::current_path() / L"Resources" / L"Assets",
-        ProjectRoot / L"Assets",
-        std::filesystem::current_path() / L"Assets",
-        ExeDir / L"Assets",
-    };
-
-    // Todo: Bin - 각 OBJ를 처리하기 전에 전체 머티리얼을 확보한다.
-    TArray<FString> MaterialSearchRoots;
-    for (const auto& Root : SearchRoots)
-    {
-        MaterialSearchRoots.push_back(Root.string());
-    }
+    */
 
     FObjDecoder Decoder;
-    if (Decoder.LoadMaterials(BinaryRoot.string(), MaterialSearchRoots) == false)
+    // Todo: Bin - Resources/Assets의 MTL을 읽고 같은 폴더에 Materials.bin을 저장한다.
+    if (!Decoder.LoadMaterials(AssetRoot.string(), { AssetRoot.string() }))
     {
         return false;
     }
 
     // Todo: Bin - GPU 머티리얼 생성/등록만 리소스 라이브러리에서 수행한다.
-    for (const auto& Entry : Decoder.GetMaterials())
+    for (const FObjMaterialInfo& Material : Decoder.GetMaterials())
     {
-        CreateAndRegisterMaterialFromInfo(Entry.Material);
+        // Todo: Bin - Materials.bin에서 복원한 머티리얼 정보를 직접 등록한다.
+        CreateAndRegisterMaterialFromInfo(Material);
     }
 
-    for (const auto& Root : SearchRoots) 
+    // Todo: Bin - Resources/Assets 아래의 OBJ를 한 번만 탐색한다.
+    std::filesystem::recursive_directory_iterator Entries(AssetRoot, Error);
+    /*
+    if (Error)
     {
-        std::error_code Ec;
-        if (std::filesystem::exists(Root, Ec) == false) 
+        UE_LOG_WARN("[OBJ Loader] Assets 폴더 탐색 실패: %s", AssetRoot.string().c_str());
+        return false;
+    }
+    */
+
+    for (const auto& Entry : Entries)
+    {
+        if (!Entry.is_regular_file())
         {
             continue;
         }
 
-        for (const auto& Entry : std::filesystem::recursive_directory_iterator(Root, Ec)) 
+        //.obj 확장자 체크
+        std::string FileExtension = Entry.path().extension().string();
+        //std::transform(FileExtension.begin(), FileExtension.end(), FileExtension.begin(), ::tolower);
+        if (FileExtension != ".obj")
         {
-            //.obj 확장자 체크
-            std::string Ext = Entry.path().extension().string();
-            std::transform(Ext.begin(), Ext.end(), Ext.begin(), ::tolower);
-
-            if (Ext != ".obj")
-            {
-                continue;
-            }
-
-            // 파일명을 MeshID(FName)로 사용
-            std::string StemName = Entry.path().stem().string();
-            FName MeshKey(StemName);
-
-            // 이미 로드된 메시는 건너뜀
-            if (AllFStaticMeshMap.find(StemName) != AllFStaticMeshMap.end()) 
-            {
-                continue;
-            }
-
-            const FString ObjPath = std::filesystem::absolute(Entry.path()).string();
-
-            // Todo: Bin - Materials.obj도 공유 Materials.bin을 덮어쓰지 않도록 예외 이름을 사용한다.
-            FString CacheName = StemName;
-            FString LowerName = CacheName;
-            std::transform(LowerName.begin(), LowerName.end(), LowerName.begin(), ::tolower);
-            CacheName += LowerName == "materials" ? ".mesh.bin" : ".bin";
-            const FString BinaryPath = (BinaryRoot / CacheName).string();
-            
-            FObjModelData ModelData;
-            // Todo: 덮어쓰도록 수정하기
-            // Todo: Bin - OBJ 캐시만 로딩/생성한다. Materials.bin은 이 단계에서 쓰지 않는다.
-            if (!Decoder.LoadObj(ObjPath, BinaryPath, ModelData))
-            {
-                UE_LOG_WARN("[OBJ Loader] 로딩 실패: %s", ObjPath.c_str());
-                continue;
-            }
-
-            FMeshDesc Desc {
-                .VertexData = ModelData.Vertices.data(),
-                .VertexDataSize = static_cast<uint32>(sizeof(FVertexData) *
-                                                      ModelData.Vertices.size()),
-                .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
-                .VertexCount = static_cast<uint32>(ModelData.Vertices.size()),
-
-                .IndexData = ModelData.Indices.data(),
-                .IndexDataSize =
-                    static_cast<uint32>(sizeof(uint32) * ModelData.Indices.size()),
-                .IndexCount = static_cast<uint32>(ModelData.Indices.size()),
-                .bIsLine = false };
-
-            TSharedPtr<FStaticMesh> StaticMesh = Renderer.CreateMesh(Desc);
-            // Todo: Bin - GPU 생성 실패 후 섹션을 역참조하지 않는다.
-            if (!StaticMesh) 
-            {
-                UE_LOG_WARN("[OBJ Loader] GPU 메시 생성 실패: %s", ObjPath.c_str());
-                continue;
-            }
-
-            if (StaticMesh) 
-            {
-                StaticMesh->PathFileName = Entry.path().string();
-                StaticMesh->MeshId = MeshKey;
-                StaticMesh->Sections = std::move(ModelData.Sections);
-
-                RegisterMesh(MeshKey, StaticMesh);
-                UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u, 섹션: %zu)",
-                    StemName.c_str(), ModelData.Vertices.size(),
-                    ModelData.Indices.size(), StaticMesh->Sections.size());
-            }
-
-            TArray<FString> mats;
-            mats.reserve(StaticMesh->Sections.size());
-
-            for (const auto& Section : StaticMesh->Sections)
-            {
-                mats.push_back(Section.MaterialName);
-            }
-
-            CreateAndRegisterUStaticMesh(MeshKey, std::move(mats), StaticMesh);
+            continue;
         }
+
+        // 파일명을 MeshID(FName)로 사용
+        std::string StemName = Entry.path().stem().string();
+        FName MeshKey(StemName);
+
+        // 이미 로드된 메시는 건너뜀
+        if (AllFStaticMeshMap.find(StemName) != AllFStaticMeshMap.end())
+        {
+            continue;
+        }
+
+        const FString ObjPath = std::filesystem::absolute(Entry.path()).string();
+
+        // Todo: Bin - Materials.obj는 없고 OBJ 이름은 유일하므로 메시 이름으로 캐시 파일을 만든다.
+        const FString CacheName = StemName + ".bin";
+        // Todo: Bin - OBJ 캐시는 Resources/Assets/<메시 이름>.bin으로 저장한다.
+        const FString BinaryPath = (AssetRoot / CacheName).string();
+
+        FObjModelData ModelData;
+        // Todo: Bin - OBJ 캐시만 로딩/생성한다. Materials.bin은 이 단계에서 쓰지 않는다.
+        if (!Decoder.LoadObj(ObjPath, BinaryPath, ModelData))
+        {
+            UE_LOG_WARN("[OBJ Loader] 로딩 실패: %s", ObjPath.c_str());
+            continue;
+        }
+
+        FMeshDesc Desc
+        {
+            .VertexData = ModelData.Vertices.data(),
+            .VertexDataSize = static_cast<uint32>(sizeof(FVertexData) *
+                                                  ModelData.Vertices.size()),
+            .VertexStride = static_cast<uint32>(sizeof(FVertexData)),
+            .VertexCount = static_cast<uint32>(ModelData.Vertices.size()),
+
+            .IndexData = ModelData.Indices.data(),
+            .IndexDataSize =
+                static_cast<uint32>(sizeof(uint32) * ModelData.Indices.size()),
+            .IndexCount = static_cast<uint32>(ModelData.Indices.size()),
+            .bIsLine = false
+        };
+
+        TSharedPtr<FStaticMesh> StaticMesh = Renderer.CreateMesh(Desc);
+        /*
+        if (!StaticMesh)
+        {
+            UE_LOG_WARN("[OBJ Loader] GPU 메시 생성 실패: %s", ObjPath.c_str());
+            continue;
+        }
+        */
+        
+        StaticMesh->PathFileName = Entry.path().string();
+        StaticMesh->MeshId = MeshKey;
+        StaticMesh->Sections = std::move(ModelData.Sections);
+
+        RegisterMesh(MeshKey, StaticMesh);
+        UE_LOG("[OBJ Loader] 로드 완료: %s (정점: %u, 인덱스: %u, 섹션: %zu)",
+            StemName.c_str(), ModelData.Vertices.size(),
+            ModelData.Indices.size(), StaticMesh->Sections.size());
+
+        TArray<FString> mats;
+        mats.reserve(StaticMesh->Sections.size());
+        for (const auto& Section : StaticMesh->Sections)
+        {
+            mats.push_back(Section.MaterialName);
+        }
+
+        CreateAndRegisterUStaticMesh(MeshKey, std::move(mats), StaticMesh);
     }
 
     return true;

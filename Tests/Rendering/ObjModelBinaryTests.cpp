@@ -66,15 +66,15 @@ int main()
             && Loaded.Sections[0].LocalBounds.Min.Y == -2, "sections");
         Check(Loaded.Materials.empty(), "mesh cache must not contain material definitions");
         Check(Loaded.Groups[0].Name == "Group" && Loaded.ObjectNames[0].Name == "Object", "metadata");
-        TArray<FMaterialBinaryEntry> MaterialEntries{
-            { "Common.mtl", Model.Materials[0] }, { "Other.mtl", Model.Materials[1] } };
+        // Todo: Bin - Materials.bin은 경로 Entry 없이 머티리얼 배열을 직접 저장한다.
+        TArray<FObjMaterialInfo> MaterialEntries = Model.Materials;
         FBinArchive MaterialArchive;
         Check(FObjDecoder::SerializeMaterials(MaterialArchive, MaterialEntries), "materials serialize");
-        TArray<FMaterialBinaryEntry> RestoredMaterials;
+        TArray<FObjMaterialInfo> RestoredMaterials;
         Check(FObjDecoder::DeserializeMaterials(MaterialArchive, RestoredMaterials), "materials deserialize");
-        Check(RestoredMaterials[0].Material.NormalTextureName == "normal.png"
-            && RestoredMaterials[1].Material.Opacity == 0.2f
-            && RestoredMaterials[1].Material.DecalTexture == "decal.png", "material fields");
+        Check(RestoredMaterials[0].NormalTextureName == "normal.png"
+            && RestoredMaterials[1].Opacity == 0.2f
+            && RestoredMaterials[1].DecalTexture == "decal.png", "material fields");
         for (size_t Length = 0; Length < MaterialArchive.GetBytes().size(); ++Length)
         {
             FBinArchive Truncated;
@@ -94,7 +94,8 @@ int main()
             Loaded.PathFileName = "unchanged";
             Check(!FObjDecoder::DeserializeObjModel(Truncated, Loaded) && Loaded.PathFileName == "unchanged", "truncated input");
         }
-        for (size_t Offset : { size_t(0), size_t(4), size_t(8) })
+        // Todo: Bin - 버전 필드 제거 후 시그니처와 문자열 길이 위치를 손상시킨다.
+        for (size_t Offset : { size_t(0), size_t(4) })
         {
             auto Corrupt = Bytes;
             Corrupt[Offset] = 0xff;
@@ -139,26 +140,36 @@ int main()
             "usemtl Body\nf 1/1/1 2/2/1 3/3/1\n";
         const FString FirstObj = "mtllib Common.mtl\n" + Geometry;
         WriteText(Fixture / "Common.mtl", "newmtl Body\nKd 1 0 0\nd 0.25\nmap_Kd body.png\n");
-        WriteText(Fixture / "Other.mtl", "newmtl Body\nKd 0 1 0\nd 0.8\n");
+        WriteText(Fixture / "Other.mtl", "newmtl Glass\nKd 0 1 0\nd 0.8\n");
+        // Todo: Bin - 여러 MTL에 같은 전역 이름이 반복되면 첫 정의를 공유한다.
+        WriteText(Fixture / "ZZDuplicate.mtl", "newmtl Body\nKd 0 0 1\nd 0.1\n");
         WriteText(Fixture / "First.obj", FirstObj);
-        WriteText(Fixture / "Second.obj", "mtllib Other.mtl\n" + Geometry);
+        // Todo: Bin - 머티리얼 이름은 전역적으로 유일하다.
+        const FString SecondGeometry =
+            "v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+            "vt 0 0\nvt 1 0\nvt 0 1\nvn 0 0 1\n"
+            "usemtl Glass\nf 1/1/1 2/2/1 3/3/1\n";
+        WriteText(Fixture / "Second.obj", "mtllib Other.mtl\n" + SecondGeometry);
         FObjDecoder FirstDecoder;
         Check(FirstDecoder.LoadMaterials(Fixture.string(), { Fixture.string() }), "initial MTL parse");
-        Check(FirstDecoder.GetMaterials().size() == 2, "all materials loaded");
+        Check(FirstDecoder.GetMaterials().size() == 2
+            && FirstDecoder.GetMaterials()[0].MaterialName == "Body"
+            && FirstDecoder.GetMaterials()[0].Opacity == 0.25f, "global duplicate material uses first definition");
         const auto MaterialCache = Fixture / "Materials.bin";
         const auto MaterialTime = std::filesystem::last_write_time(MaterialCache);
         FObjModelData FirstMesh, SecondMesh;
         Check(FirstDecoder.LoadObj((Fixture / "First.obj").string(), (Fixture / "First.bin").string(), FirstMesh), "initial OBJ parse");
         Check(FirstDecoder.LoadObj((Fixture / "Second.obj").string(), (Fixture / "Second.bin").string(), SecondMesh), "second OBJ parse");
-        Check(FirstMesh.Sections[0].MaterialName == "Common.mtl#Body"
+        Check(FirstMesh.Sections[0].MaterialName == "Body"
             && FirstMesh.Sections[0].Opacity == 0.25f, "section references common material");
-        Check(SecondMesh.Sections[0].MaterialName == "Other.mtl#Body"
-            && SecondMesh.Sections[0].Opacity == 0.8f, "same-name materials isolated by MTL");
+        Check(SecondMesh.Sections[0].MaterialName == "Glass"
+            && SecondMesh.Sections[0].Opacity == 0.8f, "section references global material name");
         Check(std::filesystem::last_write_time(MaterialCache) == MaterialTime, "OBJ load must not rewrite Materials.bin");
 
         // MTL을 지워도 Materials.bin이 있으면 파싱 없이 복원해야 한다.
         std::filesystem::remove(Fixture / "Common.mtl");
         std::filesystem::remove(Fixture / "Other.mtl");
+        std::filesystem::remove(Fixture / "ZZDuplicate.mtl");
         WriteText(Fixture / "First.obj", "invalid source: cache must be used");
         FObjDecoder CachedDecoder;
         Check(CachedDecoder.LoadMaterials(Fixture.string(), { Fixture.string() }), "material cache hit");
@@ -166,7 +177,7 @@ int main()
         WriteText(Fixture / "Third.obj", FirstObj);
         FObjModelData ThirdMesh;
         Check(CachedDecoder.LoadObj((Fixture / "Third.obj").string(), (Fixture / "Third.bin").string(), ThirdMesh), "OBJ miss with cached materials");
-        Check(ThirdMesh.Sections[0].MaterialName == FirstMesh.Sections[0].MaterialName, "shared material ID");
+        Check(ThirdMesh.Sections[0].MaterialName == FirstMesh.Sections[0].MaterialName, "shared material name");
         Check(std::filesystem::last_write_time(MaterialCache) == MaterialTime, "OBJ miss must not rewrite Materials.bin");
 
         // 머티리얼 캐시만 없을 때는 MTL만 다시 만들고 기존 OBJ 캐시는 사용할 수 있다.
