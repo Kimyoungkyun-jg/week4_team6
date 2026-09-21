@@ -17,7 +17,8 @@ AInstancingActor::AInstancingActor()
 	if (auto* PrimComp = GetRootComponent()->Cast<UInstancePrimitiveComponent>())
 	{
 
-		PrimComp->SetStaticMesh(NewObject<UStaticMesh>(FName("MasterYi"), FName("Instance_Textured")));
+		PrimComp->SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("MasterYi"));
+		PrimComp->SetMaterial(0, FName("Instance_Textured"));
 		PrimComp->SetTextureID(FName("MasterYi_Head"));
 	}
 

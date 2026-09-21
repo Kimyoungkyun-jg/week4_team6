@@ -70,6 +70,7 @@ void UClass::ResolveTypeBitsets()
 
         _class->ResolveTypeBitset(_class.get());
     }
+    bTypeBitsetsResolved = true;
 }
 
 void UClass::ResolveTypeBitset(UClass* classPtr)
@@ -96,5 +97,5 @@ void UClass::ResolveTypeBitset(UClass* classPtr)
         cur->processed = true;
 
         stack.pop_back();
-    }
+    }    
 }

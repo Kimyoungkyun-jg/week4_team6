@@ -123,7 +123,7 @@ void FEditorApplication::Tick(float DeltaTime) {
     {
         bFirstInit = false;
         UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh("Cube");
-        OpenPreviewWindow(Mesh);
+        OpenPreviewWindow(Mesh, EPrevType::Mesh);
     }
 
     for (const auto& Window : PreviewWindows)

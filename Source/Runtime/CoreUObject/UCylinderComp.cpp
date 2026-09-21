@@ -9,5 +9,6 @@ UCLASS_META(UCylinderComp, MeshName, "Cylinder")
 
 void UCylinderComp::Initialize() {
   Super::Initialize();
-  SetStaticMesh(NewObject<UStaticMesh>(FName("Cylinder"), FName("Simple")));
+  SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Cylinder"));
+  SetMaterial(0, FName("Simple"));
 }

@@ -328,6 +328,9 @@
     <ClCompile Include="Source\Runtime\Rendering\FPreviewRenderTarget.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\Core\FObjectIterator.cpp">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h">
@@ -628,6 +631,15 @@
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiPreviewEditorWindow.h" />
     <ClInclude Include="Source\Runtime\Actors\AStaticMeshActor.h" />
     <ClInclude Include="Source\Runtime\Rendering\FPreviewRenderTarget.h" />
+    <ClInclude Include="Source\Runtime\Core\TObjectIterator.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Core\TSet.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Core\FObjectIterator.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">

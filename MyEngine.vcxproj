@@ -402,6 +402,7 @@
     <ClCompile Include="Source\Runtime\CoreUObject\USpotLightComponent.cpp" />
     <ClCompile Include="Source\Runtime\Core\FName.cpp" />
     <ClCompile Include="Source\Runtime\Core\FNamePool.cpp" />
+    <ClCompile Include="Source\Runtime\Core\FObjectIterator.cpp" />
     <ClCompile Include="Source\Runtime\Engine\FArchive.cpp" />
     <ClCompile Include="Source\Runtime\Engine\FCamera.cpp" />
     <ClCompile Include="Source\Runtime\Engine\FRayCastingManager.cpp" />
@@ -507,6 +508,9 @@
     <ClInclude Include="Source\Editor\Core\FEditor.h" />
     <ClInclude Include="Source\Editor\Core\FEditorState.h" />
     <ClInclude Include="Source\Editor\Visualizer\FTextVisualizer.h" />
+    <ClInclude Include="Source\Runtime\Core\FObjectIterator.h" />
+    <ClInclude Include="Source\Runtime\Core\TObjectIterator.h" />
+    <ClInclude Include="Source\Runtime\Core\TSet.h" />
     <ClInclude Include="Source\Runtime\Engine\FSceneView.h" />
     <ClInclude Include="Source\Editor\Grid\FGrid.h" />
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiContentsDrawer.h" />
