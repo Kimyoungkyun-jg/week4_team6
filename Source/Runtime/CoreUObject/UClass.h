@@ -16,6 +16,7 @@ private:
 	static inline TArray<TUniquePtr<UClass>> classList;
 	static inline TMap<FString, uint32> nameToId;
 	static inline TMap<FString, uint32> displayNameToId;
+	static inline bool bTypeBitsetsResolved = false;
 	FString className, superClassTypeName;
 	TFunction<UObject* ()> createFunction;
 	uint32 typeId;
@@ -41,6 +42,7 @@ public:
 	bool IsChildOrSelfOf(UClass* baseClass) const;
 
 	[[nodiscard]] const FString& GetUClassName() const { return className; }
+	[[nodiscard]] static bool AreTypeBitsetsResolved() { return bTypeBitsetsResolved; }
 
 	static UClass* FindClassWithDisplayName(const FString& name)
 	{

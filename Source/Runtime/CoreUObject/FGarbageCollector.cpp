@@ -31,13 +31,15 @@ void FGarbageCollector::CollectGarbage()
 	// 스위프 단계
 	FUObjectArray& ObjectArray = FUObjectArray::Get();
 
-	uint32 Index = 0;
+	uint32 MaxIndex = ObjectArray.GetMaxIndex();
 
-	while (Index < ObjectArray.GetNumObjects()) {
+	for (uint32 Index = 0; Index < MaxIndex; Index++)
+	{
 		UObject* Object = ObjectArray.GetObjectByIndex(Index);
-		if (Collector.bIsReferenced(Object))
-			++Index;
-		else
+		if (Object == nullptr)
+			continue;
+
+		if (!Collector.bIsReferenced(Object))
 			ObjectArray.DestroyObject(Object);
 	}
 }

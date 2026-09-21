@@ -98,6 +98,8 @@ public:
 
 	void SetUUID(uint32 _UUID) { UUID = _UUID; }
 
+	uint32 GetInternalIndex() const { return (InternalIndex); }
+
 	virtual void Initialize();
 	virtual void Release();
 

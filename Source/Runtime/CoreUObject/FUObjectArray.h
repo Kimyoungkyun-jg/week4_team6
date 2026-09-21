@@ -17,9 +17,10 @@ public:
 
 	void SetNextUUID(uint32 UUID);
 	[[nodiscard]] uint32 GetNextUUID() const { return NextUUID; }
-	[[nodiscard]] uint32 GetNumObjects() const { return static_cast<uint32>(Objects.size()); }
-	[[nodiscard]] UObject* GetObjectByIndex(uint32 Index) const { return Objects[Index]; }
-	[[nodiscard]] bool IsValid(const UObject* Object, uint32 UUID) const;
+	[[nodiscard]] uint32 GetMaxIndex() const { return static_cast<uint32>(Objects.size()); }
+	[[nodiscard]] uint32 GetNumObjects() const { return static_cast<uint32>(Objects.size() - FreeIndices.size()); }
+	[[nodiscard]] UObject* GetObjectByIndex(uint32 Index) const { return (Index < Objects.size() ? Objects[Index] : nullptr); } //free된 인덱스거나 범위를 벗어나면 nullptr을 반환한다.
+	//[[nodiscard]] bool IsValid(const UObject* Object, uint32 UUID) const;
 
 	FUObjectArray(const FUObjectArray&) = delete;
 	FUObjectArray& operator=(const FUObjectArray&) = delete;
@@ -36,7 +37,8 @@ private:
 
 	[[nodiscard]] uint32 AcquireUUID() { return NextUUID++; }
 
-	TArray<UObject*> Objects;
+	TArray<UObject*>	Objects;
+	TArray<uint32>		FreeIndices;
 	uint32 NextUUID = 1u;
 
 	template <typename TObject, typename ... TArgs>

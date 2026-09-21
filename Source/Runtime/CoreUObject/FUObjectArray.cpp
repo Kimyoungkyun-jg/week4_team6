@@ -10,6 +10,17 @@ void FUObjectArray::SetNextUUID(uint32 UUID)
 
 void FUObjectArray::AddObject(UObject* Object)
 {
+	if (!FreeIndices.empty())
+	{
+		uint32 Index = FreeIndices.back();
+		FreeIndices.pop_back();
+
+		Object->InternalIndex = Index;
+		Object->UUID = AcquireUUID();
+		Objects.at(Index) = Object;
+		return;
+	}
+
 	Object->InternalIndex = static_cast<uint32>(Objects.size());
 	Object->UUID = AcquireUUID();
 	Objects.push_back(Object);
@@ -20,12 +31,15 @@ void FUObjectArray::RemoveObject(UObject* Object)
 	const uint32 Index = Object->InternalIndex;
 	assert(Index < Objects.size() && Objects[Index] == Object);
 
-	UObject* LastObject = Objects.back();
+	FreeIndices.push_back(Index);
+	Objects.at(Index) = nullptr;
 
-	Objects[Index] = LastObject;
-	LastObject->InternalIndex = Index;
+	//UObject* LastObject = Objects.back();
 
-	Objects.pop_back();
+	//Objects[Index] = LastObject;
+	//LastObject->InternalIndex = Index;
+
+	//Objects.pop_back();
 }
 
 void FUObjectArray::DestroyObject(UObject* Object) {
@@ -36,10 +50,10 @@ void FUObjectArray::DestroyObject(UObject* Object) {
 	delete Object; // 오버라이드해서 통계 구현 필요
 }
 
-bool FUObjectArray::IsValid(const UObject* Object, uint32 UUID) const
-{
-	if (Object == nullptr || UUID == 0) return false;
-
-	const auto It = std::find(Objects.begin(), Objects.end(), Object);
-	return It != Objects.end() && (*It)->UUID == UUID;
-}
+//bool FUObjectArray::IsValid(const UObject* Object, uint32 UUID) const
+//{
+//	if (Object == nullptr || UUID == 0) return false;
+//
+//	const auto It = std::find(Objects.begin(), Objects.end(), Object);
+//	return It != Objects.end() && (*It)->UUID == UUID;
+//}

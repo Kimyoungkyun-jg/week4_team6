@@ -624,6 +624,9 @@
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiPreviewEditorWindow.h" />
     <ClInclude Include="Source\Runtime\Actors\AStaticMeshActor.h" />
     <ClInclude Include="Source\Runtime\Rendering\FPreviewRenderTarget.h" />
+    <ClInclude Include="Source\Runtime\Core\TObjectIterator.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">
