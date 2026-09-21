@@ -618,6 +618,10 @@
     <ClInclude Include="Source\Runtime\CoreUObject\UStaticMesh.h">
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClInclude>
+    <!-- Todo: Bin - 바이너리 저장소와 파일 입출력 클래스 -->
+    <ClInclude Include="Source\Runtime\Rendering\FBinArchive.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FWindowsBinReader.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FWindowsBinWriter.h" />
     <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h">
       <Filter>Source\Runtime\Rendering</Filter>
     </ClInclude>

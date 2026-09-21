@@ -201,7 +201,8 @@ HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
     return nullptr;
   }
 
-  OutSplashWnd = ShowLoadingWindow(Instance);
+  // Todo: Does not work on debug mode
+  //OutSplashWnd = ShowLoadingWindow(Instance);
   HWND Window = CreateWindowExW(0, WindowClass.lpszClassName, WindowName,
                                 WS_POPUP | WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
                                 CW_USEDEFAULT, 1200, 800, nullptr, nullptr,
