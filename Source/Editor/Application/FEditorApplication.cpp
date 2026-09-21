@@ -98,7 +98,6 @@ void FEditorApplication::BeginFrame() { ImguiManager.NewFrame(); }
 
 void FEditorApplication::Tick(float DeltaTime) {
 
-
   ToolBar.Process(Editor, ConsoleWindow, ControlPanelWindow, PropertyWindow);
   EditorViewportWindow.Process(Editor, DeltaTime);
   WorldOutliner.Process(Editor);
@@ -106,6 +105,8 @@ void FEditorApplication::Tick(float DeltaTime) {
   PropertyWindow.Process(Editor);
   ConsoleWindow.Process(Editor);
   ContentsDrawer.Process(Editor);
+  StatFps.Process(Editor, DeltaTime, WindowSize);
+  StatMemory.Process(Editor);
 
   // 다중 프리뷰 창 UI 실행
   for (const auto& Window : PreviewWindows)
@@ -239,11 +240,9 @@ void FEditorApplication::Render() {
 
 void FEditorApplication::OnWindowSize(UINT Width, UINT Height) {
   // 뷰포트 종횡비 갱신
+  WindowSize = FVector2(static_cast<float>(Width), static_cast<float>(Height));
   for (auto &Viewport : Editor.GetViewports()) {
-    const FVector2 SizePixels =
-        Viewport.LengthUV *
-        FVector2{static_cast<float>(Width), static_cast<float>(Height)};
-
+    const FVector2 SizePixels = Viewport.LengthUV * WindowSize;
     auto &Camera = Viewport.ViewportCamera;
     Camera.Projection.Aspect = SizePixels.X / SizePixels.Y;
   }

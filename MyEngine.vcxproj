@@ -405,6 +405,7 @@
     <ClInclude Include="Source\Editor\Core\FConfigArchive.h" />
     <ClInclude Include="Source\Editor\Core\FEditor.h" />
     <ClInclude Include="Source\Editor\Core\FEditorState.h" />
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiOverlayStat.h" />
     <ClInclude Include="Source\Editor\Visualizer\FTextVisualizer.h" />
     <ClInclude Include="Source\Runtime\Engine\FSceneView.h" />
     <ClInclude Include="Source\Editor\Grid\FGrid.h" />
