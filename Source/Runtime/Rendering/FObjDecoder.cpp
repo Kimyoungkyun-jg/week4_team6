@@ -1,3 +1,4 @@
+
 #include "FObjDecoder.h"
 // Todo: Bin - 메모리 저장소와 파일 I/O만 분리하고 모델 변환은 이 디코더에서 처리한다.
 #include "FBinArchive.h"
@@ -18,7 +19,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 namespace
 {
     // Todo: Bin - 실제 파일이 없어도 캐시에 저장된 라이브러리 경로를 조회할 수 있다.
@@ -27,9 +27,11 @@ namespace
         std::error_code Error;
         // Todo: Bin - 캐시만 남아 있어도 조회 가능해야 하므로 원본 파일 상태를 검사하지 않는다.
         FString Key = std::filesystem::absolute(Path, Error).lexically_normal().generic_string();
-        if (Error) return {};
+		//if (Error) return {};
+
         std::transform(Key.begin(), Key.end(), Key.begin(),
             [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
+
         return Key;
     }
 
@@ -273,9 +275,6 @@ namespace
 
 		return FString(Stem);
 	}
-
-
-
 }
 
 // v x y z [w] [r g b]
@@ -1668,6 +1667,7 @@ bool FObjDecoder::SerializeMaterials(FBinArchive& Archive, const TArray<FObjMate
 {
     Archive.Clear();
     // Todo: Bin - 별도 Entry와 버전 없이 머티리얼 배열을 직접 저장한다.
+
     return Archive.SerializeUInt32(MaterialFileSignature)
         && SerializeArray(Archive, Materials, SerializeMaterial);
 }
@@ -1866,8 +1866,7 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
     }
 
     FObjModelData Loaded;
-    if (LoadObjModelBinary(BinaryPath, Loaded)
-        && NormalizeMaterialPath(Loaded.PathFileName) == NormalizeMaterialPath(ObjPath))
+    if (LoadObjModelBinary(BinaryPath, Loaded) && NormalizeMaterialPath(Loaded.PathFileName) == NormalizeMaterialPath(ObjPath))
     {
         UE_LOG("[OBJ Cache] Hit: %s", BinaryPath.c_str());
     }
@@ -1875,9 +1874,14 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
     {
         UE_LOG("[OBJ Cache] Miss: OBJ 파싱 %s", ObjPath.c_str());
         Loaded = FObjModelData{};
-        if (!DecodeFromFile(ObjPath, Loaded)) return false;
+
+		if (DecodeFromFile(ObjPath, Loaded) == false)
+		{
+			return false;
+		}
+			
         Loaded.bIsValid = true;
-        if (!SaveObjModelBinary(BinaryPath, Loaded))
+        if (SaveObjModelBinary(BinaryPath, Loaded) == false)
         {
             UE_LOG_WARN("[OBJ Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.c_str());
         }
@@ -1885,5 +1889,6 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
 
     ResolveSectionMaterials(Loaded);
     OutModel = std::move(Loaded);
+
     return true;
 }

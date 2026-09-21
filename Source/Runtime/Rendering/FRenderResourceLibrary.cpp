@@ -537,9 +537,9 @@ bool FRenderResourceLibrary::Initialize(FRenderer& Renderer) {
 TSharedPtr<FMaterial> FRenderResourceLibrary::CreateAndRegisterMaterialFromInfo(const FObjMaterialInfo& Info) {
     // Todo: Bin - 모든 OBJ 머티리얼 이름은 전역적으로 유일하므로 이름을 등록 키로 사용한다.
     const FString& MaterialKey = Info.MaterialName;
-    if (auto ExistingMat = GetMaterial(MaterialKey))
+    if (auto ExistingMtl = GetMaterial(MaterialKey))
     {
-        return ExistingMat;
+        return ExistingMtl;
     }
 
     auto Material = std::make_shared<FMaterial>();
@@ -1560,7 +1560,6 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     const std::filesystem::path ExeDir(GetExecutableDirectory());
     const std::filesystem::path ProjectRoot = ExeDir.parent_path().parent_path().parent_path();
 
-    // Todo: Bin - OBJ, MTL, bin 파일은 모두 Resources/Assets에 위치한다.
     const std::filesystem::path AssetRoot = ProjectRoot / L"Resources" / L"Assets";
     std::error_code Error;
     /*
@@ -1575,20 +1574,16 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     */
 
     FObjDecoder Decoder;
-    // Todo: Bin - Resources/Assets의 MTL을 읽고 같은 폴더에 Materials.bin을 저장한다.
     if (!Decoder.LoadMaterials(AssetRoot.string()))
     {
         return false;
     }
 
-    // Todo: Bin - GPU 머티리얼 생성/등록만 리소스 라이브러리에서 수행한다.
     for (const FObjMaterialInfo& Material : Decoder.GetMaterials())
     {
-        // Todo: Bin - Materials.bin에서 복원한 머티리얼 정보를 직접 등록한다.
         CreateAndRegisterMaterialFromInfo(Material);
     }
 
-    // Todo: Bin - Resources/Assets 아래의 OBJ를 한 번만 탐색한다.
     std::filesystem::recursive_directory_iterator Entries(AssetRoot, Error);
     /*
     if (Error)
@@ -1608,9 +1603,7 @@ bool FRenderResourceLibrary::CreateObjMeshes()
             continue;
         }
 
-        //.obj 확장자 체크
         std::string FileExtension = Entry.path().extension().string();
-        //std::transform(FileExtension.begin(), FileExtension.end(), FileExtension.begin(), ::tolower);
         if (FileExtension != OBJ_EXTENSION)
         {
             continue;
@@ -1620,7 +1613,6 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         std::string StemName = Entry.path().stem().string();
         FName MeshKey(StemName);
 
-        // 이미 로드된 메시는 건너뜀
         if (AllFStaticMeshMap.find(StemName) != AllFStaticMeshMap.end())
         {
             continue;
@@ -1628,15 +1620,15 @@ bool FRenderResourceLibrary::CreateObjMeshes()
 
         const FString ObjPath = std::filesystem::absolute(Entry.path()).string();
 
-        // Todo: Bin - Materials.obj는 없고 OBJ 이름은 유일하므로 메시 이름으로 캐시 파일을 만든다.
-        const FString CacheName = StemName + ".bin";
         // Todo: Bin - OBJ 캐시는 Resources/Assets/<메시 이름>.bin으로 저장한다.
+        const FString CacheName = StemName + ".bin";
         const FString BinaryPath = (AssetRoot / CacheName).string();
 
         FObjModelData ModelData;
-        if (!Decoder.LoadObj(ObjPath, BinaryPath, ModelData))
+        if (Decoder.LoadObj(ObjPath, BinaryPath, ModelData) == false)
         {
             UE_LOG_WARN("[OBJ Loader] 로딩 실패: %s", ObjPath.c_str());
+            
             continue;
         }
 
