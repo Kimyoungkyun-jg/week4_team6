@@ -13,11 +13,16 @@
 #include <cctype>
 #include "FImguiDragDrop.h"
 #include "Editor/Application/FEditorApplication.h"
+
+constexpr uint32_t HashStr(const char* str, uint32_t hash = 2166136261u)
+{
+	return *str ? HashStr(str + 1, (hash ^ static_cast<uint8_t>(*str)) * 16777619u) : hash;
+}
+
 FImguiContentsDrawer::FImguiContentsDrawer() : LeftPanelWidth(200.0f)
 {
 	RootPath = std::filesystem::current_path() / "Resources";
 	CurrentPath = RootPath;
-
 }
 
 void FImguiContentsDrawer::Process(FEditor& Editor)
@@ -26,21 +31,20 @@ void FImguiContentsDrawer::Process(FEditor& Editor)
 
 	// GetContentRegionAvail은 Begin 다음에 불러야 이 창의 남은 영역이 나온다.
 	// Begin 이전에 부르면 직전 창의 값이라 자식 패널이 창 밖으로 삐져나간다.
-	ImVec2 contentSize = ImGui::GetContentRegionAvail();
+	ImVec2 ContentSize = ImGui::GetContentRegionAvail();
 
-	ImGui::BeginChild("LeftPanel", ImVec2(LeftPanelWidth, contentSize.y), true);
+	ImGui::BeginChild("LeftPanel", ImVec2(LeftPanelWidth, ContentSize.y), true);
 	RenderFolderTree();
 	ImGui::EndChild();
 
 	ImGui::SameLine();
 
 	// 폭 0은 남은 공간을 전부 쓰라는 뜻
-	ImGui::BeginChild("RightPanel", ImVec2(0.0f, contentSize.y), true);
+	ImGui::BeginChild("RightPanel", ImVec2(0.0f, ContentSize.y), true);
 	RenderContentView();
 	ImGui::EndChild();
 
 	ImGui::End();
-
 }
 
 void FImguiContentsDrawer::RefreshEntries()
@@ -52,13 +56,44 @@ void FImguiContentsDrawer::RefreshEntries()
 	// StaticMesh 폴더일 때는 라이브러리의 썸네일 맵 기준 목록 표시
 	if (CurrentPath.filename() == "StaticMesh")
 	{
+		std::error_code Ec;
+		if (!std::filesystem::exists(CurrentPath, Ec))
+		{
+			std::filesystem::create_directories(CurrentPath, Ec);
+		}
+
 		for (const auto& [Key, Thumb] : FRenderResourceLibrary::Get().GetAllMeshThumbnailMap())
 		{
 			FContentEntry Item;
 			Item.DisplayName = Key.ToString();
 			Item.Extension = ".staticmesh";
 			Item.bIsDirectory = false;
-			Item.Path = (RootPath / "StaticMesh") / (Key.ToString() + ".staticmesh");
+			Item.Path = CurrentPath / (Key.ToString() + ".staticmesh");
+			Entries.push_back(std::move(Item));
+		}
+		std::sort(Entries.begin(), Entries.end(),
+			[](const FContentEntry& A, const FContentEntry& B)
+			{
+				return A.DisplayName < B.DisplayName;
+			});
+		return;
+	}
+
+	if (CurrentPath.filename() == "Materials")
+	{
+		std::error_code Ec;
+		if (!std::filesystem::exists(CurrentPath, Ec))
+		{
+			std::filesystem::create_directories(CurrentPath, Ec);
+		}
+
+		for (const auto& [Key, Thumb] : FRenderResourceLibrary::Get().GetAllMaterialThumbnailMap())
+		{
+			FContentEntry Item;
+			Item.DisplayName = Key;
+			Item.Extension = ".material";
+			Item.bIsDirectory = false;
+			Item.Path = CurrentPath / (Key + ".material");
 			Entries.push_back(std::move(Item));
 		}
 		std::sort(Entries.begin(), Entries.end(),
@@ -107,7 +142,6 @@ TSharedPtr<FTexture> FImguiContentsDrawer::GetOrLoadThumbnail(const FContentEntr
 		return nullptr;
 	}
 
-	// 라이브러리 키는 소문자 stem이다. (FRenderResourceLibrary::CreateTextures와 동일)
 	FString Key = Item.Path.stem().string();
 	std::transform(Key.begin(), Key.end(), Key.begin(),
 		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -118,7 +152,6 @@ TSharedPtr<FTexture> FImguiContentsDrawer::GetOrLoadThumbnail(const FContentEntr
 		return Existing;
 	}
 
-	// 아직 없으면 디스크에서 읽는다. 프레임당 개수를 제한해 멈춤을 막는다.
 	if (LoadsThisFrame >= MaxLoadsPerFrame)
 	{
 		return nullptr;
@@ -133,9 +166,6 @@ TSharedPtr<FTexture> FImguiContentsDrawer::GetOrLoadThumbnail(const FContentEntr
 	++LoadsThisFrame;
 
 	TSharedPtr<FTexture> Texture = Renderer->CreateTexture(Item.Path.wstring().c_str());
-	//stbi_image_free(Pixels);
-
-	// 성공이든 실패든 등록해 둔다. 실패면 nullptr이 캐시되어 재시도를 막는다.
 	Lib.RegisterTexture(Key, Texture);
 	return Texture;
 }
@@ -144,14 +174,12 @@ void FImguiContentsDrawer::RenderContentView()
 {
 	LoadsThisFrame = 0;
 
-	// 좌측 트리에서 폴더를 바꿨으면 다시 읽는다.
 	if (bNeedsRefresh || CachedPath != CurrentPath)
 	{
 		RefreshEntries();
 	}
 
 	// ---------------- 상단 바 ----------------
-	// 루트 기준 상대 경로를 보여준다.
 	const std::filesystem::path Relative = std::filesystem::relative(CurrentPath, RootPath.parent_path());
 	ImGui::TextUnformatted(WideToUTF8(Relative.wstring()).c_str());
 
@@ -164,7 +192,6 @@ void FImguiContentsDrawer::RenderContentView()
 		if (ImGui::SmallButton("Up")) { CurrentPath = CurrentPath.parent_path(); }
 	}
 
-
 	ImGui::Separator();
 
 	if (Entries.empty())
@@ -175,29 +202,19 @@ void FImguiContentsDrawer::RenderContentView()
 
 	// ---------------- 타일 그리드 ----------------
 	const ImGuiStyle& Style = ImGui::GetStyle();
-	const float TileWidth = ThumbnailSize + Style.ItemSpacing.x;
-	const float Avail = ImGui::GetContentRegionAvail().x;
+	const float WindowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
 
-	// 패널을 좁히면 0이 되어 나눗셈이 깨지므로 최소 1로 막는다.
-	int Columns = static_cast<int>(Avail / TileWidth);
-	if (Columns < 1) { Columns = 1; }
-
-	// 폴더 진입은 순회 중에 CurrentPath를 바꾸면 안 되므로 따로 모아 뒀다가 끝나고 적용한다.
 	std::filesystem::path PendingNavigate;
 
 	for (int Index = 0; Index < static_cast<int>(Entries.size()); ++Index)
 	{
 		const FContentEntry& Item = Entries[Index];
 
-		// 같은 이름이 있어도 ID가 겹치지 않도록 인덱스로 구분한다.
 		ImGui::PushID(Index);
 		ImGui::BeginGroup();
 
 		const bool bSelected = (SelectedPath == Item.Path);
 
-		const TSharedPtr<FTexture> Thumbnail = GetOrLoadThumbnail(Item);
-
-		// 썸네일 SRV 결정
 		ID3D11ShaderResourceView* DisplaySRV = nullptr;
 
 		if (Item.bIsDirectory)
@@ -209,11 +226,17 @@ void FImguiContentsDrawer::RenderContentView()
 		}
 		else if (Item.Extension == ".staticmesh")
 		{
-			// 라이브러리에서 3D 스냅샷 썸네일 조회
 			const FName MeshKey(Item.DisplayName);
 			if (auto MeshTex = FRenderResourceLibrary::Get().GetMeshThumbnail(MeshKey))
 			{
 				DisplaySRV = MeshTex->GetSRV();
+			}
+		}
+		else if (Item.Extension == ".material")
+		{
+			if (auto MatTex = FRenderResourceLibrary::Get().GetMaterialThumbnail(Item.DisplayName))
+			{
+				DisplaySRV = MatTex->GetSRV();
 			}
 		}
 		else
@@ -224,9 +247,8 @@ void FImguiContentsDrawer::RenderContentView()
 			}
 		}
 
-		if (DisplaySRV)          
+		if (DisplaySRV)
 		{
-			// 선택 상태를 배경색으로 표시
 			const ImGuiStyle& S = ImGui::GetStyle();
 			ImGui::PushStyleColor(ImGuiCol_Button,
 				bSelected ? S.Colors[ImGuiCol_ButtonActive] : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -239,11 +261,46 @@ void FImguiContentsDrawer::RenderContentView()
 				SelectedPath = Item.Path;
 			}
 
+			ImU32 BarColor = IM_COL32(0, 0, 0, 0);
+
+			switch (HashStr(Item.Extension.c_str()))
+			{
+			case HashStr(".material"):
+				BarColor = IM_COL32(46, 204, 113, 255); // 머티리얼 (초록색)
+				break;
+
+			case HashStr(".staticmesh"):
+			case HashStr(".mesh"):
+			case HashStr(".obj"):
+				BarColor = IM_COL32(52, 152, 219, 255); // 스태틱 메시 (파란색)
+				break;
+
+			default:
+				break;
+			}
+
+			// [수정] Min, Max 변수 선언 및 패딩 오프셋 보정 적용
+			const ImVec2 Min = ImGui::GetItemRectMin();
+			const ImVec2 Max = ImGui::GetItemRectMax();
+
+			if ((BarColor & IM_COL32_A_MASK) != 0)
+			{
+				const float LineMinX = Min.x + Style.FramePadding.x;
+				const float LineMaxX = Max.x - Style.FramePadding.x;
+				const float LineMaxY = Max.y - Style.FramePadding.y;
+				constexpr float LineHeight = 3.0f;
+
+				ImGui::GetWindowDrawList()->AddRectFilled(
+					ImVec2(LineMinX, LineMaxY - LineHeight),
+					ImVec2(LineMaxX, LineMaxY),
+					BarColor
+				);
+			}
+
 			ImGui::PopStyleColor();
 		}
 		else
 		{
-			// 이미지가 아니거나 아직 로드 전이면 종류를 글자로 보여준다.
 			const char* Caption = Item.bIsDirectory
 				? "[DIR]"
 				: (Item.Extension.empty() ? "FILE" : Item.Extension.c_str() + 1);
@@ -258,8 +315,20 @@ void FImguiContentsDrawer::RenderContentView()
 		if (!Item.bIsDirectory && ImGui::BeginDragDropSource())
 		{
 			FContentDragPayload DragData;
-			DragData.Kind = (Item.Extension == ".staticmesh") ? FContentDragPayload::EKind::Mesh
-				: (DisplaySRV ? FContentDragPayload::EKind::Texture : FContentDragPayload::EKind::Unknown);
+
+			// [수정] .material 확장자 분기 추가
+			if (Item.Extension == ".material")
+			{
+				DragData.Kind = FContentDragPayload::EKind::Material;
+			}
+			else if (Item.Extension == ".staticmesh")
+			{
+				DragData.Kind = FContentDragPayload::EKind::Mesh;
+			}
+			else
+			{
+				DragData.Kind = DisplaySRV ? FContentDragPayload::EKind::Texture : FContentDragPayload::EKind::Unknown;
+			}
 
 			const FString PathUtf8 = WideToUTF8(Item.Path.wstring());
 			std::snprintf(DragData.Path, sizeof(DragData.Path), "%s", PathUtf8.c_str());
@@ -269,7 +338,6 @@ void FImguiContentsDrawer::RenderContentView()
 
 			ImGui::SetDragDropPayload(ContentDragPayloadType, &DragData, sizeof(DragData));
 
-			// 드래그 중 미리보기
 			if (DisplaySRV)
 			{
 				const ImTextureID PreviewId =
@@ -282,12 +350,6 @@ void FImguiContentsDrawer::RenderContentView()
 			ImGui::EndDragDropSource();
 		}
 
-		if (ImGui::IsItemHovered() && !ImGui::IsDragDropActive())
-		{
-			ImGui::SetTooltip("%s", Item.DisplayName.c_str());
-		}
-
-		// 더블클릭 처리
 		if (Item.bIsDirectory && ImGui::IsItemHovered() &&
 			ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 		{
@@ -305,6 +367,13 @@ void FImguiContentsDrawer::RenderContentView()
 					FEditorApplication::Get().OpenPreviewWindow(Mesh);
 				}
 			}
+			else if (Item.Extension == ".material")
+			{
+				UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh("Sphere_Mat");
+				Mesh->Materials[0] = Item.DisplayName;
+
+				FEditorApplication::Get().OpenPreviewWindow(Mesh);
+			}
 		}
 
 		if (ImGui::IsItemHovered())
@@ -312,7 +381,7 @@ void FImguiContentsDrawer::RenderContentView()
 			ImGui::SetTooltip("%s", Item.DisplayName.c_str());
 		}
 
-		// 이름이 길면 썸네일 폭 안에서 줄바꿈한다.
+		// 이름이 길면 썸네일 폭 안에서 줄바꿈
 		ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ThumbnailSize);
 		ImGui::TextUnformatted(Item.DisplayName.c_str());
 		ImGui::PopTextWrapPos();
@@ -320,10 +389,16 @@ void FImguiContentsDrawer::RenderContentView()
 		ImGui::EndGroup();
 		ImGui::PopID();
 
-		// 행의 마지막이 아니면 옆에 붙인다.
-		if ((Index + 1) % Columns != 0 && Index + 1 < static_cast<int>(Entries.size()))
+		// [수정] 우측 경계선을 넘지 않을 때만 SameLine() 호출하여 잘림 방지
+		const float LastItemX2 = ImGui::GetItemRectMax().x;
+		const float NextItemX2 = LastItemX2 + Style.ItemSpacing.x + ThumbnailSize;
+
+		if (Index + 1 < static_cast<int>(Entries.size()))
 		{
-			ImGui::SameLine();
+			if (NextItemX2 < WindowVisibleX2)
+			{
+				ImGui::SameLine();
+			}
 		}
 	}
 
@@ -338,7 +413,6 @@ void FImguiContentsDrawer::RenderFolderTree()
 	ImGui::Text("Folders");
 	ImGui::Separator();
 
-	// 루트 폴더부터 재귀적으로 렌더링
 	if (std::filesystem::exists(RootPath))
 	{
 		RenderFolderTreeNode(RootPath);
@@ -347,12 +421,8 @@ void FImguiContentsDrawer::RenderFolderTree()
 
 void FImguiContentsDrawer::RenderFolderTreeNode(const std::filesystem::path& FolderPath)
 {
-
 	FString folderName = FolderPath == RootPath ? "All" : WideToUTF8(FolderPath.filename().wstring());
 
-	// 하위 폴더가 있는지 먼저 확인한다.
-	// 없으면 잎 노드로 만들어 열리지 않는 화살표가 생기지 않게 한다.
-	// 접근 권한 문제로 던지지 않도록 error_code 버전을 쓴다.
 	std::error_code Ec;
 	bool bHasSubFolder = false;
 	for (const auto& Entry : std::filesystem::directory_iterator(FolderPath, Ec))
@@ -370,7 +440,6 @@ void FImguiContentsDrawer::RenderFolderTreeNode(const std::filesystem::path& Fol
 
 	if (!bHasSubFolder)
 	{
-		// NoTreePushOnOpen을 같이 주면 TreePop을 부르지 않아도 된다.
 		Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 	}
 	if (CurrentPath == FolderPath)
@@ -382,12 +451,10 @@ void FImguiContentsDrawer::RenderFolderTreeNode(const std::filesystem::path& Fol
 		Flags |= ImGuiTreeNodeFlags_DefaultOpen;
 	}
 
-	// 이름이 같은 폴더가 여러 곳에 있을 수 있으므로 전체 경로를 ID로 쓴다.
 	ImGui::PushID(WideToUTF8(FolderPath.wstring()).c_str());
 
 	const bool bOpened = ImGui::TreeNodeEx(folderName.c_str(), Flags);
 
-	// 화살표를 눌러 접고 펴는 것과 폴더를 선택하는 것을 구분한다.
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
 	{
 		CurrentPath = FolderPath;
@@ -407,5 +474,3 @@ void FImguiContentsDrawer::RenderFolderTreeNode(const std::filesystem::path& Fol
 
 	ImGui::PopID();
 }
-
-

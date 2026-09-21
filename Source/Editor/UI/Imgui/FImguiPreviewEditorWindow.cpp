@@ -49,6 +49,7 @@ void FImguiPreviewEditorWindow::Open(UStaticMesh* InMesh, ImGuiID InDockID)
 	}
 
 	FocusOnMesh();
+
 }
 
 void FImguiPreviewEditorWindow::BringToFront()
@@ -105,7 +106,11 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-	if (ImGui::Begin(TitleString.c_str(), nullptr, ViewerFlags)) // &bIsOpen 대신 nullptr로 닫기(X) 버튼 방지
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.14f, 1.0f));
+	const bool bWindowVisible = ImGui::Begin(TitleString.c_str(), nullptr, ViewerFlags);
+	ImGui::PopStyleColor();
+
+	if (bWindowVisible)
 #else
 	// 기존 에디터 도킹 로직 유지
 	ImGui::SetNextWindowSize(ImVec2(850.0f, 600.0f), ImGuiCond_FirstUseEver);
@@ -126,7 +131,12 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		bFocusRequested = false;
 	}
 
-	if (ImGui::Begin(TitleString.c_str(), &bIsOpen, ImGuiWindowFlags_NoCollapse))
+	// 불투명 배경색 적용
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.14f, 1.0f));
+	const bool bWindowVisible = ImGui::Begin(TitleString.c_str(), &bIsOpen, ImGuiWindowFlags_NoCollapse);
+	ImGui::PopStyleColor();
+
+	if (bWindowVisible)
 #endif
 	{
 		// 상단 툴바
@@ -139,7 +149,6 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		{
 			FocusOnMesh();
 		}
-
 
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth(200.0f);
@@ -166,9 +175,6 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 			}
 			ImGui::EndCombo();
 		}
-
-
-
 
 		ImGui::Separator();
 

@@ -239,7 +239,7 @@ void FEditorApplication::Render() {
     ImguiManager.RenderUI();
 
 #else
-    const TArray<FEditorViewport>& EditorViewports = Editor.GetViewports();
+    TArray<FEditorViewport>& EditorViewports = Editor.GetViewports();
     if (EditorViewports.empty())
         return;
 
@@ -248,36 +248,24 @@ void FEditorApplication::Render() {
         Editor.bIsViewportSplit ? static_cast<int>(EditorViewports.size()) : 1;
 
     for (int i = StartIdx; i < EndIdx; ++i) {
-        const auto& EditorViewport = EditorViewports[i];
+        auto& EditorViewport = EditorViewports[i];
+
+        FGizmo* Gizmo = Editor.ObjectSelected() ? &Editor.GetGizmo() : nullptr;
+        UTextInstanceComponent* Text = Editor.ObjectSelected() ? Editor.GetTextcomp() : nullptr;
+        EditorViewport.UpdateViewAndCtx(Editor.GlobalLight, *Editor.GetSelectedActor(), Editor.SelectedTransform, *Gizmo, *Text, Editor.GetGrid(), &VisualizerRegistry);
+
         // 뷰포트 렌더링 명세 구성
-        FSceneView sceneview{
-            .Camera = EditorViewport.ViewportCamera,
-            .ViewProj = EditorViewport.ViewportCamera.CreateViewProjectionMatrix(),
-            .TopLeftUV = EditorViewport.TopLeftUV,
-            .LengthUV = EditorViewport.LengthUV,
-            .ViewMode = EditorViewport.ViewMode,
-            .ShowFlags = EditorViewport.ShowFlags,
-            .LightConstants = Editor.GlobalLight };
-
-        // 에디터 렌더링 컨텍스트 구성
-        FEditorRenderContext EditorCtx;
-        EditorCtx.SelectedActor = Editor.GetSelectedActor();
-        EditorCtx.SelectedTransform = Editor.SelectedTransform;
-        EditorCtx.Gizmo = Editor.ObjectSelected() ? &Editor.GetGizmo() : nullptr;
-        EditorCtx.TextComp =
-            Editor.ObjectSelected() ? Editor.GetTextcomp() : nullptr;
-        EditorCtx.Grid = &Editor.GetGrid();
-        EditorCtx.VisualizerRegistry = &VisualizerRegistry;
-
-        if (EditorCtx.SelectedActor) {
+        if (EditorViewport.editorCtx.SelectedActor) {
             if (USceneComponent* RootComp =
-                EditorCtx.SelectedActor->GetRootComponent()) {
-                EditorCtx.SelectedMeshComp = RootComp->Cast<UMeshComponent>();
+                EditorViewport.editorCtx.SelectedActor->GetRootComponent()) {
+                EditorViewport.editorCtx.SelectedMeshComp = RootComp->Cast<UMeshComponent>();
             }
         }
 
+
+
         // 뷰포트 렌더링 일괄 수행
-        RenderView->RenderView(sceneview, *SceneManager->CurrentScene, EditorCtx);
+        RenderView->RenderView(EditorViewport.sceneView, *SceneManager->CurrentScene, EditorViewport.editorCtx);    
     }
 
 
