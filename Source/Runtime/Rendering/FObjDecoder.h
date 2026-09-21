@@ -16,7 +16,7 @@
 #define FLAT 2
 
 struct FTriangleIndices {
-    int32 Index[3] = {-1,-1,-1};
+    int32 Index[3] = { -1,-1,-1 };
 
     FTriangleIndices() = default;
     FTriangleIndices(int A, int B, int C) : Index{ A, B, C } {}
@@ -36,9 +36,6 @@ struct FSectionKey
     // 예시 if ((A <=> B) < 0) -> A가 작다
 };
 
-
-
-
 struct FObjGroupInfo
 {
     FString Name;
@@ -49,6 +46,9 @@ struct FObjObjectInfo
     FString Name;
 };
 
+// Todo: Bin - 바이너리 직렬화에 사용하는 바이트 저장소.
+class FBinArchive;
+
 // Cooked Data
 struct FObjModelData
 {
@@ -57,7 +57,7 @@ struct FObjModelData
     TArray<FVertexData> Vertices;
     TArray<uint32> Indices;
 
-    FName TextureName{ "None" }; 
+    FName TextureName{ "None" };
     FName NormalTextureName{ "None" };
     FName SpecularTextureName{ "None" };
     bool bIsValid = false;
@@ -65,6 +65,8 @@ struct FObjModelData
     TArray<FMeshSection> Sections;
 
     TArray<FObjMaterialInfo> Materials;
+    // Todo: Bin - 메시 캐시에는 정의 대신 참조 MTL 경로와 섹션 ID만 저장한다.
+    TArray<FString> MaterialLibraryPaths;
     TArray<FObjGroupInfo> Groups;
     TArray<FObjObjectInfo> ObjectNames;
 
@@ -107,10 +109,16 @@ struct FObjInfo
 class FObjDecoder
 {
 private:
+    // Todo: Bin - 이름이 전역적으로 유일한 공유 머티리얼 목록.
+    TArray<FObjMaterialInfo> CachedMaterials;
+
+    bool bMaterialsLoaded = false;
+    const FObjMaterialInfo* FindCachedMaterial(std::string_view MaterialName) const;
+    void ResolveSectionMaterials(FObjModelData& Model) const;
     FObjInfo ObjInfo;
 
     FString ObjDirectory;
-    int32 CurrentMaterial = -1;    
+    int32 CurrentMaterial = -1;
     int32 DefiningMaterial = -1;
 
     int32 CurrentGroup = -1;
@@ -128,6 +136,8 @@ private:
 
     // 머티리얼 라이브러리
     void AddMaterialLib(std::string_view Line);
+    // Todo: Bin - MTL을 다시 파싱하지 않고 이미 로딩한 정보를 연결한다.
+    bool ImportMaterialLibrary(const FString& Path);
     void UseMaterial(std::string_view Line);
 
     // 그룹 및 오브젝트
@@ -156,5 +166,20 @@ private:
     static bool CookStaticMesh(const FObjInfo& Info, FObjModelData& Out);
 
 public:
-    static bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
+    // Todo: Bin - Materials.bin을 만들 때만 독립적으로 MTL을 파싱한다.
+    static bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
+    // Todo: Bin - 파싱/직렬화/역직렬화와 파일 로딩은 모두 FObjDecoder가 담당한다.
+    bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
+    bool LoadMaterials(const FString& AssetRoot);
+    bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
+    const TArray<FObjMaterialInfo>& GetMaterials() const { return CachedMaterials; }
+
+    static bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
+    static bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
+    static bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
+    static bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
+    static bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
+    static bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
+    static bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
+    static bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
 };

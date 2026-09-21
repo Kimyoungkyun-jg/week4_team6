@@ -9,5 +9,6 @@ UCLASS_META(USphereComp, MeshName, "Sphere")
 
 void USphereComp::Initialize() {
   Super::Initialize();
-  SetStaticMesh(NewObject<UStaticMesh>(FName("Sphere"), FName("Simple")));
+  SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Sphere"));
+  SetMaterial(0, FName("Simple"));
 }

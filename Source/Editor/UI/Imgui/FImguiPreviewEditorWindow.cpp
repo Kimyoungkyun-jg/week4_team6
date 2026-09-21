@@ -9,6 +9,7 @@
 #include "Editor/UI/Imgui/FImguiDragDrop.h"
 #include <algorithm>
 #include <filesystem>
+#include <Runtime/Core/TObjectIterator.h>
 
 FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 {
@@ -208,24 +209,36 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		ImGui::SetNextItemWidth(200.0f);
 
 		const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
+
 		if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
 		{
-			const auto& MeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
-			for (const auto& [Key, MeshPtr] : MeshMap)
+			TArray<UStaticMesh*> Meshes;
+			for (TObjectIterator<UStaticMesh> It; It; ++It)
 			{
-				const std::string ItemName = Key;
-				const bool bIsSelected = (TargetMesh.IsValid() && TargetMesh->MeshId == Key);
+				if (UStaticMesh* Mesh = *It)
+					Meshes.push_back(Mesh);
+			}
+			std::sort(Meshes.begin(), Meshes.end(),
+				[](const UStaticMesh* A, const UStaticMesh* B)
+				{
+					return A->MeshId.Compare(B->MeshId) < 0;
+				});
+
+			for (UStaticMesh* Mesh : Meshes)
+			{
+				ImGui::PushID(static_cast<int>(Mesh->GetUUID()));
+
+				const std::string ItemName = Mesh->MeshId.ToString();
+				const bool bIsSelected = (TargetMesh.Get() == Mesh);
 
 				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
 				{
-					TargetMesh = MeshPtr;
+					TargetMesh = Mesh;
 					FocusOnMesh();
 				}
 
-				if (bIsSelected)
-				{
-					ImGui::SetItemDefaultFocus();
-				}
+				if (bIsSelected) { ImGui::SetItemDefaultFocus(); }
+				ImGui::PopID();
 			}
 			ImGui::EndCombo();
 		}

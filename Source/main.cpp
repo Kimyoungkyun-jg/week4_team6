@@ -76,6 +76,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     Renderer.GetDeviceAndContext_ImplDX11(Device, Context);
     EditorApp.Initialize_ImguiWin32DX11(Window, Device, Context);
   }
+
   EditorApp.Initialize_Runtime(&SceneManager, &RenderView);
 
   // 초기화가 끝났으니 로딩 화면을 닫고 메인 창을 띄운다
@@ -239,7 +240,7 @@ HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
     return nullptr;
   }
 
-  OutSplashWnd = ShowLoadingWindow(Instance);
+  //OutSplashWnd = ShowLoadingWindow(Instance);
 
   const FWindowLayout WindowLayout = GetWindowLayout();
   constexpr DWORD MainStyle = WS_OVERLAPPEDWINDOW;

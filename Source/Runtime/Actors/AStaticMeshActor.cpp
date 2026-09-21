@@ -15,8 +15,8 @@ AStaticMeshActor::AStaticMeshActor()
 
 	if (auto* Comp = GetStaticMeshComponent())
 	{
-		Comp->SetStaticMesh(NewObject<UStaticMesh>(FName("Cube"), FName("Simple")));
-
+		Comp->SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Cube"));
+		Comp->SetMaterial(0, FName("Simple"));
 	}
 }
 
@@ -37,6 +37,9 @@ void AStaticMeshActor::SetStaticMesh(const FName& InMeshId)
 {
 	if (auto* Comp = GetStaticMeshComponent())
 	{
-		Comp->SetStaticMesh(NewObject<UStaticMesh>(InMeshId));
+		if (UStaticMesh* Shared = FRenderResourceLibrary::Get().GetUStaticMesh(InMeshId))
+		{
+			Comp->SetStaticMesh(Shared);
+		}
 	}
 }

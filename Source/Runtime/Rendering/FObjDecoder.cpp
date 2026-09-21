@@ -1,4 +1,9 @@
+
 #include "FObjDecoder.h"
+// Todo: Bin - 메모리 저장소와 파일 I/O만 분리하고 모델 변환은 이 디코더에서 처리한다.
+#include "FBinArchive.h"
+#include "FWindowsBinReader.h"
+#include "FWindowsBinWriter.h"
 
 #include "Runtime/Core/Log.h"
 #include "Runtime/Rendering/FRenderer.h"
@@ -14,9 +19,22 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 namespace
 {
+    // Todo: Bin - 실제 파일이 없어도 캐시에 저장된 라이브러리 경로를 조회할 수 있다.
+    FString NormalizeMaterialPath(const std::filesystem::path& Path)
+    {
+        std::error_code Error;
+        // Todo: Bin - 캐시만 남아 있어도 조회 가능해야 하므로 원본 파일 상태를 검사하지 않는다.
+        FString Key = std::filesystem::absolute(Path, Error).lexically_normal().generic_string();
+		//if (Error) return {};
+
+        std::transform(Key.begin(), Key.end(), Key.begin(),
+            [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
+
+        return Key;
+    }
+
 	// 에셋 폴더는 실행 파일 기준으로 잡는다.
 	std::filesystem::path GetAssetDir()
 	{
@@ -55,7 +73,7 @@ namespace
 
 	FString ReadFileToString(std::string_view FileName)
 	{
-		
+
 		std::filesystem::path FilePath(FileName);
 
 		if (!FilePath.is_absolute())
@@ -257,9 +275,6 @@ namespace
 
 		return FString(Stem);
 	}
-
-
-	
 }
 
 // v x y z [w] [r g b]
@@ -396,12 +411,12 @@ void FObjDecoder::StartEarClipping(const TArray<FCorner>& Corners)
 			FVector PrevVertexPosition = Vertex[Corners[PrevIndex].V];
 			FVector EarVertexPosition = Vertex[Corners[Current].V];
 			FVector NextVertexPosition = Vertex[Corners[NextIndex].V];
-			
+
 			if (IsConvexDot(PrevVertexPosition, EarVertexPosition, NextVertexPosition, Normal))
 			{
 				for (int32 j = Next[NextIndex]; j != PrevIndex; j = Next[j])
 				{
-					if (IsPointInTriangle(PrevVertexPosition, EarVertexPosition, NextVertexPosition, Vertex[Corners[j].V] , Normal))
+					if (IsPointInTriangle(PrevVertexPosition, EarVertexPosition, NextVertexPosition, Vertex[Corners[j].V], Normal))
 					{
 						bIsEar = false;
 						break;
@@ -411,7 +426,7 @@ void FObjDecoder::StartEarClipping(const TArray<FCorner>& Corners)
 			else
 			{
 				bIsEar = false;
-			}	
+			}
 		}
 		if (bIsEar)
 		{
@@ -445,7 +460,7 @@ void FObjDecoder::StartEarClipping(const TArray<FCorner>& Corners)
 // f a b c [d ...]   (각 항목은 v | v/vt | v//vn | v/vt/vn)
 // 4각형 이상은 트라이앵글로 나눠 3개씩 저장한다.
 void FObjDecoder::ParseFace(std::string_view Line)
-{	
+{
 	TArray<FCorner> Corners;
 
 	while (true)
@@ -467,7 +482,7 @@ void FObjDecoder::ParseFace(std::string_view Line)
 			ToZeroBased(V,  ObjInfo.VertexList.size()),
 			ToZeroBased(VT, ObjInfo.UVList.size()),
 			ToZeroBased(VN, ObjInfo.NormalList.size()),
-		});
+			});
 	}
 
 	if (Corners.size() < 3)
@@ -476,7 +491,7 @@ void FObjDecoder::ParseFace(std::string_view Line)
 		return;
 	}
 
-	
+
 
 	// 트라이앵글: (0,1,2), (0,2,3), (0,3,4) ...
 	if (Corners.size() == 3)
@@ -568,7 +583,21 @@ void FObjDecoder::SetSmoothingGroup(std::string_view Line)
 
 // mtllib a.mtl [b.mtl ...]
 // 공백으로 나열된 여러 파일일 수도 있고, 공백이 든 파일명 하나일 수도 있다.
-// 쪼개서 열리는 것만 읽고, 하나도 못 열면 줄 전체를 파일명 하나로 다시 시도한다.
+// Todo: Bin - mtllib 경로 정보는 보존하되 머티리얼 조회 키로 사용하지 않는다.
+bool FObjDecoder::ImportMaterialLibrary(const FString& Path)
+{
+    if (Path.empty()) return false;
+
+    const FString NormalizedPath = NormalizeMaterialPath(Path);
+    if (std::find(ObjInfo.MaterialLibs.begin(), ObjInfo.MaterialLibs.end(), NormalizedPath)
+        == ObjInfo.MaterialLibs.end())
+    {
+        ObjInfo.MaterialLibs.push_back(NormalizedPath);
+    }
+    return true;
+}
+
+// Todo: Bin - 쪼개서 조회하고, 없으면 공백 포함 파일명 전체를 다시 조회한다.
 void FObjDecoder::AddMaterialLib(std::string_view Line)
 {
 	const std::string_view FullLine = Trim(Line);
@@ -591,15 +620,8 @@ void FObjDecoder::AddMaterialLib(std::string_view Line)
 
 		const FString LibPath = (std::filesystem::path(ObjDirectory) / Name).generic_string();
 
-		std::filesystem::path ResolvedPath;
-		if (!ResolveExistingFile(LibPath, ResolvedPath))
-		{
-			continue;
-		}
-
-		ObjInfo.MaterialLibs.push_back(LibPath);
-		ParseMtlFile(ReadFileToString(LibPath));
-		++LoadedCount;
+		// Todo: Bin - MTL 파일 존재 여부 대신 먼저 로딩한 Materials.bin 목록을 조회한다.
+		if (ImportMaterialLibrary(LibPath)) ++LoadedCount;
 	}
 
 	if (LoadedCount > 0)
@@ -610,13 +632,7 @@ void FObjDecoder::AddMaterialLib(std::string_view Line)
 	// 하나도 못 열은 경우 전체 경로로 열어보기
 	const FString WholePath = (std::filesystem::path(ObjDirectory) / FullLine).generic_string();
 
-	std::filesystem::path ResolvedPath;
-	if (ResolveExistingFile(WholePath, ResolvedPath))
-	{
-		ObjInfo.MaterialLibs.push_back(WholePath);
-		ParseMtlFile(ReadFileToString(WholePath));
-		return;
-	}
+	if (ImportMaterialLibrary(WholePath)) return;
 
 	UE_LOG_WARN("FObjDecoder : mtllib not found - %s", FString(FullLine).c_str());
 }
@@ -632,6 +648,28 @@ void FObjDecoder::UseMaterial(std::string_view Line)
 	}
 
 	CurrentMaterial = FindOrAddMaterial(Name);
+	// Todo: Bin - 전역 공유 목록에서 이름으로 조회해 기존 파싱 데이터에 연결한다.
+	const FObjMaterialInfo* CachedMaterial = FindCachedMaterial(Name);
+	if (CachedMaterial == nullptr)
+	{
+		UE_LOG_WARN("[OBJ Material] 정의 없음, Simple 사용: %s", FString(Name).c_str());
+		return;
+	}
+
+	ObjInfo.Materials[CurrentMaterial] = *CachedMaterial;
+}
+
+// Todo: Bin - 모든 머티리얼 이름은 전역적으로 유일하므로 경로나 합성 ID가 필요 없다.
+const FObjMaterialInfo* FObjDecoder::FindCachedMaterial(std::string_view MaterialName) const
+{
+	for (const FObjMaterialInfo& Material : CachedMaterials)
+	{
+		if (Material.MaterialName == MaterialName)
+		{
+			return &Material;
+		}
+	}
+	return nullptr;
 }
 
 int32 FObjDecoder::FindOrAddMaterial(std::string_view Name)
@@ -659,15 +697,9 @@ void FObjDecoder::ParseMtlFile(const FString& File)
 	{
 		ParseMtlLine(NextLine(Remaining));
 	}
-	
-	auto& ResLib = FRenderResourceLibrary::Get();
-	for (const auto& MatInfo : ObjInfo.Materials)
-	{
-		ResLib.CreateAndRegisterMaterialFromInfo(MatInfo);
-	}
-	
-	DefiningMaterial = -1;
 
+	// Todo: Bin - 실제 등록은 공유 Materials.bin 로딩 단계에서 수행한다.
+	DefiningMaterial = -1;
 }
 
 void FObjDecoder::ParseMtlLine(std::string_view Line)
@@ -953,7 +985,7 @@ namespace
 			Vertex.v = 1.0f - UV.Y;
 		}
 
-		
+
 		if (Key.NormalKind == EXPLICIT)
 		{
 			const FVector& Normal = Info.NormalList[Key.NormalId];
@@ -1054,7 +1086,7 @@ void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorLi
 		if (!IsIndexValid(V.Index[0], Info.VertexList.size())
 			|| !IsIndexValid(V.Index[1], Info.VertexList.size())
 			|| !IsIndexValid(V.Index[2], Info.VertexList.size()))
-		{			
+		{
 			NormalVectorList.push_back(FVector(0, 0, 0));
 			continue;
 		}
@@ -1063,7 +1095,7 @@ void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorLi
 		const FVector VertexB = Info.VertexList[V.Index[1]];
 		const FVector VertexC = Info.VertexList[V.Index[2]];
 		const int32 SmoothingGroupNumber = Info.SmoothingGroupsList[Index];
-		
+
 		NormalVectorList.push_back((VertexB - VertexA).Cross(VertexC - VertexA));
 
 		if (SmoothingGroupNumber > 0)
@@ -1086,6 +1118,8 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 	Out.Indices.clear();
 	Out.Sections.clear();
 	Out.Materials = Info.Materials;
+	// Todo: Bin - OBJ 디코딩에만 사용하는 Materials는 메시 바이너리에서 제외한다.
+	Out.MaterialLibraryPaths = Info.MaterialLibs;
 	Out.Groups = Info.Groups;
 	Out.ObjectNames = Info.ObjectNames;
 
@@ -1143,7 +1177,10 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 
 		if (MatIdx >= 0 && MatIdx < static_cast<int32>(Info.Materials.size()))
 		{
-			CurrentSection.MaterialName = Info.Materials[MatIdx].MaterialName;
+			// Todo: Bin - 전역적으로 유일한 머티리얼 이름을 섹션 참조로 기록한다.
+			const auto& Material = Info.Materials[MatIdx];
+			CurrentSection.MaterialName = Material.MaterialName.empty()
+				? "Simple" : Material.MaterialName;
 		}
 		else
 		{
@@ -1276,6 +1313,24 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 	return (!Out.Indices.empty());
 }
 
+// Todo: Bin - 전체 MTL 캐시 생성용 진입점. 기존 MTL 파서를 재사용한다.
+bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
+{
+	std::ifstream File(Path);
+	//if (!File) return false;
+	
+	std::stringstream Buffer;
+	Buffer << File.rdbuf();
+	//if (File.bad()) return false;
+	
+	FObjDecoder Decoder;
+	Decoder.ParseMtlFile(Buffer.str());
+	OutMaterials = std::move(Decoder.ObjInfo.Materials);
+	
+	return true;
+}
+
+// Todo: Bin - 이 함수는 OBJ 텍스트 파싱만 수행하며 Materials.bin을 만들지 않는다.
 bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out)
 {
 	//if (auto It = ObjStaticMeshMap.find(AbsolutePath); It != ObjStaticMeshMap.end())
@@ -1283,15 +1338,15 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 	//	return It->second;
 	//}
 
-	FObjDecoder Decoder;
-	const FObjInfo Info = Decoder.StartObjFileParser(AbsolutePath);
+	// Todo: Bin - 현재 디코더가 가진 CachedMaterials를 사용해 직접 OBJ를 파싱한다.
+	const FObjInfo Info = StartObjFileParser(AbsolutePath);
 	Out.PathFileName = AbsolutePath;
 
 	if (!CookStaticMesh(Info, Out))
 	{
 		return false;
 	}
-	
+
 	Out.TextureName = FName("None");
 	Out.NormalTextureName = FName("None");
 	Out.SpecularTextureName = FName("None");
@@ -1318,4 +1373,522 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 	}
 	// ObjStaticMeshMap.emplace(AbsolutePath, Out);
 	return true;
+}
+
+// Todo: Bin - 기존 FObjModelBinary의 직렬화/역직렬화 구현을 디코더로 통합.
+namespace
+{
+    constexpr uint32 ObjFileSignature = 0x4D4A424F; // "OBJM"
+    constexpr uint32 MaterialFileSignature = 0x4C54414D; // "MATL"
+    constexpr uint32 MaxElementCount = 16 * 1024 * 1024;
+
+    bool SerializeVector(FBinArchive& Archive, const FVector& V)
+    {
+        return Archive.SerializeFloat(V.X) && Archive.SerializeFloat(V.Y) && Archive.SerializeFloat(V.Z);
+    }
+    bool DeserializeVector(FBinArchive& Archive, FVector& V)
+    {
+        return Archive.DeserializeFloat(V.X) && Archive.DeserializeFloat(V.Y) && Archive.DeserializeFloat(V.Z);
+    }
+    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
+    bool SerializeVertex(FBinArchive& Archive, const FVertexData& Value)
+    {
+        return Archive.SerializeFloat(Value.x)
+            && Archive.SerializeFloat(Value.y)
+            && Archive.SerializeFloat(Value.z)
+            && Archive.SerializeFloat(Value.r)
+            && Archive.SerializeFloat(Value.g)
+            && Archive.SerializeFloat(Value.b)
+            && Archive.SerializeFloat(Value.a)
+            && Archive.SerializeFloat(Value.u)
+            && Archive.SerializeFloat(Value.v)
+            && Archive.SerializeFloat(Value.nx)
+            && Archive.SerializeFloat(Value.ny)
+            && Archive.SerializeFloat(Value.nz)
+            && Archive.SerializeFloat(Value.tx)
+            && Archive.SerializeFloat(Value.ty)
+            && Archive.SerializeFloat(Value.tz)
+            && Archive.SerializeFloat(Value.bx)
+            && Archive.SerializeFloat(Value.by)
+            && Archive.SerializeFloat(Value.bz);
+    }
+    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
+    bool DeserializeVertex(FBinArchive& Archive, FVertexData& Value)
+    {
+        return Archive.DeserializeFloat(Value.x)
+            && Archive.DeserializeFloat(Value.y)
+            && Archive.DeserializeFloat(Value.z)
+            && Archive.DeserializeFloat(Value.r)
+            && Archive.DeserializeFloat(Value.g)
+            && Archive.DeserializeFloat(Value.b)
+            && Archive.DeserializeFloat(Value.a)
+            && Archive.DeserializeFloat(Value.u)
+            && Archive.DeserializeFloat(Value.v)
+            && Archive.DeserializeFloat(Value.nx)
+            && Archive.DeserializeFloat(Value.ny)
+            && Archive.DeserializeFloat(Value.nz)
+            && Archive.DeserializeFloat(Value.tx)
+            && Archive.DeserializeFloat(Value.ty)
+            && Archive.DeserializeFloat(Value.tz)
+            && Archive.DeserializeFloat(Value.bx)
+            && Archive.DeserializeFloat(Value.by)
+            && Archive.DeserializeFloat(Value.bz);
+    }
+    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
+    bool SerializeSection(FBinArchive& Archive, const FMeshSection& Value)
+    {
+        return Archive.SerializeUInt32(Value.FirstIndex)
+            && Archive.SerializeUInt32(Value.IndexCount)
+            && Archive.SerializeString(Value.MaterialName)
+            && SerializeVector(Archive, Value.LocalBounds.Min)
+            && SerializeVector(Archive, Value.LocalBounds.Max);
+    }
+    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
+    bool DeserializeSection(FBinArchive& Archive, FMeshSection& Value)
+    {
+        return Archive.DeserializeUInt32(Value.FirstIndex)
+            && Archive.DeserializeUInt32(Value.IndexCount)
+            && Archive.DeserializeString(Value.MaterialName)
+            && DeserializeVector(Archive, Value.LocalBounds.Min)
+            && DeserializeVector(Archive, Value.LocalBounds.Max);
+    }
+    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
+    bool SerializeMaterial(FBinArchive& Archive, const FObjMaterialInfo& Value)
+    {
+        return Archive.SerializeString(Value.MaterialName)
+            && SerializeVector(Archive, Value.Ambient)
+            && SerializeVector(Archive, Value.Diffuse)
+            && SerializeVector(Archive, Value.Specular)
+            && SerializeVector(Archive, Value.Emissive)
+            && SerializeVector(Archive, Value.TransmissionFilter)
+            && Archive.SerializeFloat(Value.SpecularExponent)
+            && Archive.SerializeFloat(Value.Opacity)
+            && Archive.SerializeFloat(Value.OpticalDensity)
+            && Archive.SerializeInt32(Value.IlluminationModel)
+            && Archive.SerializeString(Value.DiffuseTextureName)
+            && Archive.SerializeString(Value.AmbientTextureName)
+            && Archive.SerializeString(Value.SpecularTextureName)
+            && Archive.SerializeString(Value.AlphaTextureName)
+            && Archive.SerializeString(Value.NormalTextureName)
+            && Archive.SerializeString(Value.EmissiveTexture)
+            && Archive.SerializeString(Value.SpecularExponentTexture)
+            && Archive.SerializeString(Value.ReflectionTexture)
+            && Archive.SerializeString(Value.DisplacementTexture)
+            && Archive.SerializeString(Value.DecalTexture);
+    }
+    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
+    bool DeserializeMaterial(FBinArchive& Archive, FObjMaterialInfo& Value)
+    {
+        return Archive.DeserializeString(Value.MaterialName)
+            && DeserializeVector(Archive, Value.Ambient)
+            && DeserializeVector(Archive, Value.Diffuse)
+            && DeserializeVector(Archive, Value.Specular)
+            && DeserializeVector(Archive, Value.Emissive)
+            && DeserializeVector(Archive, Value.TransmissionFilter)
+            && Archive.DeserializeFloat(Value.SpecularExponent)
+            && Archive.DeserializeFloat(Value.Opacity)
+            && Archive.DeserializeFloat(Value.OpticalDensity)
+            && Archive.DeserializeInt32(Value.IlluminationModel)
+            && Archive.DeserializeString(Value.DiffuseTextureName)
+            && Archive.DeserializeString(Value.AmbientTextureName)
+            && Archive.DeserializeString(Value.SpecularTextureName)
+            && Archive.DeserializeString(Value.AlphaTextureName)
+            && Archive.DeserializeString(Value.NormalTextureName)
+            && Archive.DeserializeString(Value.EmissiveTexture)
+            && Archive.DeserializeString(Value.SpecularExponentTexture)
+            && Archive.DeserializeString(Value.ReflectionTexture)
+            && Archive.DeserializeString(Value.DisplacementTexture)
+            && Archive.DeserializeString(Value.DecalTexture);
+    }
+    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
+    bool SerializeGroup(FBinArchive& Archive, const FObjGroupInfo& Value)
+    {
+        return Archive.SerializeString(Value.Name);
+    }
+    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
+    bool DeserializeGroup(FBinArchive& Archive, FObjGroupInfo& Value)
+    {
+        return Archive.DeserializeString(Value.Name);
+    }
+    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
+    bool SerializeObjectName(FBinArchive& Archive, const FObjObjectInfo& Value)
+    {
+        return Archive.SerializeString(Value.Name);
+    }
+    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
+    bool DeserializeObjectName(FBinArchive& Archive, FObjObjectInfo& Value)
+    {
+        return Archive.DeserializeString(Value.Name);
+    }
+
+    // Todo: Bin - 메시에는 MTL 경로만, Materials.bin에는 실제 정의를 저장한다.
+    bool SerializeLibraryPath(FBinArchive& Archive, const FString& Path)
+    {
+        return Archive.SerializeString(Path);
+    }
+    bool DeserializeLibraryPath(FBinArchive& Archive, FString& Path)
+    {
+        return Archive.DeserializeString(Path);
+    }
+    bool SerializeIndex(FBinArchive& Archive, const uint32& Index)
+    {
+        return Archive.SerializeUInt32(Index);
+    }
+    bool DeserializeIndex(FBinArchive& Archive, uint32& Index)
+    {
+        return Archive.DeserializeUInt32(Index);
+    }
+
+    // 배열 객체의 메모리가 아닌 개수와 원소를 차례로 저장한다.
+    template<typename T>
+    bool SerializeArray(FBinArchive& Archive, const TArray<T>& Values, bool (*SerializeElement)(FBinArchive&, const T&))
+    {
+		if (Values.size() > MaxElementCount || !Archive.SerializeUInt32(static_cast<uint32>(Values.size())))
+		{
+			return false;
+		}
+        
+		for (const T& Value : Values)
+		{
+			if (!SerializeElement(Archive, Value)) 
+			{
+				return false;
+			}
+		}
+
+        return true;
+    }
+
+    template<typename T>
+    bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values, bool (*DeserializeElement)(FBinArchive&, T&))
+    {
+        uint32 Count = 0;
+		if (!Archive.DeserializeUInt32(Count)
+			|| Count > MaxElementCount
+			|| Count > Archive.GetRemainingBytes())
+		{
+			return false;
+		}
+
+        Values.clear();
+        // 손상된 파일의 개수로 미리 대량 할당하지 않고, 읽은 원소만 추가한다.
+        for (uint32 i = 0; i < Count; ++i)
+        {
+            T Value{};
+			if (!DeserializeElement(Archive, Value))
+			{
+				return false;
+			}
+				
+            Values.push_back(std::move(Value));
+        }
+
+        return true;
+    }
+
+    bool ValidateObjModel(const FObjModelData& Model)
+    {
+        if (Model.Vertices.empty() || Model.Indices.empty()
+            || Model.Indices.size() % 3 != 0) return false;
+        for (const auto& V : Model.Vertices)
+        {
+            const float Fields[] = { V.x,V.y,V.z,V.r,V.g,V.b,V.a,V.u,V.v,
+                V.nx,V.ny,V.nz,V.tx,V.ty,V.tz,V.bx,V.by,V.bz };
+            for (float Field : Fields)
+                if (!std::isfinite(Field)) return false;
+        }
+        for (uint32 Index : Model.Indices)
+            if (Index >= Model.Vertices.size()) return false;
+        for (const auto& Section : Model.Sections)
+            if (Section.IndexCount == 0 || Section.IndexCount % 3 != 0
+                || Section.FirstIndex % 3 != 0
+                || Section.FirstIndex > Model.Indices.size()
+                || Section.IndexCount > Model.Indices.size() - Section.FirstIndex) return false;
+        return true;
+    }
+}
+
+bool FObjDecoder::SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model)
+{
+    if (!ValidateObjModel(Model)) return false;
+    // 한 Archive에는 완성된 모델 하나만 저장한다.
+    Archive.Clear();
+    return Archive.SerializeUInt32(ObjFileSignature)
+        // Todo: Bin - 버전은 저장하지 않고 다시 생성할 때 기존 파일을 덮어쓴다.
+        && Archive.SerializeString(Model.PathFileName)
+        && SerializeArray(Archive, Model.Vertices, SerializeVertex)
+        && SerializeArray(Archive, Model.Indices, SerializeIndex)
+        && SerializeArray(Archive, Model.Sections, SerializeSection)
+        && SerializeArray(Archive, Model.MaterialLibraryPaths, SerializeLibraryPath)
+        && SerializeArray(Archive, Model.Groups, SerializeGroup)
+        && SerializeArray(Archive, Model.ObjectNames, SerializeObjectName);
+}
+
+bool FObjDecoder::DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel)
+{
+    Archive.ResetReadPosition();
+    uint32 FileSignature = 0;
+    // Todo: Bin - 파일 종류만 확인한다.
+    if (!Archive.DeserializeUInt32(FileSignature)
+        || FileSignature != ObjFileSignature) return false;
+
+    // 복원이 끝나기 전에는 호출자의 모델을 변경하지 않는다.
+    FObjModelData Loaded;
+    if (!Archive.DeserializeString(Loaded.PathFileName)
+        || !DeserializeArray(Archive, Loaded.Vertices, DeserializeVertex)
+        || !DeserializeArray(Archive, Loaded.Indices, DeserializeIndex)
+        || !DeserializeArray(Archive, Loaded.Sections, DeserializeSection)
+        || !DeserializeArray(Archive, Loaded.MaterialLibraryPaths, DeserializeLibraryPath)
+        || !DeserializeArray(Archive, Loaded.Groups, DeserializeGroup)
+        || !DeserializeArray(Archive, Loaded.ObjectNames, DeserializeObjectName)
+        || Archive.GetRemainingBytes() != 0
+        || !ValidateObjModel(Loaded)) return false;
+    Loaded.bIsValid = true;
+    OutModel = std::move(Loaded);
+    return true;
+}
+
+bool FObjDecoder::SaveObjModelBinary(const FString& Path, const FObjModelData& Model)
+{
+    FBinArchive Archive;
+    return SerializeObjModel(Archive, Model)
+        && FWindowsBinWriter::Save(Path, Archive);
+}
+
+bool FObjDecoder::LoadObjModelBinary(const FString& Path, FObjModelData& OutModel)
+{
+    FBinArchive Archive;
+
+    return FWindowsBinReader::Load(Path, Archive) && DeserializeObjModel(Archive, OutModel);
+}
+
+// Todo: Bin - Materials.bin은 공유 정의만 저장한다. 메시 데이터나 GPU 포인터는 포함하지 않는다.
+bool FObjDecoder::SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials)
+{
+    Archive.Clear();
+    // Todo: Bin - 별도 Entry와 버전 없이 머티리얼 배열을 직접 저장한다.
+
+    return Archive.SerializeUInt32(MaterialFileSignature)
+        && SerializeArray(Archive, Materials, SerializeMaterial);
+}
+
+bool FObjDecoder::DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials)
+{
+    Archive.ResetReadPosition();
+    uint32 FileSignature = 0;
+    // Todo: Bin - 파일 종류만 확인한다.
+    
+	if (!Archive.DeserializeUInt32(FileSignature) || FileSignature != MaterialFileSignature)
+	{
+		return false;
+	}
+
+    TArray<FObjMaterialInfo> Loaded;
+	if (!DeserializeArray(Archive, Loaded, DeserializeMaterial) || Archive.GetRemainingBytes() != 0)
+	{
+		return false;
+	}
+    
+	for (const FObjMaterialInfo& Material : Loaded)
+    {
+		if (Material.MaterialName.empty() || !std::isfinite(Material.Opacity))
+		{
+			return false;
+		}
+    }
+    
+	OutMaterials = std::move(Loaded);
+    
+	return true;
+}
+
+bool FObjDecoder::SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials)
+{
+    FBinArchive Archive;
+    return SerializeMaterials(Archive, Materials) && FWindowsBinWriter::Save(Path, Archive);
+}
+
+bool FObjDecoder::LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
+{
+    FBinArchive Archive;
+    return FWindowsBinReader::Load(Path, Archive) && DeserializeMaterials(Archive, OutMaterials);
+}
+
+// Todo: Bin - 먼저 한 번 호출한다. 캐시 성공 시 MTL 탐색/파싱을 건너뛴다.
+bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
+{
+    bMaterialsLoaded = false;
+    CachedMaterials.clear();
+
+    const std::filesystem::path AssetPath(AssetRoot);
+    const auto BinaryPath = AssetPath /  L"Bins" / "Materials.bin";
+
+    TArray<FObjMaterialInfo> Loaded;
+	//TMap<FString, FObjMaterialInfo> loadedMaterialInfoMap;
+
+    if (LoadMaterialsBinary(BinaryPath.string(), Loaded))
+    {
+        UE_LOG("[Material Cache] Hit: %s", BinaryPath.string().c_str());
+    }
+    else
+    {
+		// Todo: Fix bug
+
+        UE_LOG("[Material Cache] Miss: 전체 MTL 파싱");
+        TArray<std::filesystem::path> Files;
+        std::error_code Error;
+		/*
+        if (!std::filesystem::exists(AssetPath, Error)
+            || Error
+            || !std::filesystem::is_directory(AssetPath, Error)
+            || Error)
+        {
+            return false;
+        }
+		*/
+
+        // Todo: Bin - Resources/Assets 하나만 순회해 모든 MTL을 찾는다.
+        std::filesystem::recursive_directory_iterator AssetIter(AssetPath, Error), End;
+        //if (Error) return false;
+
+		const char* MTL_EXTENSION = ".mtl";
+
+		for (const auto& Asset : std::filesystem::directory_iterator(AssetPath))
+		{
+			if (Asset.is_regular_file() == false)
+			{
+				continue;
+			}
+
+			if (Asset.path().extension() != MTL_EXTENSION)
+			{
+				continue;
+			}
+
+			TArray<FObjMaterialInfo> Materials;
+
+			// Todo: assert
+			DecodeMaterialsFromFile(Asset.path().string(), Materials);
+
+			for (FObjMaterialInfo& Material : Materials)
+			{
+				// Todo: Bin
+				// MTL 파일과 속성이 달라도 MaterialName이 같으면
+				// 이미 등록된 전역 머티리얼과 동일한 것으로 취급한다.
+				Loaded.push_back(std::move(Material));
+			}
+		}
+
+		SaveMaterialsBinary(BinaryPath.string(), Loaded);
+
+		/*
+        if (!SaveMaterialsBinary(BinaryPath.string(), Loaded))
+        {
+            UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.string().c_str());
+        }
+		*/
+    }
+
+    // Todo: Bin - Materials.bin의 배열을 그대로 공유 머티리얼 목록으로 사용한다.
+    CachedMaterials = std::move(Loaded);
+    bMaterialsLoaded = true;
+
+    return true;
+}
+
+// Todo: Bin - 파싱/캐시 복원 모두 동일한 공유 머티리얼 참조와 속성을 적용한다.
+void FObjDecoder::ResolveSectionMaterials(FObjModelData& Model) const
+{
+    Model.Materials.clear();
+    Model.TextureName = FName("None");
+    Model.NormalTextureName = FName("None");
+    Model.SpecularTextureName = FName("None");
+    for (auto& Section : Model.Sections)
+    {
+        // Todo: Bin - Section은 전역적으로 유일한 MaterialName을 직접 참조한다.
+        const FObjMaterialInfo* Material = FindCachedMaterial(Section.MaterialName);
+        if (Material == nullptr)
+        {
+            if (Section.MaterialName != "Simple" && Section.MaterialName != "DefaultMaterial")
+            {
+                UE_LOG_WARN("[OBJ Material] 정의 없음, Simple 사용: %s", Section.MaterialName.c_str());
+            }
+            Section.MaterialName = "Simple";
+            Section.Opacity = 1.0f;
+            Section.bIsAlpha = false;
+            Section.IlluminationModel = 0;
+            continue;
+        }
+
+        Section.Opacity = Material->Opacity;
+        Section.IlluminationModel = Material->IlluminationModel;
+        Section.bIsAlpha = Material->Opacity < 0.99f || !Material->AlphaTextureName.empty()
+            || Material->IlluminationModel == 4 || Material->IlluminationModel == 6 || Material->IlluminationModel == 7;
+
+        // Todo: Bin - FObjModelData가 원래 보관하던 사용 머티리얼 정보도 복원한다.
+        const bool bAlreadyAdded = std::any_of(Model.Materials.begin(), Model.Materials.end(),
+            [Material](const FObjMaterialInfo& Existing)
+            {
+                return Existing.MaterialName == Material->MaterialName;
+            });
+
+        if (!bAlreadyAdded)
+        {
+            Model.Materials.push_back(*Material);
+        }
+    }
+
+    // Todo: Bin - 캐시 적중 시에도 기존 모델의 대표 텍스처 정보를 동일하게 복원한다.
+    if (!Model.Materials.empty())
+    {
+        const FObjMaterialInfo& Material = Model.Materials.front();
+        auto MakeTextureKey = [](const FString& TexturePath)
+        {
+            if (TexturePath.empty()) return FName("None");
+            FString Key = std::filesystem::path(TexturePath).stem().string();
+            std::transform(Key.begin(), Key.end(), Key.begin(), ::tolower);
+            return FName(Key);
+        };
+
+        Model.TextureName = MakeTextureKey(Material.DiffuseTextureName);
+        Model.NormalTextureName = MakeTextureKey(Material.NormalTextureName);
+        Model.SpecularTextureName = MakeTextureKey(Material.SpecularTextureName);
+    }
+}
+
+// Todo: Bin - Materials.bin은 건드리지 않고 이 OBJ의 캐시만 처리한다.
+bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel)
+{
+    if (!bMaterialsLoaded)
+    {
+        UE_LOG_WARN("[OBJ Cache] LoadMaterials를 먼저 호출해야 합니다.");
+        return false;
+    }
+
+    FObjModelData Loaded;
+    if (LoadObjModelBinary(BinaryPath, Loaded) && NormalizeMaterialPath(Loaded.PathFileName) == NormalizeMaterialPath(ObjPath))
+    {
+        UE_LOG("[OBJ Cache] Hit: %s", BinaryPath.c_str());
+    }
+    else
+    {
+        UE_LOG("[OBJ Cache] Miss: OBJ 파싱 %s", ObjPath.c_str());
+        Loaded = FObjModelData{};
+
+		if (DecodeFromFile(ObjPath, Loaded) == false)
+		{
+			return false;
+		}
+			
+        Loaded.bIsValid = true;
+        if (SaveObjModelBinary(BinaryPath, Loaded) == false)
+        {
+            UE_LOG_WARN("[OBJ Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.c_str());
+        }
+    }
+
+    ResolveSectionMaterials(Loaded);
+    OutModel = std::move(Loaded);
+
+    return true;
 }

@@ -402,6 +402,7 @@
     <ClCompile Include="Source\Runtime\CoreUObject\USpotLightComponent.cpp" />
     <ClCompile Include="Source\Runtime\Core\FName.cpp" />
     <ClCompile Include="Source\Runtime\Core\FNamePool.cpp" />
+    <ClCompile Include="Source\Runtime\Core\FObjectIterator.cpp" />
     <ClCompile Include="Source\Runtime\Engine\FArchive.cpp" />
     <ClCompile Include="Source\Runtime\Engine\FCamera.cpp" />
     <ClCompile Include="Source\Runtime\Engine\FRayCastingManager.cpp" />
@@ -507,6 +508,9 @@
     <ClInclude Include="Source\Editor\Core\FEditor.h" />
     <ClInclude Include="Source\Editor\Core\FEditorState.h" />
     <ClInclude Include="Source\Editor\Visualizer\FTextVisualizer.h" />
+    <ClInclude Include="Source\Runtime\Core\FObjectIterator.h" />
+    <ClInclude Include="Source\Runtime\Core\TObjectIterator.h" />
+    <ClInclude Include="Source\Runtime\Core\TSet.h" />
     <ClInclude Include="Source\Runtime\Engine\FDelegate.h" />
     <ClInclude Include="Source\Runtime\Engine\FSceneView.h" />
     <ClInclude Include="Source\Editor\Grid\FGrid.h" />
@@ -586,6 +590,10 @@
     <ClInclude Include="Source\Runtime\Rendering\FLineBatcher.h" />
     <ClInclude Include="Source\Runtime\Rendering\FMaterial.h" />
     <ClInclude Include="Source\Runtime\Rendering\FMesh.h" />
+    <!-- Todo: Bin - 바이너리 저장소와 파일 입출력 클래스 -->
+    <ClInclude Include="Source\Runtime\Rendering\FBinArchive.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FWindowsBinReader.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FWindowsBinWriter.h" />
     <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h" />
     <ClInclude Include="Source\Runtime\Rendering\FPreviewRenderTarget.h" />
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h" />

@@ -328,6 +328,9 @@
     <ClCompile Include="Source\Runtime\Rendering\FPreviewRenderTarget.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\Core\FObjectIterator.cpp">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h">
@@ -618,6 +621,10 @@
     <ClInclude Include="Source\Runtime\CoreUObject\UStaticMesh.h">
       <Filter>Source\Runtime\CoreUObject</Filter>
     </ClInclude>
+    <!-- Todo: Bin - 바이너리 저장소와 파일 입출력 클래스 -->
+    <ClInclude Include="Source\Runtime\Rendering\FBinArchive.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FWindowsBinReader.h" />
+    <ClInclude Include="Source\Runtime\Rendering\FWindowsBinWriter.h" />
     <ClInclude Include="Source\Runtime\Rendering\FObjDecoder.h">
       <Filter>Source\Runtime\Rendering</Filter>
     </ClInclude>
@@ -625,6 +632,15 @@
     <ClInclude Include="Source\Runtime\Actors\AStaticMeshActor.h" />
     <ClInclude Include="Source\Runtime\Rendering\FPreviewRenderTarget.h" />
     <ClInclude Include="Source\Runtime\Engine\FDelegate.h" />
+    <ClInclude Include="Source\Runtime\Core\TObjectIterator.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Core\TSet.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Core\FObjectIterator.h">
+      <Filter>Source\Runtime\Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">

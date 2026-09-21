@@ -29,9 +29,6 @@ public:
     void SetMaterial(int32 Slot, const FName& InMaterialId);
     FName GetMaterial(int32 Slot = 0) const;
 
-
-
-
     bool bIsMovingUV = false;
 
 protected:
