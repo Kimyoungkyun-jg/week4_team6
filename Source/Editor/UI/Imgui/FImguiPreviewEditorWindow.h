@@ -8,7 +8,13 @@
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "ThirdParty/Imgui/imgui.h"
 
-// 프리뷰 및 세부 속성 편집 창
+enum class EPrevType
+{
+	Mesh = 0,
+	Material,
+};
+	
+	// 프리뷰 및 세부 속성 편집 창
 class FImguiPreviewEditorWindow final
 {
 public:
@@ -19,7 +25,9 @@ public:
 	FImguiPreviewEditorWindow& operator=(const FImguiPreviewEditorWindow&) = delete;
 
 
-	void Open(UStaticMesh* InMesh, ImGuiID InDockID = 0);
+	void OpenPreview(UStaticMesh* InMesh, ImGuiID InDockID = 0, EPrevType type = EPrevType::Mesh);
+
+	
 	void Close() { bIsOpen = false; }
 	void BringToFront();
 
@@ -28,7 +36,6 @@ public:
 
 
 	void Process(FEditor& Editor, float DeltaTime);
-	void Render(class FRenderView& RenderView);
 
 
 	void FocusOnMesh();
@@ -42,11 +49,14 @@ public:
 	uint32 PreviewHeight = 512;
 	// 그리드 및 카메라 설정
 	bool bShowGrid = true;
+
+	EPrevType prevType = EPrevType::Mesh;
 private:
 
 	void ProcessViewportInput(FEditor& Editor, const ImVec2& ViewportPos, const ImVec2& ViewportSize, float DeltaTime);
 
-	void DrawDetailsPanel();
+	void DrawMeshDetailsPanel();
+	void DrawMaterialDetailsPanel();
 
 	bool bIsOpen = false;
 	bool bFocusRequested = false;

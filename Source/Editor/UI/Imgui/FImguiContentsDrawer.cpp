@@ -64,6 +64,11 @@ void FImguiContentsDrawer::RefreshEntries()
 
 		for (const auto& [Key, Thumb] : FRenderResourceLibrary::Get().GetAllMeshThumbnailMap())
 		{
+			if (Key == "Sphere_Mat") // 머터리얼 전용 ustaticmesh
+			{
+				continue;
+			}
+
 			FContentEntry Item;
 			Item.DisplayName = Key.ToString();
 			Item.Extension = ".staticmesh";
@@ -358,13 +363,13 @@ void FImguiContentsDrawer::RenderContentView()
 		else if (!Item.bIsDirectory && ImGui::IsItemHovered() &&
 			ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 		{
-			if (Item.Extension == ".staticmesh" || Item.Extension == ".obj")
+			if (Item.Extension == ".staticmesh")
 			{
 				const FName MeshId(Item.DisplayName);
 				UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh(MeshId);
 				if (Mesh)
 				{
-					FEditorApplication::Get().OpenPreviewWindow(Mesh);
+					FEditorApplication::Get().OpenPreviewWindow(Mesh, EPrevType::Mesh);
 				}
 			}
 			else if (Item.Extension == ".material")
@@ -372,7 +377,7 @@ void FImguiContentsDrawer::RenderContentView()
 				UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh("Sphere_Mat");
 				Mesh->Materials[0] = Item.DisplayName;
 
-				FEditorApplication::Get().OpenPreviewWindow(Mesh);
+				FEditorApplication::Get().OpenPreviewWindow(Mesh, EPrevType::Material);
 			}
 		}
 

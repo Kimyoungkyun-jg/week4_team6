@@ -6,7 +6,9 @@
 #include "Runtime/Input/FInputManager.h"
 #include "ThirdParty/Imgui/imgui.h"
 #include "ThirdParty/Imgui/imgui_internal.h"
+#include "Editor/UI/Imgui/FImguiDragDrop.h"
 #include <algorithm>
+#include <filesystem>
 #include <Runtime/Core/TObjectIterator.h>
 
 FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
@@ -15,12 +17,11 @@ FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 	PreviewViewport.ViewportCamera.Projection.FOV = 60.0f;
 	PreviewViewport.ViewportCamera.Projection.Aspect = 1.0f;
 
-
 	CameraController.CameraMoveSpeed = 5.0f;
 	CameraController.CameraRotateSpeed = 0.5f;
 }
 
-void FImguiPreviewEditorWindow::Open(UStaticMesh* InMesh, ImGuiID InDockID)
+void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, ImGuiID InDockID, EPrevType type)
 {
 	if (!InMesh)
 	{
@@ -32,17 +33,28 @@ void FImguiPreviewEditorWindow::Open(UStaticMesh* InMesh, ImGuiID InDockID)
 	InitialDockID = InDockID;
 	bFocusRequested = true;
 	bNeedInitialDock = true;
+	prevType = type;
 
 #if IS_OBJ_VIEWER
 	TitleString += "OBJ_Viewer###PreviewEditor";
 #else
-	// 스크린샷과 동일하게 탭에 메시 이름 표시
-	TitleString = TargetMesh->MeshId.ToString();
-	TitleString += "###PreviewEditor";
-	TitleString += TargetMesh->MeshId.ToString();
-
+	switch (type)
+	{
+	case EPrevType::Mesh:
+		TitleString = TargetMesh->MeshId.ToString();
+		TitleString += "###PreviewMeshEditor";
+		TitleString += TargetMesh->MeshId.ToString();
+		break;
+	case EPrevType::Material:
+	{
+		const FString MatName = InMesh->Materials.empty() ? "Material" : InMesh->Materials[0];
+		TitleString = MatName + "###PreviewMaterialEditor_" + MatName;
+		break;
+	}
+	default:
+		break;
+	}
 #endif
-
 
 	if (InitialDockID != 0)
 	{
@@ -50,7 +62,6 @@ void FImguiPreviewEditorWindow::Open(UStaticMesh* InMesh, ImGuiID InDockID)
 	}
 
 	FocusOnMesh();
-
 }
 
 void FImguiPreviewEditorWindow::BringToFront()
@@ -69,20 +80,16 @@ void FImguiPreviewEditorWindow::FocusOnMesh()
 
 	const FAxisAlignedBoundingBox& Bounds = TargetMesh->GetBounds();
 	MeshCenter = (Bounds.Min + Bounds.Max) * 0.5f;
-
 	MeshExtent = (Bounds.Max - Bounds.Min).Size();
 
-	// 최소 거리 2.0f, 최대 거리 500.0f로 클램핑 (필요에 따라 상한값 조절 가능)
 	constexpr float MinDistance = 2.0f;
 	constexpr float MaxDistance = 100.0f;
 	const float CalculatedDistance = (MeshExtent > 0.1f) ? (MeshExtent * 1.5f) : 5.0f;
 	const float Distance = std::clamp(CalculatedDistance, MinDistance, MaxDistance);
 
-	// 메시를 비스듬히 내려다보도록 카메라 배치
 	PreviewViewport.ViewportCamera.Pitch = -20.0f;
 	PreviewViewport.ViewportCamera.Yaw = 45.0f;
 
-	// 엔진 표준 회전 행렬로부터 전방 벡터 추출
 	const FMatrix Rotation = FMatrix::MakeRotation(FVector(0.0f, PreviewViewport.ViewportCamera.Pitch, PreviewViewport.ViewportCamera.Yaw));
 	const FVector Forward{ Rotation.M[0][0], Rotation.M[0][1], Rotation.M[0][2] };
 
@@ -97,7 +104,6 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 	}
 
 #if IS_OBJ_VIEWER
-	// 뷰어 모드: 전체 화면 강제 고정 및 타이틀바/리사이즈/이동 비활성화
 	const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(MainViewport->WorkPos, ImGuiCond_Always);
 	ImGui::SetNextWindowSize(MainViewport->WorkSize, ImGuiCond_Always);
@@ -113,12 +119,13 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 	if (bWindowVisible)
 #else
-	// 기존 에디터 도킹 로직 유지
 	ImGui::SetNextWindowSize(ImVec2(850.0f, 600.0f), ImGuiCond_FirstUseEver);
 
+	// 첫 프레임 생성 시 도크 노드에 강제 바인딩 (탭 중첩 보장)
 	if (bNeedInitialDock && InitialDockID != 0)
 	{
 		ImGui::SetNextWindowDockID(InitialDockID, ImGuiCond_Always);
+		ImGui::DockBuilderDockWindow(TitleString.c_str(), InitialDockID);
 		bNeedInitialDock = false;
 	}
 	else if (InitialDockID != 0)
@@ -132,13 +139,12 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		bFocusRequested = false;
 	}
 
-	// 불투명 배경색 적용
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.14f, 1.0f));
 	const bool bWindowVisible = ImGui::Begin(TitleString.c_str(), &bIsOpen, ImGuiWindowFlags_NoCollapse);
 	ImGui::PopStyleColor();
+#endif
 
 	if (bWindowVisible)
-#endif
 	{
 		// 상단 툴바
 		ImGui::Checkbox("Grid", &bShowGrid);
@@ -179,8 +185,8 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
 				{
-					TargetMesh = Mesh;
-					FocusOnMesh(); // 메시 교체 후 카메라 초점 재정렬
+					TargetMesh = MeshPtr;
+					FocusOnMesh();
 				}
 
 				if (bIsSelected) { ImGui::SetItemDefaultFocus(); }
@@ -229,9 +235,21 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		ImGui::SameLine();
 
 		// 우측 세부 정보 패널
-		ImGui::BeginChild("MeshDetailsPanel", ImVec2(DetailsWidth, ViewHeight), true);
-		DrawDetailsPanel();
-		ImGui::EndChild();
+		switch (prevType)
+		{
+		case EPrevType::Mesh:
+			ImGui::BeginChild("MeshDetailsPanel", ImVec2(DetailsWidth, ViewHeight), true);
+			DrawMeshDetailsPanel();
+			ImGui::EndChild();
+			break;
+		case EPrevType::Material:
+			ImGui::BeginChild("MaterialDetailsPanel", ImVec2(DetailsWidth, ViewHeight), true);
+			DrawMaterialDetailsPanel();
+			ImGui::EndChild();
+			break;
+		default:
+			break;
+		}
 	}
 	ImGui::End();
 }
@@ -247,22 +265,18 @@ void FImguiPreviewEditorWindow::ProcessViewportInput(FEditor& Editor, const ImVe
 		return;
 	}
 
-	// 포커스 단축키
 	if (bHovered && FInputManager::Get().IsKeyJustPressed('F'))
 	{
 		FocusOnMesh();
 		return;
 	}
 
-	// 우클릭 자유 시점 제어
 	if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && (bHovered || ImGui::IsWindowFocused()))
 	{
-		// 우클릭 상태에서 마우스 휠로 속도 촘촘하게 동적 조절
 		const float Wheel = ImGui::GetIO().MouseWheel;
 		if (Wheel != 0.0f)
 		{
 			CameraSpeed += Wheel * 0.1f;
-			// 휠 조절 속도 상한
 			CameraSpeed = std::clamp(CameraSpeed, 1.0f, 15.0f);
 		}
 
@@ -274,7 +288,7 @@ void FImguiPreviewEditorWindow::ProcessViewportInput(FEditor& Editor, const ImVe
 	}
 }
 
-void FImguiPreviewEditorWindow::DrawDetailsPanel()
+void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 {
 	if (!TargetMesh.IsValid())
 	{
@@ -301,6 +315,101 @@ void FImguiPreviewEditorWindow::DrawDetailsPanel()
 		ImGui::Text("Size: %.1f, %.1f, %.1f", Size.X, Size.Y, Size.Z);
 	}
 
+	// ---------------- Materials 편집 섹션 ----------------
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Materials");
+
+	const auto& AllMaterialMap = FRenderResourceLibrary::Get().GetAllMaterials();
+	TArray<FString> AvailableMaterials;
+	AvailableMaterials.reserve(AllMaterialMap.size());
+	for (const auto& [MatKey, _] : AllMaterialMap)
+	{
+		AvailableMaterials.push_back(MatKey);
+	}
+	std::sort(AvailableMaterials.begin(), AvailableMaterials.end());
+
+	for (int SlotIdx = 0; SlotIdx < static_cast<int>(TargetMesh->Materials.size()); ++SlotIdx)
+	{
+		ImGui::PushID(SlotIdx);
+		FString& CurrentSlotMat = TargetMesh->Materials[SlotIdx];
+
+		ImGui::TextDisabled("Slot [%d]", SlotIdx);
+
+		// 머티리얼 썸네일 SRV 조회
+		ID3D11ShaderResourceView* ThumbnailSRV = nullptr;
+		if (auto MatTex = FRenderResourceLibrary::Get().GetMaterialThumbnail(CurrentSlotMat))
+		{
+			ThumbnailSRV = MatTex->GetSRV();
+		}
+
+		constexpr float ThumbWidth = 72.0f;
+		constexpr float ThumbHeight = 72.0f;
+		const ImTextureID TexId = reinterpret_cast<ImTextureID>(ThumbnailSRV);
+
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f));
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+		ImGui::ImageButton("##MatThumb", TexId, ImVec2(ThumbWidth, ThumbHeight), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
+
+		// 머티리얼 드롭 수신
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
+			{
+				const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
+				if (DragData && DragData->Kind == FContentDragPayload::EKind::Material)
+				{
+					CurrentSlotMat = DragData->Key;
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		// 하단 머티리얼 인디케이터 (초록색 바)
+		const ImVec2 Min = ImGui::GetItemRectMin();
+		const ImVec2 Max = ImGui::GetItemRectMax();
+		constexpr float LineHeight = 3.5f;
+
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			ImVec2(Min.x + 2.0f, Max.y - LineHeight - 2.0f),
+			ImVec2(Max.x - 2.0f, Max.y - 2.0f),
+			IM_COL32(46, 204, 113, 255)
+		);
+
+		ImGui::SameLine();
+
+		const float YOffset = (ThumbHeight - ImGui::GetFrameHeight()) * 0.5f;
+		if (YOffset > 0.0f)
+		{
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + YOffset);
+		}
+
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::BeginCombo("##MatCombo", CurrentSlotMat.c_str()))
+		{
+			for (const FString& MatName : AvailableMaterials)
+			{
+				const bool bMatSelected = (CurrentSlotMat == MatName);
+				if (ImGui::Selectable(MatName.c_str(), bMatSelected))
+				{
+					CurrentSlotMat = MatName;
+				}
+
+				if (bMatSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		ImGui::Spacing();
+		ImGui::PopID();
+	}
+
+	// ---------------- 카메라 정보 ----------------
 	ImGui::Spacing();
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Camera (Free Flight)");
@@ -315,6 +424,132 @@ void FImguiPreviewEditorWindow::DrawDetailsPanel()
 	ImGui::Spacing();
 	ImGui::TextDisabled("RMB + WASD: Fly Camera");
 	ImGui::TextDisabled("Key F: Focus Mesh");
+
+	if (ImGui::Button("Focus Mesh (F)", ImVec2(-1.0f, 25.0f)))
+	{
+		FocusOnMesh();
+	}
+}
+
+void FImguiPreviewEditorWindow::DrawMaterialDetailsPanel()
+{
+	if (!TargetMesh.IsValid() || TargetMesh->Materials.empty())
+	{
+		ImGui::TextDisabled("No material selected");
+		return;
+	}
+
+	const FString& MatName = TargetMesh->Materials[0];
+	auto Material = FRenderResourceLibrary::Get().GetMaterial(MatName);
+
+	ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "Material Details");
+	ImGui::Separator();
+	ImGui::Text("Material Name: %s", MatName.c_str());
+
+	if (!Material)
+	{
+		ImGui::TextDisabled("Material resource not found");
+		return;
+	}
+
+	ImGui::Spacing();
+	ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Texture Parameters");
+	ImGui::TextDisabled("Base Color / Diffuse");
+
+	// 1. 머티리얼에서 현재 FTexture 객체 및 SRV 가져오기
+	auto DiffuseTex = Material->GetDiffuseMap();
+	ID3D11ShaderResourceView* DiffuseSRV = DiffuseTex ? DiffuseTex->GetSRV() : nullptr;
+
+	constexpr float ThumbWidth = 72.0f;
+	constexpr float ThumbHeight = 72.0f;
+	const ImTextureID TexId = reinterpret_cast<ImTextureID>(DiffuseSRV);
+
+	ImGui::PushID("DiffuseSlot");
+
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f));
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+	ImGui::ImageButton("##DiffuseThumb", TexId, ImVec2(ThumbWidth, ThumbHeight), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar();
+
+	// 텍스처 드래그 앤 드롭 수신
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
+		{
+			const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
+			if (DragData && DragData->Kind == FContentDragPayload::EKind::Texture)
+			{
+				// 1. stem 추출 후 소문자 변환
+				std::filesystem::path FilePath(DragData->Path);
+				std::string CleanKey = FilePath.stem().string();
+				std::transform(CleanKey.begin(), CleanKey.end(), CleanKey.begin(), [](unsigned char c) {
+					return static_cast<char>(std::tolower(c));
+					});
+
+				// 2. 라이브러리 캐시 조회
+				auto NewTex = FRenderResourceLibrary::Get().GetTexture(CleanKey);
+
+				// 3. 미캐시 시 디스크에서 즉시 로드 후 라이브러리 등록
+				if (!NewTex)
+				{
+					if (auto Renderer = FRenderResourceLibrary::Get().GetRenderer())
+					{
+						NewTex = Renderer->CreateTexture(FilePath.wstring().c_str());
+						if (NewTex)
+						{
+							FRenderResourceLibrary::Get().RegisterTexture(CleanKey, NewTex);
+						}
+					}
+				}
+
+				// 4. 머티리얼에 디퓨즈 맵 반영
+				if (NewTex)
+				{
+					Material->SetDiffuseMap(NewTex);
+				}
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
+
+	// 텍스처 인디케이터 바 (주황색)
+	const ImVec2 Min = ImGui::GetItemRectMin();
+	const ImVec2 Max = ImGui::GetItemRectMax();
+	constexpr float LineHeight = 3.5f;
+
+	ImGui::GetWindowDrawList()->AddRectFilled(
+		ImVec2(Min.x + 2.0f, Max.y - LineHeight - 2.0f),
+		ImVec2(Max.x - 2.0f, Max.y - 2.0f),
+		IM_COL32(230, 126, 34, 255)
+	);
+
+	ImGui::SameLine();
+	const float YOffset = (ThumbHeight - ImGui::GetFrameHeight()) * 0.5f;
+	if (YOffset > 0.0f)
+	{
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + YOffset);
+	}
+
+	if (DiffuseTex)
+	{
+		ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f), "Texture Bound");
+	}
+	else
+	{
+		ImGui::TextDisabled("None (Drop Texture Here)");
+	}
+
+	ImGui::PopID();
+
+	// ---------------- 카메라 조작 안내 ----------------
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Camera (Free Flight)");
+	ImGui::Text("Pos: %.1f, %.1f, %.1f",
+		PreviewViewport.ViewportCamera.Position.X,
+		PreviewViewport.ViewportCamera.Position.Y,
+		PreviewViewport.ViewportCamera.Position.Z);
 
 	if (ImGui::Button("Focus Mesh (F)", ImVec2(-1.0f, 25.0f)))
 	{

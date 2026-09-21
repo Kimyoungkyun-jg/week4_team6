@@ -240,7 +240,7 @@ HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
     return nullptr;
   }
 
-  OutSplashWnd = ShowLoadingWindow(Instance);
+  //OutSplashWnd = ShowLoadingWindow(Instance);
 
   const FWindowLayout WindowLayout = GetWindowLayout();
   constexpr DWORD MainStyle = WS_OVERLAPPEDWINDOW;
