@@ -75,6 +75,7 @@ public:
   // 스태틱 메시 썸네일 텍스처 보관 맵
   TMap<FName, TSharedPtr<FTexture>> AllMeshThumbnailMap;
 
+
   // 전체 썸네일 맵 조회
   [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
     return AllMeshThumbnailMap;

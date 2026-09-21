@@ -141,13 +141,12 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 		return;
 	}
 
-	// 현재 선택된 정적 메시 키값
+	// 1. 현재 선택된 정적 메시 선택 콤보 박스
 	UStaticMesh* CurrentStaticMesh = StaticMeshComp.GetStaticMesh();
 	std::string CurrentMeshName = CurrentStaticMesh ? CurrentStaticMesh->MeshId.ToString() : "None";
 
 	if (ImGui::BeginCombo("Static Mesh", CurrentMeshName.c_str()))
 	{
-		// 키 목록 정렬
 		TArray<FName> SortedKeys;
 		SortedKeys.reserve(AllUStaticMeshMap.size());
 		for (const auto& [MeshKey, _] : AllUStaticMeshMap)
@@ -180,10 +179,58 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 		ImGui::EndCombo();
 	}
 
-	// UV 애니메이션 토글 체크박스 추가
+	// 2. 머티리얼 슬롯 리스트 및 변경 콤보 박스
+	if (CurrentStaticMesh)
+	{
+		ImGui::Spacing();
+		ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Materials");
+
+		const auto& AllMaterialMap = FRenderResourceLibrary::Get().GetAllMaterials();
+
+		// 사용 가능한 전체 머티리얼 키 목록 미리 정렬
+		TArray<FString> AvailableMaterials;
+		AvailableMaterials.reserve(AllMaterialMap.size());
+		for (const auto& [MatKey, _] : AllMaterialMap)
+		{
+			AvailableMaterials.push_back(MatKey);
+		}
+		std::sort(AvailableMaterials.begin(), AvailableMaterials.end());
+
+		// UStaticMesh가 가지고 있는 머티리얼 슬롯 순회
+		for (int SlotIdx = 0; SlotIdx < static_cast<int>(CurrentStaticMesh->Materials.size()); ++SlotIdx)
+		{
+			ImGui::PushID(SlotIdx);
+
+			FString& CurrentSlotMat = CurrentStaticMesh->Materials[SlotIdx];
+			std::string SlotLabel = "Slot [" + std::to_string(SlotIdx) + "]";
+
+			if (ImGui::BeginCombo(SlotLabel.c_str(), CurrentSlotMat.c_str()))
+			{
+				for (const FString& MatName : AvailableMaterials)
+				{
+					const bool bMatSelected = (CurrentSlotMat == MatName);
+					if (ImGui::Selectable(MatName.c_str(), bMatSelected))
+					{
+						CurrentSlotMat = MatName; // 선택한 새 머티리얼 키로 교체
+					}
+
+					if (bMatSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			ImGui::PopID();
+		}
+	}
+
+	// UV 애니메이션 토글
 	ImGui::Spacing();
 	ImGui::Checkbox("Animate UV (bIsMovingUV)", &StaticMeshComp.bIsMovingUV);
 }
+
 
 void FImguiPropertyWindow::ShowTransform(FEditor& Editor, USceneComponent& Comp, bool bIsRoot) const
 {

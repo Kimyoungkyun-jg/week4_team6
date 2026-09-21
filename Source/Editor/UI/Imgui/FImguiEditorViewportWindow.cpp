@@ -57,6 +57,12 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
     if (bBtnClicked)
     {
         Editor.bIsViewportSplit = !Editor.bIsViewportSplit;
+
+        // 4-Split 모드로 진입했을 때만 카메라 트랜스폼 초기화 실행
+        if (Editor.bIsViewportSplit)
+        {
+            Editor.ResetSplitViewportCameras();
+        }
         EndWindow();
         return;
     }
@@ -110,6 +116,21 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
             UpdateCamera(Editor, ActiveVP, Input, DeltaTime);
         }
     }
+
+    if (Editor.bIsViewportSplit)
+    {
+        // 4분할 모드: 활성화된 모든 뷰포트의 버튼 표시
+        for (FEditorViewport& VP : Viewports)
+        {
+            VP.Process();
+        }
+    }
+    else
+    {
+        // 단일 뷰포트 모드: 메인(0번) 뷰포트의 버튼만 표시
+        Viewports[0].Process();
+    }
+    
 
     EndWindow();
 }

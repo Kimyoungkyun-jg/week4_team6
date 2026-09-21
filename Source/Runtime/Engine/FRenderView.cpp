@@ -41,10 +41,10 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
         }
 
 
-        const auto& RenderDatas = MeshComponent->GetRenderDatas(View.Camera);
+        const auto& RenderDatas = MeshComponent->GetRenderDatas(*View.Camera);
 
         // 공통 Matrix 및 Color 계산 (루프 밖 1회 수행)
-        const FMatrix World = MeshComponent->GetRenderMatrix(View.Camera);
+        const FMatrix World = MeshComponent->GetRenderMatrix(*View.Camera);
         const FMatrix MVP = World * View.ViewProj;
 
         FVector FinalColorOverride = MeshComponent->GetColor();
@@ -103,11 +103,11 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
     CollectScenePrimitives(Scene, View, EditorCtx.SelectedActor);
 
     // 기본 씬 오브젝트 패스
-    FlushBasePass(View.Camera);
+    FlushBasePass(*View.Camera);
 
     // 에디터 라인 패스
     if (EditorCtx.Grid) {
-        DrawGrid(View.Camera, *EditorCtx.Grid);
+        DrawGrid(*View.Camera, *EditorCtx.Grid);
     }
 
     if (EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
@@ -122,21 +122,21 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
             Visualizer->Draw(
                 *EditorCtx.SelectedMeshComp,
                 *this,
-                View.Camera,
+                *View.Camera,
                 FVector4{0.0f, 1.0f, 0.0f, 1.0f}
             );
         }
     }
     
-    FlushLinePass(View.Camera);
+    FlushLinePass(*View.Camera);
 
     // 후처리 외곽선 패스
-    RenderPostProcessPass(View.Camera, EditorCtx.SelectedActor, View.TopLeftUV, View.LengthUV);
+    RenderPostProcessPass(*View.Camera, EditorCtx.SelectedActor, View.TopLeftUV, View.LengthUV);
 
     // 오버레이 패스
     if (EditorCtx.Gizmo && EditorCtx.SelectedActor)
     {
-        RenderOverlayPass(View.Camera, View, EditorCtx.SelectedTransform, *EditorCtx.Gizmo, EditorCtx.TextComp);
+        RenderOverlayPass(*View.Camera, View, EditorCtx.SelectedTransform, *EditorCtx.Gizmo, EditorCtx.TextComp);
     }
 }
 
