@@ -82,7 +82,7 @@ public:
     void BindBackBufferWithDepth();
     ID3D11RenderTargetView* GetBackBuffer() { return BackBufferRTV.Get(); }
 
-    void RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid = false);
+    void RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid = false, TSharedPtr<FMaterial> OverrideMaterial=nullptr);
     void RenderMaterialPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, TSharedPtr<FStaticMesh>,  TSharedPtr<FMaterial> Material, uint32 Width, uint32 Height, bool bDrawGrid = false);
 private:
     bool InitializeDeviceAndSwapChain(HWND Window);

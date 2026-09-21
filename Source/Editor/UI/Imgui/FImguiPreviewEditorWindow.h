@@ -19,7 +19,7 @@ class FImguiPreviewEditorWindow final
 {
 public:
 	FImguiPreviewEditorWindow();
-	~FImguiPreviewEditorWindow();
+	~FImguiPreviewEditorWindow() = default;
 
 	FImguiPreviewEditorWindow(const FImguiPreviewEditorWindow&) = delete;
 	FImguiPreviewEditorWindow& operator=(const FImguiPreviewEditorWindow&) = delete;

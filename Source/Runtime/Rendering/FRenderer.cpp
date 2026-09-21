@@ -900,7 +900,8 @@ void FRenderer::RenderOutline(FVector2 TopLeftUV, FVector2 LengthUV) {
   BindBackBufferWithDepth();
 }
 
-void FRenderer::RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid)
+void FRenderer::RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, 
+    UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid, TSharedPtr<FMaterial> OverrideMaterial)
 {
   if (!TargetMesh)
   {
@@ -957,7 +958,7 @@ void FRenderer::RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const
   SetRenderMode(EViewModeIndex::VMI_Lit);
   UpdateLightConstants(LightConstants, EViewModeIndex::VMI_Lit);
 
-  TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[0]);
+  
   auto& Sections = MeshAsset->GetSections();
 
   FObjectConstants ObjConstants = {};
@@ -971,35 +972,41 @@ void FRenderer::RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const
   {
       for (int i = 0; i < TargetMesh->Materials.size(); i++)
       {
-          // 머티리얼 조회 및 폴백
-          auto Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[i]);
-          if (!Material)
+          // OverrideMaterial이 넘어왔다면(머티리얼 프리뷰 창일 때) 최우선 바인딩, 없으면 라이브러리에서 조회
+          TSharedPtr<FMaterial> MaterialToDraw = OverrideMaterial;
+          if (!MaterialToDraw)
           {
-              Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+              MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[i]);
+              if (!MaterialToDraw)
+              {
+                  MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+              }
           }
 
-          if (Material && i < static_cast<int>(Sections.size()))
+          if (MaterialToDraw && i < static_cast<int>(Sections.size()))
           {
-              Draw(*MeshAsset, *Material, ObjConstants, Sections.at(i).FirstIndex, Sections.at(i).IndexCount, 0, false);
+              Draw(*MeshAsset, *MaterialToDraw, ObjConstants, Sections.at(i).FirstIndex, Sections.at(i).IndexCount, 0, false);
           }
       }
   }
   else
   {
-      // 기본 도형(Cube, Sphere 등)은 0번 슬롯 머티리얼 또는 메시 이름으로 조회
-      FName MatKey = (!TargetMesh->Materials.empty()) ? TargetMesh->Materials[0] : TargetMesh->MeshId;
-      auto Material = FRenderResourceLibrary::Get().GetMaterial(MatKey);
-
-      // 없으면 기본 Simple 머티리얼로 폴백
-      if (!Material)
+      // 기본 구체/큐브 등 섹션이 없는 단일 메시의 경우
+      TSharedPtr<FMaterial> MaterialToDraw = OverrideMaterial;
+      if (!MaterialToDraw)
       {
-          Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+          FName MatKey = (!TargetMesh->Materials.empty()) ? TargetMesh->Materials[0] : TargetMesh->MeshId;
+          MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(MatKey);
+
+          if (!MaterialToDraw)
+          {
+              MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+          }
       }
 
-      if (Material)
+      if (MaterialToDraw)
       {
-          // 전체 인덱스 드로우 (-1 또는 전체 인덱스 수)
-          Draw(*MeshAsset, *Material, ObjConstants, 0, -1, 0, false);
+          Draw(*MeshAsset, *MaterialToDraw, ObjConstants, 0, -1, 0, false);
       }
   }
 

@@ -418,9 +418,10 @@ void FRenderView::RenderPreviewScene(
     UStaticMesh* TargetMesh,
     uint32 Width,
     uint32 Height,
-    bool bDrawGrid)
+    bool bDrawGrid,
+    TSharedPtr<FMaterial> OverrideMaterial)
 {
-    Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+    Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid, OverrideMaterial);
 }
 
 

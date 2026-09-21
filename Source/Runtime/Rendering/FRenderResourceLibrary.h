@@ -10,6 +10,8 @@
 #include "Runtime/Core/PointerTypes.h"
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Core/TMap.h"
+#include "Runtime/Engine/FDelegate.h"
+#include <unordered_set>
 #include "Vertices.h"
 
 class FRenderer;
@@ -56,6 +58,12 @@ public:
 
   bool Initialize(FRenderer &Renderer);
 
+
+  // 저장된 머티리얼 키를 넘겨주는 이벤트
+  TMulticastDelegate<const FString&> OnMaterialSaved;
+
+
+
   // 파이프라인 보관 맵
   TMap<FName, TSharedPtr<FRenderPipeline>> AllPipelineMap;
   // 저수준 렌더 정적 메시 보관 맵
@@ -77,6 +85,13 @@ public:
 
   // 머터리얼 썸네일 텍스처 보관 맵
   TMap<FString, TSharedPtr<FTexture>> AllMaterialThumbnailMap;
+
+  // 머터리얼 참조 메시 보관 맵
+  TMap<FString, std::unordered_set<FString>> AllMaterialToMeshDependencyMap;
+
+
+
+
 
   // 전체 썸네일 맵 조회
   [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
@@ -166,6 +181,17 @@ public:
   //Obj용 등록함수
   TSharedPtr<FStaticMesh> CreateStaticMesh(const FName& ID,const TArray<FVertexData>& Vertices,const TArray<uint32>& Indices);
 
+
+  // material 참조하는 mesh 넣어주기
+  void RegisterMeshMaterialDependency(FString MeshId, const FString& MaterialKey);
+
+  // 머티리얼 키를 받아서 자기 자신 썸네일과 의존성이 걸린 메시 썸네일들을 한 번에 갱신
+  void RefreshMaterialAndDependentThumbnails(const FString& InMaterialKey);
+
+
+  void UpdateMeshMaterialDependency(const FString& MeshId, const FString& OldMatKey, const FString& NewMatKey);
+
+  void UnregisterMeshMaterialDependency(const FString& MeshId, const FString& MaterialKey);
 
   // 개별 메쉬 접근자
   [[nodiscard]] TSharedPtr<FStaticMesh> GetCubeMesh() const {

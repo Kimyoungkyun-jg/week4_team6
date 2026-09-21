@@ -41,7 +41,8 @@ public:
 		UStaticMesh* TargetMesh,
 		uint32 Width = 0,
 		uint32 Height = 0,
-		bool bDrawGrid = true);
+		bool bDrawGrid = true,
+		TSharedPtr<FMaterial> OverrideMaterial = nullptr);
 
 	// 뷰포트 패스 파이프라인
 	void BeginView(FVector2 TopLeftUV, FVector2 LengthUV, EViewModeIndex ViewMode, const FLightConstants& LightConstants);

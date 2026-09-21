@@ -533,6 +533,13 @@ bool FRenderResourceLibrary::Initialize(FRenderer &Renderer) {
   CreateMeshThumbnails(); // 메시 썸네일 일괄 생성
   CreateMaterialThumbnails(); // 머터리얼 썸네일 일괄 생성
 
+
+  //머터리얼 변경 후 저장시 발동할 함수
+  FRenderResourceLibrary::Get().OnMaterialSaved.Add([](const FString& SavedMatKey)
+      {
+          FRenderResourceLibrary::Get().RefreshMaterialAndDependentThumbnails(SavedMatKey);
+      });
+
   return true;
 }
 
@@ -604,6 +611,12 @@ UStaticMesh* FRenderResourceLibrary::CreateAndRegisterUStaticMesh(FName Key, TAr
     MeshPtr->MeshId = Key;
     MeshPtr->SetStaticMeshAsset(fstaticmesh);
 
+    for (int i = 0; i < MeshPtr->Materials.size(); i++)
+    {
+        RegisterMeshMaterialDependency(Key.ToString(), MeshPtr->Materials[i]);
+    }
+
+
     AllUStaticMeshMap[Key.ToString()] = MeshPtr;
 
     return MeshPtr;
@@ -629,14 +642,17 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
         if (Key == "Spotlight")
         {
             StaticMeshObj->Materials.push_back("Spotlight");
+            RegisterMeshMaterialDependency("Spotlight", "Spotlight");
         }
         else if (Key == "MasterYi")
         {
             StaticMeshObj->Materials.push_back("MasterYi");
+            RegisterMeshMaterialDependency("MasterYi", "MasterYi");
         }
         else
         {
             StaticMeshObj->Materials.push_back("Simple_Solid");
+            RegisterMeshMaterialDependency(Key, "Simple_Solid");
         }
 
         AllUStaticMeshMap[Key] = StaticMeshObj;
@@ -647,6 +663,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
     if (SphereAsset)
     {
         CreateAndRegisterUStaticMesh(FName("Sphere_Mat"), { "Simple" }, SphereAsset);
+        RegisterMeshMaterialDependency("Sphere_Mat", "Simple");
     }
 
 
@@ -2036,4 +2053,54 @@ void FRenderResourceLibrary::UpdateMeshThumbnail(const FString& MeshKey)
     }
 
     Renderer.BindBackBufferWithDepth();
+}
+
+
+void FRenderResourceLibrary::RegisterMeshMaterialDependency(FString MeshId, const FString& MaterialKey)
+{
+    if (!MaterialKey.empty())
+    {
+        AllMaterialToMeshDependencyMap[MaterialKey].insert(MeshId);
+    }
+}
+
+void FRenderResourceLibrary::UnregisterMeshMaterialDependency(const FString& MeshId, const FString& MaterialKey)
+{
+    if (MaterialKey.empty()) return;
+
+    auto It = AllMaterialToMeshDependencyMap.find(MaterialKey);
+    if (It != AllMaterialToMeshDependencyMap.end())
+    {
+        It->second.erase(MeshId);
+        if (It->second.empty())
+        {
+            AllMaterialToMeshDependencyMap.erase(It);
+        }
+    }
+}
+
+
+void FRenderResourceLibrary::RefreshMaterialAndDependentThumbnails(const FString& InMaterialKey)
+{
+    UpdateMaterialThumbnail(InMaterialKey);
+
+    // 이 머티리얼을 참조하는 메시들 썸네일 갱신
+    auto It = AllMaterialToMeshDependencyMap.find(InMaterialKey);
+    if (It != AllMaterialToMeshDependencyMap.end())
+    {
+        const auto& MeshSet = It->second;
+        for (const FString& MeshKey : MeshSet)
+        {
+            UpdateMeshThumbnail(MeshKey);
+        }
+    }
+    
+}
+
+void FRenderResourceLibrary::UpdateMeshMaterialDependency(const FString& MeshId, const FString& OldMatKey, const FString& NewMatKey)
+{
+    if (OldMatKey == NewMatKey) return;
+
+    UnregisterMeshMaterialDependency(MeshId, OldMatKey);
+    RegisterMeshMaterialDependency(MeshId, NewMatKey);
 }
