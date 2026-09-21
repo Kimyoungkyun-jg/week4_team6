@@ -37,6 +37,9 @@ void AStaticMeshActor::SetStaticMesh(const FName& InMeshId)
 {
 	if (auto* Comp = GetStaticMeshComponent())
 	{
-		Comp->SetStaticMesh(NewObject<UStaticMesh>(InMeshId));
+		if (UStaticMesh* Shared = FRenderResourceLibrary::Get().GetUStaticMesh(InMeshId))
+		{
+			Comp->SetStaticMesh(Shared);
+		}
 	}
 }

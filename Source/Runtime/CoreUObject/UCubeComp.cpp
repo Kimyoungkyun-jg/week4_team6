@@ -9,5 +9,5 @@ UCLASS_META(UCubeComp, MeshName, "Cube")
 void UCubeComp::Initialize() {
   Super::Initialize();
   SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Cube"));
-  SetMaterial(0, FName("Textured"));
+  SetMaterial(0, FName("Simple"));
 }

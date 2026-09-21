@@ -7,6 +7,7 @@
 #include "ThirdParty/Imgui/imgui.h"
 #include "ThirdParty/Imgui/imgui_internal.h"
 #include <algorithm>
+#include <Runtime/Core/TObjectIterator.h>
 
 FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 {
@@ -154,24 +155,35 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		ImGui::SetNextItemWidth(200.0f);
 
 		const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
+
 		if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
 		{
-			const auto& MeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
-			for (const auto& [Key, MeshPtr] : MeshMap)
+			TArray<UStaticMesh*> Meshes;
+			for (TObjectIterator<UStaticMesh> It; It; ++It)
 			{
-				const std::string ItemName = Key;
-				const bool bIsSelected = (TargetMesh.IsValid() && TargetMesh->MeshId == Key);
+				Meshes.push_back(*It);
+			}
+			std::sort(Meshes.begin(), Meshes.end(),
+				[](const UStaticMesh* A, const UStaticMesh* B)
+				{
+					return A->MeshId.Compare(B->MeshId) < 0;
+				});
+
+			for (UStaticMesh* Mesh : Meshes)
+			{
+				ImGui::PushID(static_cast<int>(Mesh->GetUUID()));
+
+				const std::string ItemName = Mesh->MeshId.ToString();
+				const bool bIsSelected = (TargetMesh.Get() == Mesh);
 
 				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
 				{
-					TargetMesh = MeshPtr;
+					TargetMesh = Mesh;
 					FocusOnMesh(); // 메시 교체 후 카메라 초점 재정렬
 				}
 
-				if (bIsSelected)
-				{
-					ImGui::SetItemDefaultFocus();
-				}
+				if (bIsSelected) { ImGui::SetItemDefaultFocus(); }
+				ImGui::PopID();
 			}
 			ImGui::EndCombo();
 		}
