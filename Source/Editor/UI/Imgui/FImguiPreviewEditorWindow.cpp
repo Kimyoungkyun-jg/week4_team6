@@ -185,7 +185,7 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
 				{
-					TargetMesh = MeshPtr;
+					TargetMesh = Mesh;
 					FocusOnMesh();
 				}
 
