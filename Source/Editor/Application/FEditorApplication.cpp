@@ -164,32 +164,64 @@ void FEditorApplication::Tick(float DeltaTime) {
 #include "ThirdParty/Imgui/imgui_internal.h"
 #include <Runtime\CoreUObject\UMeshComponent.h>
 
-void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh) {
+void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
+{
     if (!InMesh)
     {
         return;
     }
 
-    // 이미 열려있는 창이면 최상단으로 포커스
+    // 1. 닫힌 창 정리
+    PreviewWindows.erase(
+        std::remove_if(PreviewWindows.begin(), PreviewWindows.end(),
+            [](const TSharedPtr<FImguiPreviewEditorWindow>& Win) {
+                return !Win || !Win->IsOpen();
+            }),
+        PreviewWindows.end()
+    );
+
+    const FString CurrentMatName = (!InMesh->Materials.empty()) ? InMesh->Materials[0] : "";
+
+    // 2. 이미 열려 있는 창인지 검사
     for (const auto& Window : PreviewWindows)
     {
-        if (Window && Window->GetTargetMesh() == InMesh)
+        if (Window && Window->IsOpen())
         {
-            Window->BringToFront();
-            return;
+            if (type == EPrevType::Mesh && Window->prevType == EPrevType::Mesh)
+            {
+                if (Window->GetTargetMesh() == InMesh)
+                {
+                    Window->BringToFront();
+                    return;
+                }
+            }
+            else if (type == EPrevType::Material && Window->prevType == EPrevType::Material)
+            {
+                // TitleString에 머티리얼 이름이 고유하게 들어가 있으므로 이를 기준으로 중복 검사
+                FString ExpectedTitle = CurrentMatName + "###PreviewMaterialEditor_" + CurrentMatName;
+                if (Window->GetTitleString() == ExpectedTitle)
+                {
+                    Window->BringToFront();
+                    return;
+                }
+            }
         }
     }
 
     ImGuiID TargetDockID = 0;
-
 #if !IS_OBJ_VIEWER
-    // 기존에 열려 있는 프리뷰 창의 도크 노드 탐색
+    // 기존에 열려 있는 프리뷰 창의 도크 노드 ID 가져오기 (탭 중첩용)
     for (const auto& Window : PreviewWindows)
     {
         if (Window && Window->IsOpen())
         {
             if (ImGuiWindow* Win = ImGui::FindWindowByName(Window->GetTitleString().c_str()))
             {
+                if (Win->DockNode)
+                {
+                    TargetDockID = Win->DockNode->ID;
+                    break;
+                }
                 if (Win->DockId != 0)
                 {
                     TargetDockID = Win->DockId;
@@ -204,10 +236,10 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh) {
         }
     }
 
-    // 첫 번째 프리뷰 창일 경우 메인 뷰포트와 분리된 독립 플로팅 도크 노드 생성
+    // 첫 창일 때 독립 도크 노드 생성
     if (TargetDockID == 0)
     {
-        TargetDockID = ImGui::DockBuilderAddNode(0, 0);
+        TargetDockID = ImGui::DockBuilderAddNode(0, ImGuiDockNodeFlags_None);
         const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
         const ImVec2 DefaultPos = MainViewport ? ImVec2(MainViewport->WorkPos.x + 150.0f, MainViewport->WorkPos.y + 80.0f) : ImVec2(200.0f, 100.0f);
         ImGui::DockBuilderSetNodePos(TargetDockID, DefaultPos);
@@ -216,11 +248,15 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh) {
     }
 #endif
 
-    // 새 프리뷰 창 생성 및 연결 (OBJ Viewer 모드에서는 TargetDockID가 0으로 들어가 전체화면 모드로 동작)
+    // 새 프리뷰 창 생성 및 등록
     auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
-    NewWindow->Open(InMesh, TargetDockID);
+    NewWindow->OpenPreview(InMesh, TargetDockID, type);
     PreviewWindows.push_back(NewWindow);
 }
+
+
+
+
 
 void FEditorApplication::Render() {
 
@@ -282,8 +318,6 @@ void FEditorApplication::Render() {
     RenderView->GetRenderer().BindBackBufferWithDepth();
     ImguiManager.RenderUI();
 #endif
-
-
 
 }
 
