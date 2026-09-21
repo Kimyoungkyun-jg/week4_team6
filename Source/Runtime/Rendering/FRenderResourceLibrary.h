@@ -75,11 +75,19 @@ public:
   // 스태틱 메시 썸네일 텍스처 보관 맵
   TMap<FName, TSharedPtr<FTexture>> AllMeshThumbnailMap;
 
+  // 머터리얼 썸네일 텍스처 보관 맵
+  TMap<FString, TSharedPtr<FTexture>> AllMaterialThumbnailMap;
 
   // 전체 썸네일 맵 조회
   [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
     return AllMeshThumbnailMap;
   }
+
+
+  [[nodiscard]] const TMap<FString, TSharedPtr<FTexture>>& GetAllMaterialThumbnailMap() const {
+      return AllMaterialThumbnailMap;
+  }
+
 
   // 스태틱 메시 썸네일 조회
   [[nodiscard]] TSharedPtr<FTexture> GetMeshThumbnail(const FName& Id) const {
@@ -87,6 +95,13 @@ public:
     if (it != AllMeshThumbnailMap.end())
       return it->second;
     return nullptr;
+  }
+
+  [[nodiscard]] TSharedPtr<FTexture> GetMaterialThumbnail(const FString& Id) const {
+      auto it = AllMaterialThumbnailMap.find(Id);
+      if (it != AllMaterialThumbnailMap.end())
+          return it->second;
+      return nullptr;
   }
 
   // 인스턴싱 배치 배열 맵
@@ -282,6 +297,8 @@ public:
 
   // 스태틱 메시 썸네일 일괄 생성
   bool CreateMeshThumbnails();
+  // 머터리얼 썸네일 일괄 생성
+  bool CreateMaterialThumbnails();
 
 private:
   bool InitializePipelines();

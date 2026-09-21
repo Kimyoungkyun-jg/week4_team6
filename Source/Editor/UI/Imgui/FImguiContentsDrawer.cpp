@@ -52,13 +52,20 @@ void FImguiContentsDrawer::RefreshEntries()
 	// StaticMesh 폴더일 때는 라이브러리의 썸네일 맵 기준 목록 표시
 	if (CurrentPath.filename() == "StaticMesh")
 	{
+		// 디스크에 StaticMesh 폴더가 없으면 실제 디렉터리 생성
+		std::error_code Ec;
+		if (!std::filesystem::exists(CurrentPath, Ec))
+		{
+			std::filesystem::create_directories(CurrentPath, Ec);
+		}
+
 		for (const auto& [Key, Thumb] : FRenderResourceLibrary::Get().GetAllMeshThumbnailMap())
 		{
 			FContentEntry Item;
 			Item.DisplayName = Key.ToString();
 			Item.Extension = ".staticmesh";
 			Item.bIsDirectory = false;
-			Item.Path = (RootPath / "StaticMesh") / (Key.ToString() + ".staticmesh");
+			Item.Path = CurrentPath / (Key.ToString() + ".staticmesh");
 			Entries.push_back(std::move(Item));
 		}
 		std::sort(Entries.begin(), Entries.end(),
@@ -68,6 +75,34 @@ void FImguiContentsDrawer::RefreshEntries()
 			});
 		return;
 	}
+
+
+	if (CurrentPath.filename() == "Materials")
+	{
+		std::error_code Ec;
+		if (!std::filesystem::exists(CurrentPath, Ec))
+		{
+			std::filesystem::create_directories(CurrentPath, Ec);
+		}
+
+		for (const auto& [Key, Thumb] : FRenderResourceLibrary::Get().GetAllMaterialThumbnailMap())
+		{
+			FContentEntry Item;
+			Item.DisplayName = Key;
+			Item.Extension = ".material";
+			Item.bIsDirectory = false;
+			Item.Path = CurrentPath / (Key + ".material");
+			Entries.push_back(std::move(Item));
+		}
+		std::sort(Entries.begin(), Entries.end(),
+			[](const FContentEntry& A, const FContentEntry& B)
+			{
+				return A.DisplayName < B.DisplayName;
+			});
+		return;
+	}
+
+
 
 	std::error_code Ec;
 	for (const auto& Entry : std::filesystem::directory_iterator(CurrentPath, Ec))
@@ -214,6 +249,14 @@ void FImguiContentsDrawer::RenderContentView()
 			if (auto MeshTex = FRenderResourceLibrary::Get().GetMeshThumbnail(MeshKey))
 			{
 				DisplaySRV = MeshTex->GetSRV();
+			}
+		}
+		else if (Item.Extension == ".material")
+		{
+			// 머티리얼 썸네일 SRV 조회
+			if (auto MatTex = FRenderResourceLibrary::Get().GetMaterialThumbnail(Item.DisplayName))
+			{
+				DisplaySRV = MatTex->GetSRV();
 			}
 		}
 		else

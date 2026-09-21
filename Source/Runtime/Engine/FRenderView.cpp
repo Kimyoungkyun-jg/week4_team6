@@ -420,7 +420,7 @@ void FRenderView::RenderPreviewScene(
     uint32 Height,
     bool bDrawGrid)
 {
-    Renderer.RenderPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+    Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
 }
 
 
