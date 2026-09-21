@@ -215,6 +215,11 @@ const FMaterialEntry materialTable[] = {
         .PipelineID = FName("SelectedActor_Text"),
         .TextureName = "bazziotf",
     },
+        {
+        .Id = FName("MasterYi"),
+        .PipelineID = FName("Textured"),
+        .TextureName = "masteryi_head",
+    },
 };
 
 bool FRenderResourceLibrary::CreateSolidWireframePipeline() {
@@ -610,7 +615,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
     for (const auto& [Key, Mesh] : AllFStaticMeshMap) {
         if (!Mesh) continue;
 
-        //  이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
+        // 이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
         if (AllUStaticMeshMap.find(Key) != AllUStaticMeshMap.end()) {
             continue;
         }
@@ -620,29 +625,33 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
         StaticMeshObj->MeshId = Key;
         StaticMeshObj->SetStaticMeshAsset(Mesh);
 
-        // 머티리얼 확인 및 생성
-        TSharedPtr<FMaterial> Material = GetMaterial(Key);
-        if (!Material)
+        // [수정] 외부 생성 함수를 호출하지 않고 머티리얼 슬롯만 지정
+        if (Key == "Spotlight")
         {
-            Material = std::make_shared<FMaterial>();
-            FName PipelineName = FName("Simple_Solid");
-
-            // 기본 텍스처가 지정되어 있다면 Textured 파이프라인 및 텍스처 설정
-            if (!Mesh->DefaultTextureId.empty() && Mesh->DefaultTextureId != "None")
-            {
-                Material->SetDiffuseMap(GetTexture(Mesh->DefaultTextureId));
-                PipelineName = FName("Textured");
-            }
-
-            Material->SetPipeLine(GetPipeline(PipelineName));
-            RegisterMaterial(Key, Material);
+            StaticMeshObj->Materials.push_back("Spotlight");
         }
-
-        // 기본 도형은 0번 슬롯에 자기 자신의 Key 머티리얼 등록
-        StaticMeshObj->Materials.push_back(Key);
+        else if (Key == "MasterYi")
+        {
+            StaticMeshObj->Materials.push_back("MasterYi");
+        }
+        else
+        {
+            StaticMeshObj->Materials.push_back("Simple_Solid");
+        }
 
         AllUStaticMeshMap[Key] = StaticMeshObj;
     }
+
+
+    auto SphereAsset = GetSphereMesh();
+    if (SphereAsset)
+    {
+        CreateAndRegisterUStaticMesh(FName("Sphere_Mat"), { "Simple" }, SphereAsset);
+    }
+
+
+
+
 
     UE_LOG("[UStaticMeshMap] 생성 완료 (총 %zu 개)", AllUStaticMeshMap.size());
     return true;
@@ -1304,6 +1313,8 @@ bool FRenderResourceLibrary::CreateSphereMesh() {
   return AllFStaticMeshMap["Sphere"] != nullptr;
 }
 
+
+
 bool FRenderResourceLibrary::CreateLineMesh() {
   if (!RendererRef) return false;
   FRenderer &Renderer = *RendererRef;
@@ -1550,6 +1561,13 @@ bool FRenderResourceLibrary::CreateObjMeshes() {
   const std::filesystem::path ExeDir(GetExecutableDirectory());
   const std::filesystem::path ProjectRoot =
       ExeDir.parent_path().parent_path().parent_path();
+
+
+
+
+
+
+
 
   TArray<std::filesystem::path> SearchRoots = {
       ProjectRoot / L"Resources" / L"Assets",

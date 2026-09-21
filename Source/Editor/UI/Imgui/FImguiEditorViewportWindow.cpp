@@ -32,7 +32,8 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
     // 뷰포트 모드 전환 버튼
     constexpr float ButtonWidth = 60.0f;
     constexpr float ButtonHeight = 18.0f;
-    const ImVec2 BtnMin{ WinPos.x + WinSize.x - ButtonWidth - 12.0f, WinPos.y + 3.0f };
+
+    const ImVec2 BtnMin{ WinPos.x + WinSize.x - ButtonWidth - 16.0f, WinPos.y + 20.0f };
     const ImVec2 BtnMax{ BtnMin.x + ButtonWidth, BtnMin.y + ButtonHeight };
 
     const bool bBtnHovered = (MousePos.X >= BtnMin.x && MousePos.X <= BtnMax.x && MousePos.Y >= BtnMin.y && MousePos.Y <= BtnMax.y);
@@ -43,7 +44,7 @@ void FImguiEditorViewportWindow::Process(FEditor& Editor, float DeltaTime)
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
     
-    ImDrawList* FG = ImGui::GetForegroundDrawList();
+    ImDrawList* FG = ImGui::GetWindowDrawList();
     const ImU32 BgColor = bBtnClicked ? IM_COL32(35, 55, 85, 255) : (bBtnHovered ? IM_COL32(65, 85, 120, 240) : IM_COL32(45, 55, 75, 220));
     
     FG->AddRectFilled(BtnMin, BtnMax, BgColor, 3.0f);

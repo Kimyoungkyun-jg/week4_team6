@@ -37,28 +37,30 @@ void FEditorViewport::UpdateFocusedAndHovered(bool bFocused, bool bHovered)
 
 #include "Runtime/Input/FInputManager.h" // 프로젝트의 InputManager 헤더 위치에 맞게 포함
 
-#include "Runtime/Input/FInputManager.h"
-
 void FEditorViewport::Process()
 {
-    // 1. 전체 화면 기준 절대 픽셀 좌표 계산
+    // 1. 초기 코드의 원본 좌표 계산식 그대로 복원
     const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
     if (!MainViewport) return;
 
     const ImVec2 MainOrigin = MainViewport->Pos;
     const ImVec2 MainSize = MainViewport->Size;
 
+    // 원래 정확했던 픽셀 오프셋 (12.0f, 32.0f) 유지
     const float StartX = MainOrigin.x + (TopLeftUV.X * MainSize.x) + 12.0f;
     const float StartY = MainOrigin.y + (TopLeftUV.Y * MainSize.y) + 32.0f;
 
-    // 2. FInputManager 기준 마우스 좌표 및 클릭 상태
+    // 2. FInputManager 마우스 판정
     const FVector2 EngineMousePos = FInputManager::Get().GetMousePosition();
     const ImVec2 MousePos(EngineMousePos.X, EngineMousePos.Y);
     const bool bLButtonClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
-    ImDrawList* DrawList = ImGui::GetForegroundDrawList();
+    // [핵심] ForegroundDrawList(최상단 강제) 대신 WindowDrawList 사용
+    // 메인 뷰포트 창 컨텍스트 안에서 불릴 경우 해당 윈도우 레이어로 그려지므로
+    // 그 위에 뜨는 프리뷰 모달 창보다 낮은 z-order를 갖게 됩니다.
+    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
-    // 3. 버튼 렌더링 람다
+    // 3. 버튼 렌더링 람다 (기존 유지)
     auto DrawOverlayButton = [&](const char* Label, float PosX, float PosY, float Width, float Height, bool& outClicked) -> float
         {
             const ImVec2 Min(PosX, PosY);
@@ -114,7 +116,6 @@ void FEditorViewport::Process()
     const char* ShowLabel = "Show";
     const float ShowWidth = ImGui::CalcTextSize(ShowLabel).x + 18.0f;
 
-    // 뷰포트 고유 팝업 ID
     char ShowPopupID[32];
     snprintf(ShowPopupID, sizeof(ShowPopupID), "ShowPopup##%p", this);
 
@@ -122,26 +123,21 @@ void FEditorViewport::Process()
     const float ShowBtnX = CurX;
     CurX += DrawOverlayButton(ShowLabel, ShowBtnX, StartY, ShowWidth, BtnHeight, bShowClicked);
 
-    // Show 버튼 클릭 시 팝업 열기
     if (bShowClicked)
     {
         ImGui::OpenPopup(ShowPopupID);
     }
 
-    // 팝업이 뜨는 위치를 Show 버튼 바로 아래로 지정
     ImGui::SetNextWindowPos(ImVec2(ShowBtnX, StartY + BtnHeight + 4.0f));
 
-    // 드롭다운 팝업 메뉴
     if (ImGui::BeginPopup(ShowPopupID))
     {
-        // 1. Primitives 플래그 체크박스
         bool bPrimitives = HasShowFlag(EEngineShowFlags::SF_Primitives);
         if (ImGui::Checkbox("Primitives", &bPrimitives))
         {
             ToggleShowFlag(EEngineShowFlags::SF_Primitives);
         }
 
-        // 2. Billboard Text 플래그 체크박스
         bool bBillboard = HasShowFlag(EEngineShowFlags::SF_BillboardText);
         if (ImGui::Checkbox("Billboard Text", &bBillboard))
         {
