@@ -105,8 +105,7 @@ void FEditorApplication::Tick(float DeltaTime) {
   PropertyWindow.Process(Editor);
   ConsoleWindow.Process(Editor);
   ContentsDrawer.Process(Editor);
-  StatFps.Process(Editor, DeltaTime, WindowSize);
-  StatMemory.Process(Editor);
+  OverlayStat.Process(Editor, DeltaTime, WindowSize);
 
   // 다중 프리뷰 창 UI 실행
   for (const auto& Window : PreviewWindows)

@@ -406,6 +406,8 @@
     <ClInclude Include="Source\Editor\Core\FEditor.h" />
     <ClInclude Include="Source\Editor\Core\FEditorState.h" />
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiOverlayStat.h" />
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiStatFps.h" />
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiStatMemory.h" />
     <ClInclude Include="Source\Editor\Visualizer\FTextVisualizer.h" />
     <ClInclude Include="Source\Runtime\Engine\FSceneView.h" />
     <ClInclude Include="Source\Editor\Grid\FGrid.h" />

@@ -30,8 +30,7 @@ class FEditorApplication final {
 	FImguiConsoleWindow ConsoleWindow;
 	FImguiWorldOutliner WorldOutliner;
 	FImguiContentsDrawer ContentsDrawer;
-	FImguiStatFps StatFps;
-	FImguiStatMemory StatMemory;
+	FImguiOverlayStat OverlayStat;
 	TArray<TSharedPtr<FImguiPreviewEditorWindow>> PreviewWindows;
 
 	FVisualizerRegistry VisualizerRegistry;

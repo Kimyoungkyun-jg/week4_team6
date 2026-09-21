@@ -627,6 +627,12 @@
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiOverlayStat.h">
       <Filter>Source\Editor\UI\Imgui</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiStatMemory.h">
+      <Filter>Source\Editor\UI\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\UI\Imgui\FImguiStatFps.h">
+      <Filter>Source\Editor\UI\Imgui</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\GridPS.hlsl">
