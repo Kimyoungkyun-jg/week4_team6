@@ -20,6 +20,21 @@ private:
     };
     TArray<FSnapshotEntry> Snapshot;
     size_t Cursor = 0;
+    bool bIncludeDerived;
+
+    void CollectBucket(const TSet<UObject*>* Bucket)
+    {
+        if (!Bucket) 
+        { 
+            return; 
+        }
+
+        Snapshot.reserve(Snapshot.size() + Bucket->size());
+        for (UObject* Object : *Bucket)
+        {
+            Snapshot.push_back({ Object->GetUUID(), Object->GetInternalIndex() });
+        }
+    }
 
     TObject* Resolve() const
     {
@@ -36,12 +51,18 @@ private:
     }
 
 public:
-    TObjectIterator()
+    TObjectIterator(bool bInIncludeDerivedClasses = true) : bIncludeDerived(bInIncludeDerivedClasses)
     {
         assert(UClass::AreTypeBitsetsResolved() && "UClass::ResolveTypeBitsets() not call");
 
         UClass* TargetClass = TObject::StaticClass();
         FUObjectArray& ObjectArray = FUObjectArray::Get();
+
+        if (!bIncludeDerived)
+        {
+            CollectBucket(ObjectArray.GetBucket(TargetClass));
+            return;
+        }
 
         // 등록 클래스를 훑으며 파생 클래스 버킷을 합친다.
         // FClassIdSet을 이용해 비트 테스트만으로 판정된다.
@@ -53,18 +74,7 @@ public:
             {
                 continue;
             }
-
-            const TSet<UObject*>* Bucket = ObjectArray.GetBucket(ClassType);
-            if (!Bucket)
-            {
-                continue;
-            }
-
-            Snapshot.reserve(Snapshot.size() + Bucket->size());
-            for (UObject* Object : *Bucket)
-            {
-                Snapshot.push_back({ Object->GetUUID(), Object->GetInternalIndex() });
-            }
+            CollectBucket(ObjectArray.GetBucket(ClassType));
         }
 
     }

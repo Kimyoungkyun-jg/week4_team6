@@ -12,13 +12,14 @@ class FObjectIterator // FUObjectArray 전체를 선형탐색
 private:
     uint32  CurrentIndex;
     UClass* TargetClass;
+    bool    bIncludeDerived;
 
 
     void AdvanceToNextValidObject();
 
 public:
 
-    explicit FObjectIterator(UClass* Class = UObject::StaticClass());
+    explicit FObjectIterator(UClass* Class = UObject::StaticClass(), bool bInIncludeDerivedClasses = true);
 
     FObjectIterator& operator++();
 

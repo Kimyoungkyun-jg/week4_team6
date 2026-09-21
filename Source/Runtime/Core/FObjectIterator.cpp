@@ -7,13 +7,14 @@ void FObjectIterator::AdvanceToNextValidObject() {
         if (CurrentIndex >= ObjectArray.GetMaxIndex())
             return;
         UObject* Object = ObjectArray.GetObjectByIndex(CurrentIndex);
-        if (Object && Object->IsA(TargetClass))
+        if (Object && (bIncludeDerived ? Object->IsA(TargetClass) : Object->GetClass() == TargetClass))
             return;
         ++CurrentIndex;
     }
 }
 
-FObjectIterator::FObjectIterator(UClass* Class) : CurrentIndex(0), TargetClass(Class)
+FObjectIterator::FObjectIterator(UClass* Class, bool bInIncludeDerivedClasses) : 
+    CurrentIndex(0), TargetClass(Class), bIncludeDerived(bInIncludeDerivedClasses)
 {
     assert(UClass::AreTypeBitsetsResolved() && "UClass::ResolveTypeBitsets() not call");
     AdvanceToNextValidObject();
