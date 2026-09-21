@@ -33,13 +33,6 @@ void FUObjectArray::RemoveObject(UObject* Object)
 
 	FreeIndices.push_back(Index);
 	Objects.at(Index) = nullptr;
-
-	//UObject* LastObject = Objects.back();
-
-	//Objects[Index] = LastObject;
-	//LastObject->InternalIndex = Index;
-
-	//Objects.pop_back();
 }
 
 void FUObjectArray::DestroyObject(UObject* Object) {

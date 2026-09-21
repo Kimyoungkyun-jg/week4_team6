@@ -15,8 +15,8 @@ AStaticMeshActor::AStaticMeshActor()
 
 	if (auto* Comp = GetStaticMeshComponent())
 	{
-		Comp->SetStaticMesh(NewObject<UStaticMesh>(FName("Cube"), FName("Simple")));
-
+		Comp->SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Cube"));
+		Comp->SetMaterial(0, FName("Simple"));
 	}
 }
 

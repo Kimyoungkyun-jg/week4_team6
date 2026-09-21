@@ -16,6 +16,7 @@
 #include "Runtime/CoreUObject/UStaticMeshComponent.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include <algorithm>
+#include <Runtime/Core/TObjectIterator.h>
 
 void FImguiPropertyWindow::Process(FEditor& Editor)
 {
@@ -130,52 +131,67 @@ void FImguiPropertyWindow::ShowComponentDetails(FEditor& Editor, AActor& Actor,
 	}
 }
 
+
 void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const {
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.6f, 1.0f), "Static Mesh Settings");
 
-	const auto& AllUStaticMeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
-	if (AllUStaticMeshMap.empty())
+	TObjectIterator<UStaticMesh> AnyMesh;
+	if (!AnyMesh)
 	{
 		ImGui::TextDisabled("No Static Meshes available");
 		return;
 	}
 
-	// 현재 선택된 정적 메시 키값
 	UStaticMesh* CurrentStaticMesh = StaticMeshComp.GetStaticMesh();
-	std::string CurrentMeshName = CurrentStaticMesh ? CurrentStaticMesh->MeshId.ToString() : "None";
+	const FString CurrentMeshName =
+		CurrentStaticMesh ? CurrentStaticMesh->MeshId.ToString() : "None";
 
 	if (ImGui::BeginCombo("Static Mesh", CurrentMeshName.c_str()))
 	{
-		// 키 목록 정렬
-		TArray<FName> SortedKeys;
-		SortedKeys.reserve(AllUStaticMeshMap.size());
-		for (const auto& [MeshKey, _] : AllUStaticMeshMap)
+		TArray<UStaticMesh*> Meshes;
+		for (TObjectIterator<UStaticMesh> It; It; ++It)
 		{
-			SortedKeys.push_back(MeshKey);
+			Meshes.push_back(*It);
 		}
-		std::sort(SortedKeys.begin(), SortedKeys.end(), [](const FName& A, const FName& B) {
-			return A.ToString() < B.ToString();
+
+		std::sort(Meshes.begin(), Meshes.end(),
+			[](const UStaticMesh* A, const UStaticMesh* B)
+			{
+				const FString NameA = A->MeshId.ToString();
+				const FString NameB = B->MeshId.ToString();
+				if (NameA != NameB)
+				{
+					return NameA < NameB;
+				}
+				return A->GetUUID() < B->GetUUID();
 			});
 
-		for (const FName& MeshKey : SortedKeys)
+		ImGui::TextDisabled("%zu objects (registered map: %zu)",
+			Meshes.size(),
+			FRenderResourceLibrary::Get().GetAllUStaticMeshMap().size());
+		ImGui::Separator();
+
+		for (UStaticMesh* Mesh : Meshes)
 		{
-			std::string ItemName = MeshKey.ToString();
-			bool bIsSelected = (CurrentStaticMesh && CurrentStaticMesh->MeshId == MeshKey);
+			ImGui::PushID(static_cast<int>(Mesh->GetUUID()));
+
+			const std::string ItemName =
+				Mesh->MeshId.ToString() + "   (UUID " + std::to_string(Mesh->GetUUID()) + ")";
+
+			const bool bIsSelected = (Mesh == CurrentStaticMesh);
 
 			if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
 			{
-				auto it = AllUStaticMeshMap.find(MeshKey.ToString());
-				if (it != AllUStaticMeshMap.end())
-				{
-					StaticMeshComp.SetStaticMesh(it->second);
-				}
+				StaticMeshComp.SetStaticMesh(Mesh);
 			}
 
 			if (bIsSelected)
 			{
 				ImGui::SetItemDefaultFocus();
 			}
+
+			ImGui::PopID();
 		}
 		ImGui::EndCombo();
 	}

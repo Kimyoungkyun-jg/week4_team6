@@ -9,5 +9,6 @@ UCLASS_META(UConeComp, MeshName, "Cone")
 
 void UConeComp::Initialize() {
   Super::Initialize();
-  SetStaticMesh(NewObject<UStaticMesh>(FName("Cone"), FName("Simple")));
+  SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Cone"));
+  SetMaterial(0, FName("Simple"));
 }
