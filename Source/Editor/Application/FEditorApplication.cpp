@@ -22,6 +22,7 @@
 #include "Runtime/Actors/TestTextActor.h"
 #include "Runtime/CoreUObject/UPlaneComp.h"
 #include "Runtime/CoreUObject/USphereComp.h"
+#include "Runtime/Core/FStatRegistry.h"
 
 #include "Editor/Visualizer/IVisualizer.h"
 
@@ -40,7 +41,7 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
   this->CurrentScene = SceneManager->CurrentScene;
 
   Editor.Initialize(SceneManager);
-
+  STATS.Initialize();
 
   FEditorViewport PerspViewport;
   PerspViewport.TopLeftUV = {0.5f, 0.0f};
@@ -105,7 +106,8 @@ void FEditorApplication::Tick(float DeltaTime) {
   PropertyWindow.Process(Editor);
   ConsoleWindow.Process(Editor);
   ContentsDrawer.Process(Editor);
-  OverlayStat.Process(Editor, DeltaTime, WindowSize);
+  OverlayStat.Process(Editor, DeltaTime);
+  STATS.Reset();
 
   // 다중 프리뷰 창 UI 실행
   for (const auto& Window : PreviewWindows)
@@ -239,7 +241,8 @@ void FEditorApplication::Render() {
 
 void FEditorApplication::OnWindowSize(UINT Width, UINT Height) {
   // 뷰포트 종횡비 갱신
-  WindowSize = FVector2(static_cast<float>(Width), static_cast<float>(Height));
+  FVector2 WindowSize = FVector2(static_cast<float>(Width), static_cast<float>(Height));
+  STATS.UpdateWindowSize(WindowSize);
   for (auto &Viewport : Editor.GetViewports()) {
     const FVector2 SizePixels = Viewport.LengthUV * WindowSize;
     auto &Camera = Viewport.ViewportCamera;

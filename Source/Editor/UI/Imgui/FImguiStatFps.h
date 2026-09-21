@@ -1,21 +1,22 @@
 #pragma once
 #include "Source/ThirdParty/Imgui/imgui.h"
 #include "Source/Editor/Core/FEditor.h"
+#include "Source/Runtime/Core/FStatRegistry.h"
 #include <string>
 
-struct FImguiStatFps
+struct FImguiStatFps final
 {
 	float DeltaTime; // ms
 
-	void SetDeltaTime(float InDeltaTime) // second
+	const void SetDeltaTime(const float InDeltaTime) // second
 	{
 		DeltaTime = InDeltaTime * 1000.f;
 	}
-	float GetFPS()
+	const float GetFPS() const
 	{
 		return 1000.f / DeltaTime;
 	}
-	void Process(FEditor InEditor, float InDeltaTime, FVector2 WindowSize)
+	const void Process(FEditor InEditor, const float InDeltaTime)
 	{
 		const FVector2 TopLeft = InEditor.GetViewports()[0].TopLeftUV;
 		const FVector2 Length = InEditor.GetViewports()[0].LengthUV;
@@ -24,10 +25,12 @@ struct FImguiStatFps
 		PosNDC.X += Length.X;
 		PosNDC.Y += Length.Y * 0.2f;
 
-		FVector2 PosPixel = PosNDC * WindowSize;
-		PosPixel.X -= 90.f;
+		FVector2 PosPixel = PosNDC * STATS.GetWindowSize();
+		PosPixel.X -= 100.f;
 
-		float RowMargin = 15.f;
+		ImFont* Font = ImGui::GetFont();
+		const float FontSize = 21.f;
+		const float RowMargin = 25.f;
 
 		SetDeltaTime(InDeltaTime);
 		char FpsBuf[16];
@@ -36,7 +39,7 @@ struct FImguiStatFps
 		std::snprintf(DeltaTimeBuf, sizeof(DeltaTimeBuf), "%.2f ms", DeltaTime);
 
 		ImDrawList* DrawList = ImGui::GetForegroundDrawList();
-		DrawList->AddText(ImVec2(PosPixel.X, PosPixel.Y), IM_COL32(0, 255, 0, 255), FpsBuf);
-		DrawList->AddText(ImVec2(PosPixel.X, PosPixel.Y + RowMargin), IM_COL32(0, 255, 0, 255), DeltaTimeBuf);
+		DrawList->AddText(Font, FontSize, ImVec2(PosPixel.X, PosPixel.Y), IM_COL32(0, 255, 0, 255), FpsBuf);
+		DrawList->AddText(Font, FontSize, ImVec2(PosPixel.X, PosPixel.Y + RowMargin), IM_COL32(0, 255, 0, 255), DeltaTimeBuf);
 	}
 };

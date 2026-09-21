@@ -409,6 +409,7 @@
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiStatFps.h" />
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiStatMemory.h" />
     <ClInclude Include="Source\Editor\Visualizer\FTextVisualizer.h" />
+    <ClInclude Include="Source\Runtime\Core\FStatRegistry.h" />
     <ClInclude Include="Source\Runtime\Engine\FSceneView.h" />
     <ClInclude Include="Source\Editor\Grid\FGrid.h" />
     <ClInclude Include="Source\Editor\UI\Imgui\FImguiContentsDrawer.h" />

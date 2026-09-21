@@ -409,6 +409,8 @@ void FRenderView::FlushQueue(const FCamera& Camera)
         Renderer.ClearTextInstances();
     }
 
+    STATS.UpdateRenderQueueNum(RenderQueue.GetOpaqueRenderQ().size(), RenderQueue.GetTranslucentRenderQ().size(), RenderQueue.GetTextRenderQ().size(), RenderQueue.GetInstancingRenderQ().size());
+
     RenderQueue.Clear();
 }
 

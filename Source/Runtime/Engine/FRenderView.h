@@ -7,6 +7,7 @@
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Rendering/FRenderQueue.h"
 #include "Runtime/Engine/FSceneView.h"
+#include "Runtime/Core/FStatRegistry.h"
 
 struct FCamera;
 class FGizmo;

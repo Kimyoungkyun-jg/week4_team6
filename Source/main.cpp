@@ -202,7 +202,7 @@ HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
   OutSplashWnd = ShowLoadingWindow(Instance);
   HWND Window = CreateWindowExW(0, WindowClass.lpszClassName, WindowName,
                                 WS_POPUP | WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
-                                CW_USEDEFAULT, 1200, 800, nullptr, nullptr,
+                                CW_USEDEFAULT, 1920, 1080, nullptr, nullptr,
                                 Instance, nullptr);
 
   return Window;

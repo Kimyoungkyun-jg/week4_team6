@@ -36,8 +36,6 @@ class FEditorApplication final {
 	FVisualizerRegistry VisualizerRegistry;
 
 	FRenderView* RenderView = nullptr;
-	
-	FVector2 WindowSize;
 
 public:
 	

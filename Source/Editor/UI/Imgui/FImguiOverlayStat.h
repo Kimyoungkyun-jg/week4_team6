@@ -8,9 +8,15 @@ struct FImguiOverlayStat
 	FImguiStatFps StatFps;
 	FImguiStatMemory StatMemory;
 
-	void Process(FEditor InEditor, float InDeltaTime, FVector2 WindowSize)
+	const void Process(FEditor InEditor, const float InDeltaTime)
 	{
-		StatFps.Process(InEditor, InDeltaTime, WindowSize);
-		StatMemory.Process(InEditor);
+		if (STATS.IsStatFps())
+		{
+			StatFps.Process(InEditor, InDeltaTime);
+		}
+		if (STATS.IsStatMemory())
+		{
+			StatMemory.Process(InEditor);
+		}
 	}
 };

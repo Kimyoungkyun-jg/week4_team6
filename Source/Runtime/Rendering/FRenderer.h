@@ -11,6 +11,7 @@
 #include "Runtime/Rendering/FLineBatcher.h"
 #include "ShaderConstants.h"
 #include "Vertices.h"
+#include "Runtime/Core/FStatRegistry.h"
 
 #include <Windows.h>
 #include <d3d11.h>
@@ -168,6 +169,8 @@ public:
         {
             Context->Draw(Mesh.VertexCount, static_cast<UINT>(startidx));
         }
+
+        STATS.UpdateDrawCallCount(Mesh.GetIndexCount(), Mesh.GetVertexCount());
     }
 
 private:
