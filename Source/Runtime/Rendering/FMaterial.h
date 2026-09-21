@@ -64,7 +64,7 @@ public:
     return Pipeline ? Pipeline->GetPipelineDesc().BlendMode : EBlendMode::Opaque;
   }
 
-  FName MaterialId{"None"};
+  FString MaterialId;
 private:
   void BindResources(ID3D11DeviceContext &Context) const;
 

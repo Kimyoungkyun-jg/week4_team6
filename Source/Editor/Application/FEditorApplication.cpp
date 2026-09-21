@@ -171,7 +171,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
         return;
     }
 
-    // 1. 닫힌 창 정리
+    // 닫힌 창 정리
     PreviewWindows.erase(
         std::remove_if(PreviewWindows.begin(), PreviewWindows.end(),
             [](const TSharedPtr<FImguiPreviewEditorWindow>& Win) {
@@ -182,7 +182,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
 
     const FString CurrentMatName = (!InMesh->Materials.empty()) ? InMesh->Materials[0] : "";
 
-    // 2. 이미 열려 있는 창인지 검사
+    // 이미 열려 있는 창인지 검사
     for (const auto& Window : PreviewWindows)
     {
         if (Window && Window->IsOpen())
@@ -250,7 +250,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
 
     // 새 프리뷰 창 생성 및 등록
     auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
-    NewWindow->OpenPreview(InMesh, TargetDockID, type);
+    NewWindow->OpenPreview(InMesh,TargetDockID, type);
     PreviewWindows.push_back(NewWindow);
 }
 
@@ -311,7 +311,7 @@ void FEditorApplication::Render() {
         if (Window && Window->IsOpen())
         {
             RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
-                Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
+                Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid, Window->prevType);
         }
     }
 

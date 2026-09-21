@@ -5,6 +5,7 @@
 #include "Editor/Visualizer/FVisualizerRegistry.h"
 #include "Editor/Visualizer/IVisualizer.h"
 #include "Runtime/Actors/AActor.h"
+#include "Editor/UI/Imgui/FImguiPreviewEditorWindow.h"
 #include "Runtime/CoreUObject/UBillBoardComp.h"
 #include "Runtime/CoreUObject/UClass.h"
 #include "Runtime/Engine/FCamera.h"
@@ -16,6 +17,7 @@
 #include "Runtime/Rendering/FPreviewRenderTarget.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Engine/UScene.h"
+
 #include <fstream>
 
 FRenderView::FRenderView(FRenderer &Renderer) : Renderer(Renderer) {}
@@ -412,16 +414,27 @@ void FRenderView::FlushQueue(const FCamera& Camera)
     RenderQueue.Clear();
 }
 
-void FRenderView::RenderPreviewScene(
+void FRenderView::RenderPreviewScene( //지금 render를 2군데에서 돌리고 있음...뭐하냐 나?
     FPreviewRenderTarget& RenderTarget,
     const FCamera& Camera,
     UStaticMesh* TargetMesh,
     uint32 Width,
     uint32 Height,
     bool bDrawGrid,
-    TSharedPtr<FMaterial> OverrideMaterial)
+    EPrevType prevType)
 {
-    Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid, OverrideMaterial);
+    switch (prevType)
+    {
+    case EPrevType::Mesh:
+        Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+        break;
+    case EPrevType::Material:
+        //Renderer.RenderMaterialPreviewScene(RenderTarget, Camera, TargetMesh->GetStaticMeshAsset(), ,Width, Height, bDrawGrid) 
+        break;
+    default:
+        break;
+    }
+    
 }
 
 

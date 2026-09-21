@@ -311,44 +311,7 @@ public:
         return nullptr;
     }
 
-
-  // 메쉬 전체 해제
-  void DestroyAllMeshes() {
-    AllFStaticMeshMap.clear();
-    AllUStaticMeshMap.clear();
-  }
-
-  // 머티리얼 전체 해제
-  void DestroyAllMaterials() { AllMaterialMap.clear(); }
-
-  // 파이프라인 전체 해제
-  void DestroyAllPipelines() { AllPipelineMap.clear(); }
-
-  void DestroyAllInstancingArray() { AllInstancingArrayMap.clear(); }
-
   void UnregisterMaterial(const FString& InKey); //material 등록해제
-
-
-  // 전체 머티리얼 맵 조회
-  const TMap<FString, TSharedPtr<FMaterial>> &GetAllMaterials() const {
-    return AllMaterialMap;
-  }
-
-  // 렌더러 참조 조회
-  FRenderer *GetRenderer() const { return RendererRef; }
-
-  // 정점 배열 메쉬 캐싱 생성
-  TSharedPtr<FStaticMesh> GetOrCreateMesh(const FName &ID,
-                                    const TArray<FVertexData> &vertices);
-
-  
-
-  [[nodiscard]] TSharedPtr<FFont> GetFont(const FName& InName) const {
-      auto it = AllFontMap.find(InName);
-      if (it != AllFontMap.end())
-          return it->second;
-      return nullptr;
-  }
 
 
   TSharedPtr<FStaticMesh> CreateAndRegisterStaticMesh(

@@ -1853,7 +1853,7 @@ bool FRenderResourceLibrary::CreateMeshThumbnails() {
         const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
         Cam.Position = Center - Forward * Distance;
 
-    Renderer.RenderMeshPreviewScene(ThumbnailRT, Cam, Mesh, 128, 128, false);
+        Renderer.RenderMeshPreviewScene(ThumbnailRT, Cam, Mesh, 128, 128, false);
 
         D3D11_TEXTURE2D_DESC TexDesc = {};
         TexDesc.Width = 128;

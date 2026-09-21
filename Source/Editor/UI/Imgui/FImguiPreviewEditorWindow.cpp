@@ -21,7 +21,7 @@ FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 	CameraController.CameraRotateSpeed = 0.5f;
 }
 
-void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, const FString& InMaterialKey, ImGuiID InDockID, EPrevType type)
+void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, ImGuiID InDockID, EPrevType type)
 {
 	if (!InMesh)
 	{
@@ -55,10 +55,7 @@ void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, const FString& 
 	{
 		OriginalMesh = InMesh; // 원본 구체 메시 보관
 
-		// 인자로 넘어온 InMaterialKey를 우선 사용 (비어있을 때만 InMesh의 슬롯 확인)
-		OriginalMatKey = !InMaterialKey.empty()
-			? InMaterialKey
-			: (!InMesh->Materials.empty() ? InMesh->Materials[0] : "Material");
+		OriginalMatKey = InMesh->Materials[0];
 
 		TitleString = OriginalMatKey + "###PreviewMaterialEditor_" + OriginalMatKey;
 
@@ -207,40 +204,77 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		}
 
 		ImGui::SetNextItemWidth(200.0f);
-
-		const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
-
-		if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
+		if (prevType == EPrevType::Material)
 		{
-			TArray<UStaticMesh*> Meshes;
-			for (TObjectIterator<UStaticMesh> It; It; ++It)
+			const std::string CurrentMatName = !OriginalMatKey.empty() ? OriginalMatKey : "Select Material";
+
+			if (ImGui::BeginCombo("##MaterialSelectCombo", CurrentMatName.c_str()))
 			{
-				if (UStaticMesh* Mesh = *It)
-					Meshes.push_back(Mesh);
-			}
-			std::sort(Meshes.begin(), Meshes.end(),
-				[](const UStaticMesh* A, const UStaticMesh* B)
+				const auto& AllMaterials = FRenderResourceLibrary::Get().GetAllMaterials();
+				for (const auto& [MatKey, MatAsset] : AllMaterials)
 				{
-					return A->MeshId.Compare(B->MeshId) < 0;
-				});
+					const bool bIsSelected = (OriginalMatKey == MatKey);
 
-			for (UStaticMesh* Mesh : Meshes)
-			{
-				ImGui::PushID(static_cast<int>(Mesh->GetUUID()));
+					if (ImGui::Selectable(MatKey.c_str(), bIsSelected))
+					{
+						// 다른 머티리얼을 선택한 경우 타겟 교체
+						OriginalMatKey = MatKey;
+						TitleString = OriginalMatKey + "###PreviewMaterialEditor_" + OriginalMatKey;
 
-				const std::string ItemName = Mesh->MeshId.ToString();
-				const bool bIsSelected = (TargetMesh.Get() == Mesh);
+						if (auto OrigMat = FRenderResourceLibrary::Get().GetMaterial(OriginalMatKey))
+						{
+							PreviewMaterialInstance = OrigMat->Clone();
+						}
 
-				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
-				{
-					TargetMesh = Mesh;
-					FocusOnMesh();
+						bIsDirty = false;
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
 				}
-
-				if (bIsSelected) { ImGui::SetItemDefaultFocus(); }
-				ImGui::PopID();
+				ImGui::EndCombo();
 			}
-			ImGui::EndCombo();
+		}
+		else if (prevType == EPrevType::Mesh)
+		{
+			const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
+
+			if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
+			{
+				const auto& AllMeshes = FRenderResourceLibrary::Get().AllUStaticMeshMap;
+				for (const auto& [MeshKey, MeshAsset] : AllMeshes)
+				{
+					const FString ItemName = MeshKey;
+
+					// 프리뷰용 전용 구체 메시는 메시 에디터 목록에서 제외
+					if (ItemName == "Sphere_Mat")
+					{
+						continue;
+					}
+
+					const bool bIsSelected = (TargetMesh.IsValid() && TargetMesh->MeshId == MeshKey);
+
+					if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+					{
+						if (auto OrigMesh = FRenderResourceLibrary::Get().GetUStaticMesh(ItemName))
+						{
+							OriginalMesh = OrigMesh;
+							TargetMesh = OrigMesh->ClonePreviewMesh();
+							TitleString = OriginalMesh->MeshId.ToString() + "###PreviewMeshEditor_" + OriginalMesh->MeshId.ToString();
+							bIsDirty = false;
+							FocusOnMesh();
+						}
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
 		}
 
 		ImGui::Separator();
@@ -271,20 +305,20 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 		const ImVec2 ViewportPos = ImGui::GetCursorScreenPos();
 
-		// [수정] 씬 렌더링 호출 (머티리얼 모드일 때 PreviewMaterialInstance 전달)
+		// 씬 렌더링 호출 (머티리얼 모드일 때 PreviewMaterialInstance 전달)
 		if (NewWidth > 0 && NewHeight > 0 && TargetMesh.IsValid())
 		{
 			if (auto Renderer = FRenderResourceLibrary::Get().GetRenderer())
 			{
 				TSharedPtr<FMaterial> OverrideMat = (prevType == EPrevType::Material) ? PreviewMaterialInstance : nullptr;
-				Renderer->RenderMeshPreviewScene(
+				Renderer->RenderMaterialPreviewScene(
 					RenderTarget,
 					PreviewViewport.ViewportCamera,
-					TargetMesh.Get(),
-					NewWidth,
-					NewHeight,
-					bShowGrid,
-					OverrideMat
+					TargetMesh->GetStaticMeshAsset(),
+					OverrideMat,
+					NewWidth,           // Width
+					NewHeight,          // Height
+					bShowGrid           // bDrawGrid
 				);
 			}
 		}

@@ -1026,7 +1026,8 @@ void FRenderer::RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const
   }
 }
 
-void FRenderer::RenderMaterialPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, TSharedPtr<FStaticMesh> Meshasset, TSharedPtr<FMaterial> Material, uint32 Width, uint32 Height, bool bDrawGrid)
+void FRenderer::RenderMaterialPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, TSharedPtr<FStaticMesh> Meshasset, 
+    TSharedPtr<FMaterial> Material, uint32 Width, uint32 Height, bool bDrawGrid)
 {
     if (!Meshasset || !Material)
     {

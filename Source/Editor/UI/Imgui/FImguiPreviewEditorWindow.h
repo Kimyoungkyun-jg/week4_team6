@@ -25,7 +25,7 @@ public:
 	FImguiPreviewEditorWindow& operator=(const FImguiPreviewEditorWindow&) = delete;
 
 
-	void OpenPreview(UStaticMesh* InMesh, const FString& InMaterialKey = "", ImGuiID InDockID = 0, EPrevType type = EPrevType::Mesh);
+	void OpenPreview(UStaticMesh* InMesh, ImGuiID InDockID = 0, EPrevType type = EPrevType::Mesh);
 
 	
 	void Close() { bIsOpen = false; }
@@ -85,7 +85,7 @@ private:
 
 
 	//TODO 되게 미련한 방법...직렬화 역직렬화를 사용해서 undo buffer를 만들고 싶음
-	std::shared_ptr<FMaterial> PreviewMaterialInstance = nullptr; // 프리뷰 전용 복사본 
+	TSharedPtr<FMaterial> PreviewMaterialInstance; // 프리뷰 전용 복사본 
 	FString OriginalMatKey;                                      // 원본 머티리얼 키
 	UStaticMesh* OriginalMesh = nullptr; // 원본 메시 포인터
 	bool bIsDirty = false;
