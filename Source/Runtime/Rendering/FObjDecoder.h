@@ -170,7 +170,7 @@ public:
     static bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
     // Todo: Bin - 파싱/직렬화/역직렬화와 파일 로딩은 모두 FObjDecoder가 담당한다.
     bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
-    bool LoadMaterials(const FString& AssetRoot, const TArray<FString>& SearchRoots);
+    bool LoadMaterials(const FString& AssetRoot);
     bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
     const TArray<FObjMaterialInfo>& GetMaterials() const { return CachedMaterials; }
 

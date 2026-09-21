@@ -1687,12 +1687,14 @@ bool FObjDecoder::LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialIn
 }
 
 // Todo: Bin - 먼저 한 번 호출한다. 캐시 성공 시 MTL 탐색/파싱을 건너뛴다.
-bool FObjDecoder::LoadMaterials(const FString& AssetRoot, const TArray<FString>& SearchRoots)
+bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
 {
     bMaterialsLoaded = false;
     CachedMaterials.clear();
 
-    const auto BinaryPath = std::filesystem::path(AssetRoot) / "Materials.bin";
+    const std::filesystem::path AssetPath(AssetRoot);
+    const auto BinaryPath = AssetPath / "Materials.bin";
+
     TArray<FObjMaterialInfo> Loaded;
     if (LoadMaterialsBinary(BinaryPath.string(), Loaded))
     {
@@ -1700,39 +1702,46 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot, const TArray<FString>&
     }
     else
     {
+		// Todo: Fix bug
+
         UE_LOG("[Material Cache] Miss: 전체 MTL 파싱");
-        TMap<FString, bool> Seen;
         TArray<std::filesystem::path> Files;
-        for (const auto& Root : SearchRoots)
+        std::error_code Error;
+		/*
+        if (!std::filesystem::exists(AssetPath, Error)
+            || Error
+            || !std::filesystem::is_directory(AssetPath, Error)
+            || Error)
         {
-            std::error_code Error;
-            const bool Exists = std::filesystem::exists(Root, Error);
-            if (Error) return false;
-            if (!Exists) continue;
+            return false;
+        }
+		*/
 
-            std::filesystem::recursive_directory_iterator It(Root, Error), End;
-            if (Error) return false;
+        // Todo: Bin - Resources/Assets 하나만 순회해 모든 MTL을 찾는다.
+        std::filesystem::recursive_directory_iterator AssetIter(AssetPath, Error), End;
+        //if (Error) return false;
 
-            while (It != End)
+        while (AssetIter != End)
+        {
+            const bool Regular = AssetIter->is_regular_file(Error);
+            //if (Error) return false;
+
+            if (Regular)
             {
-                const bool Regular = It->is_regular_file(Error);
-                if (Error) return false;
+                FString Extension = AssetIter->path().extension().string();
+				/*
+                std::transform(Extension.begin(), Extension.end(), Extension.begin(),
+                    [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
+				*/
 
-                if (Regular)
+                if (Extension == ".mtl")
                 {
-                    FString Extension = It->path().extension().string();
-                    std::transform(Extension.begin(), Extension.end(), Extension.begin(),
-                        [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
-
-					const FString Key = NormalizeMaterialPath(It->path());
-                    if (Extension == ".mtl" && !Key.empty() && Seen.emplace(Key, true).second)
-                        Files.push_back(It->path());
+                    Files.push_back(AssetIter->path());
                 }
-
-                It.increment(Error);
-
-                if (Error) return false;
             }
+
+            AssetIter.increment(Error);
+            //if (Error) return false;
         }
 
         std::sort(Files.begin(), Files.end());
@@ -1741,6 +1750,7 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot, const TArray<FString>&
             TArray<FObjMaterialInfo> Materials;
             if (!DecodeMaterialsFromFile(Path.string(), Materials)) return false;
 
+			/*
             for (auto& Material : Materials)
             {
                 // Todo: Bin - 전역적으로 유일한 이름만 허용하고 경로 기반 ID는 만들지 않는다.
@@ -1756,16 +1766,47 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot, const TArray<FString>&
                         Material.MaterialName.c_str());
                     continue;
                 }
+
                 Loaded.push_back(std::move(Material));
             }
+			*/
+
+			for (FObjMaterialInfo& Material : Materials)
+			{
+				// Todo: Bin
+				// MTL 파일과 속성이 달라도 MaterialName이 같으면
+				// 이미 등록된 전역 머티리얼과 동일한 것으로 취급한다.
+				const bool bAlreadyRegistered =
+					std::any_of(
+						Loaded.begin(),
+						Loaded.end(),
+						[&Material](const FObjMaterialInfo& Existing)
+						{
+							return Existing.MaterialName
+								== Material.MaterialName;
+						});
+
+				if (bAlreadyRegistered)
+				{
+					// Todo: Bin
+					// 최초로 등록한 머티리얼의 속성을 유지하고
+					// 이후 같은 이름의 머티리얼 속성은 사용하지 않는다.
+					continue;
+				}
+
+				Loaded.push_back(std::move(Material));
+			}
+
         }
 
-        std::error_code Error;
-        std::filesystem::create_directories(AssetRoot, Error);
-        if (Error || !SaveMaterialsBinary(BinaryPath.string(), Loaded))
+		SaveMaterialsBinary(BinaryPath.string(), Loaded);
+
+		/*
+        if (!SaveMaterialsBinary(BinaryPath.string(), Loaded))
         {
             UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.string().c_str());
         }
+		*/
     }
 
     // Todo: Bin - Materials.bin의 배열을 그대로 공유 머티리얼 목록으로 사용한다.

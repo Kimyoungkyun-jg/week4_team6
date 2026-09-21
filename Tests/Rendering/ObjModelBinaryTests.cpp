@@ -151,7 +151,7 @@ int main()
             "usemtl Glass\nf 1/1/1 2/2/1 3/3/1\n";
         WriteText(Fixture / "Second.obj", "mtllib Other.mtl\n" + SecondGeometry);
         FObjDecoder FirstDecoder;
-        Check(FirstDecoder.LoadMaterials(Fixture.string(), { Fixture.string() }), "initial MTL parse");
+        Check(FirstDecoder.LoadMaterials(Fixture.string()), "initial MTL parse");
         Check(FirstDecoder.GetMaterials().size() == 2
             && FirstDecoder.GetMaterials()[0].MaterialName == "Body"
             && FirstDecoder.GetMaterials()[0].Opacity == 0.25f, "global duplicate material uses first definition");
@@ -172,7 +172,7 @@ int main()
         std::filesystem::remove(Fixture / "ZZDuplicate.mtl");
         WriteText(Fixture / "First.obj", "invalid source: cache must be used");
         FObjDecoder CachedDecoder;
-        Check(CachedDecoder.LoadMaterials(Fixture.string(), { Fixture.string() }), "material cache hit");
+        Check(CachedDecoder.LoadMaterials(Fixture.string()), "material cache hit");
         Check(CachedDecoder.LoadObj((Fixture / "First.obj").string(), (Fixture / "First.bin").string(), FirstMesh), "OBJ cache hit without reparsing");
         WriteText(Fixture / "Third.obj", FirstObj);
         FObjModelData ThirdMesh;
@@ -184,7 +184,7 @@ int main()
         WriteText(Fixture / "Common.mtl", "newmtl Body\nKd 1 0 0\nd 0.9\n");
         std::filesystem::remove(MaterialCache);
         FObjDecoder RebuiltDecoder;
-        Check(RebuiltDecoder.LoadMaterials(Fixture.string(), { Fixture.string() }), "material cache rebuild");
+        Check(RebuiltDecoder.LoadMaterials(Fixture.string()), "material cache rebuild");
         Check(RebuiltDecoder.LoadObj((Fixture / "First.obj").string(), (Fixture / "First.bin").string(), FirstMesh), "independent OBJ cache");
         Check(FirstMesh.Sections[0].Opacity == 0.9f, "cached section uses current shared material");
 
@@ -192,7 +192,7 @@ int main()
         WriteText(Fixture / "First.bin", "broken");
         WriteText(Fixture / "First.obj", FirstObj);
         FObjDecoder RecoveryDecoder;
-        Check(RecoveryDecoder.LoadMaterials(Fixture.string(), { Fixture.string() }), "corrupt material cache recovery");
+        Check(RecoveryDecoder.LoadMaterials(Fixture.string()), "corrupt material cache recovery");
         Check(RecoveryDecoder.LoadObj((Fixture / "First.obj").string(), (Fixture / "First.bin").string(), FirstMesh), "corrupt OBJ cache recovery");
 
         std::cout << "PASS: serialization, corruption, file IO, OBJ/MTL cache combinations, shared material references\n";

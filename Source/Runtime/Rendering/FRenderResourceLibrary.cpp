@@ -1576,7 +1576,7 @@ bool FRenderResourceLibrary::CreateObjMeshes()
 
     FObjDecoder Decoder;
     // Todo: Bin - Resources/Assets의 MTL을 읽고 같은 폴더에 Materials.bin을 저장한다.
-    if (!Decoder.LoadMaterials(AssetRoot.string(), { AssetRoot.string() }))
+    if (!Decoder.LoadMaterials(AssetRoot.string()))
     {
         return false;
     }
@@ -1631,7 +1631,6 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         const FString BinaryPath = (AssetRoot / CacheName).string();
 
         FObjModelData ModelData;
-        // Todo: Bin - OBJ 캐시만 로딩/생성한다. Materials.bin은 이 단계에서 쓰지 않는다.
         if (!Decoder.LoadObj(ObjPath, BinaryPath, ModelData))
         {
             UE_LOG_WARN("[OBJ Loader] 로딩 실패: %s", ObjPath.c_str());
