@@ -20,9 +20,9 @@ inline std::vector<FVertexData> CreateSphereVertices(float radius = 0.5f, int sl
 		float x = r * sinf(theta);
 		float z = r * cosf(theta);
 
-		float cr = (x / radius) * 0.5f + 0.5f;
-		float cg = (y / radius) * 0.5f + 0.5f;
-		float cb = (z / radius) * 0.5f + 0.5f;
+		float cr = 1;
+		float cg = 1;
+		float cb = 1;
 
 		float nx = x / radius;
 		float ny = y / radius;

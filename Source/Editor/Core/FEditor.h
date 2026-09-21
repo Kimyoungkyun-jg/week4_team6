@@ -77,9 +77,12 @@ public:
   void LoadState();
   UTextInstanceComponent* GetTextcomp() { return SelectedActorTextComp; }
 
+  void ResetSplitViewportCameras();
+
   //다중 뷰포트
   bool bIsViewportSplit = false;
   FVector2 CenterUV = { 0.5,0.5 };
+
 
 private:
   USceneManager *SceneManager =

@@ -6,6 +6,7 @@ struct FContentDragPayload
         Unknown = 0,
         Texture,
         Mesh,
+        Material,
     };
 
     // 전체 경로 (UTF-8)

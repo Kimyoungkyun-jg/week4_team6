@@ -218,6 +218,11 @@ const FMaterialEntry materialTable[] = {
         .PipelineID = FName("SelectedActor_Text"),
         .TextureName = "bazziotf",
     },
+        {
+        .Id = FName("MasterYi"),
+        .PipelineID = FName("Textured"),
+        .TextureName = "masteryi_head",
+    },
 };
 
 bool FRenderResourceLibrary::CreateSolidWireframePipeline() {
@@ -527,8 +532,9 @@ bool FRenderResourceLibrary::Initialize(FRenderer& Renderer) {
         return false;
     }
 
-    CreateUStaticMeshMap();
-    CreateMeshThumbnails(); // 썸네일 일괄 생성
+  CreateUStaticMeshMap();
+  CreateMeshThumbnails(); // 메시 썸네일 일괄 생성
+  CreateMaterialThumbnails(); // 머터리얼 썸네일 일괄 생성
 
     return true;
 }
@@ -614,7 +620,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
     for (const auto& [Key, Mesh] : AllFStaticMeshMap) {
         if (!Mesh) continue;
 
-        //  이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
+        // 이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
         if (AllUStaticMeshMap.find(Key) != AllUStaticMeshMap.end()) {
             continue;
         }
@@ -624,29 +630,33 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
         StaticMeshObj->MeshId = Key;
         StaticMeshObj->SetStaticMeshAsset(Mesh);
 
-        // 머티리얼 확인 및 생성
-        TSharedPtr<FMaterial> Material = GetMaterial(Key);
-        if (!Material)
+        // [수정] 외부 생성 함수를 호출하지 않고 머티리얼 슬롯만 지정
+        if (Key == "Spotlight")
         {
-            Material = std::make_shared<FMaterial>();
-            FName PipelineName = FName("Simple_Solid");
-
-            // 기본 텍스처가 지정되어 있다면 Textured 파이프라인 및 텍스처 설정
-            if (!Mesh->DefaultTextureId.empty() && Mesh->DefaultTextureId != "None")
-            {
-                Material->SetDiffuseMap(GetTexture(Mesh->DefaultTextureId));
-                PipelineName = FName("Textured");
-            }
-
-            Material->SetPipeLine(GetPipeline(PipelineName));
-            RegisterMaterial(Key, Material);
+            StaticMeshObj->Materials.push_back("Spotlight");
         }
-
-        // 기본 도형은 0번 슬롯에 자기 자신의 Key 머티리얼 등록
-        StaticMeshObj->Materials.push_back(Key);
+        else if (Key == "MasterYi")
+        {
+            StaticMeshObj->Materials.push_back("MasterYi");
+        }
+        else
+        {
+            StaticMeshObj->Materials.push_back("Simple_Solid");
+        }
 
         AllUStaticMeshMap[Key] = StaticMeshObj;
     }
+
+
+    auto SphereAsset = GetSphereMesh();
+    if (SphereAsset)
+    {
+        CreateAndRegisterUStaticMesh(FName("Sphere_Mat"), { "Simple" }, SphereAsset);
+    }
+
+
+
+
 
     UE_LOG("[UStaticMeshMap] 생성 완료 (총 %zu 개)", AllUStaticMeshMap.size());
     return true;
@@ -1308,6 +1318,8 @@ bool FRenderResourceLibrary::CreateSphereMesh() {
     return AllFStaticMeshMap["Sphere"] != nullptr;
 }
 
+
+
 bool FRenderResourceLibrary::CreateLineMesh() {
     if (!RendererRef) return false;
     FRenderer& Renderer = *RendererRef;
@@ -1556,10 +1568,10 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         return false;
     }
 
+    // Todo: Make as static constant, move to header
     FRenderer& Renderer = *RendererRef;
     const std::filesystem::path ExeDir(GetExecutableDirectory());
     const std::filesystem::path ProjectRoot = ExeDir.parent_path().parent_path().parent_path();
-
     const std::filesystem::path AssetRoot = ProjectRoot / L"Resources" / L"Assets";
     std::error_code Error;
     /*
@@ -1584,6 +1596,16 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         CreateAndRegisterMaterialFromInfo(Material);
     }
 
+    /*
+    TArray<std::filesystem::path> SearchRoots = {
+        ProjectRoot / L"Resources" / L"Assets",
+        std::filesystem::current_path() / L"Resources" / L"Assets",
+        ProjectRoot / L"Assets",
+        std::filesystem::current_path() / L"Assets",
+        ExeDir / L"Assets",
+    };
+    */
+
     std::filesystem::recursive_directory_iterator Entries(AssetRoot, Error);
     /*
     if (Error)
@@ -1592,9 +1614,6 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         return false;
     }
     */
-
-    // Todo: Move to class
-    const char* OBJ_EXTENSION = ".obj";
 
     for (const auto& Entry : Entries)
     {
@@ -1622,7 +1641,7 @@ bool FRenderResourceLibrary::CreateObjMeshes()
 
         // Todo: Bin - OBJ 캐시는 Resources/Assets/<메시 이름>.bin으로 저장한다.
         const FString CacheName = StemName + ".bin";
-        const FString BinaryPath = (AssetRoot / CacheName).string();
+        const FString BinaryPath = (AssetRoot / "Bins" / CacheName).string();
 
         FObjModelData ModelData;
         if (Decoder.LoadObj(ObjPath, BinaryPath, ModelData) == false)
@@ -1812,7 +1831,7 @@ bool FRenderResourceLibrary::CreateMeshThumbnails() {
         const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
         Cam.Position = Center - Forward * Distance;
 
-        Renderer.RenderPreviewScene(ThumbnailRT, Cam, Mesh, 128, 128, false);
+    Renderer.RenderMeshPreviewScene(ThumbnailRT, Cam, Mesh, 128, 128, false);
 
         D3D11_TEXTURE2D_DESC TexDesc = {};
         TexDesc.Width = 128;
@@ -1841,6 +1860,86 @@ bool FRenderResourceLibrary::CreateMeshThumbnails() {
                 ThumbTexture->Texture2D = SnapshotTex;
                 ThumbTexture->TextureSRV = SnapshotSRV;
                 AllMeshThumbnailMap[Key] = ThumbTexture;
+            }
+        }
+    }
+
+  Renderer.BindBackBufferWithDepth();
+  return true;
+}
+
+bool FRenderResourceLibrary::CreateMaterialThumbnails()
+{
+    if (!RendererRef) {
+        return false;
+    }
+    FRenderer& Renderer = *RendererRef;
+
+    FPreviewRenderTarget ThumbnailRT;
+    ID3D11Device* Device = Renderer.GetDevice();
+    ID3D11DeviceContext* Context = Renderer.GetContext();
+    if (!Device || !Context) {
+        return false;
+    }
+
+    ThumbnailRT.Resize(Device, 128, 128);
+
+    // 머티리얼 프리뷰용 메시 (구체 권장, 필요 시 GetCubeMesh()로 변경 가능)
+    auto PreviewMesh = GetSphereMesh();
+
+    if (!PreviewMesh) return false;
+
+    // 1. 카메라 위치 고정 (중심 0,0,0 기준 알맞은 거리 설정)
+    const FVector Center = { 0.0f, 0.0f, 0.0f };
+    const float Distance = 2.3f; // 128x128 뷰포트에 꽉 차게 나오는 최적 거리
+
+    FCamera Cam;
+    Cam.Projection.ProjectionType = EProjectionType::Perspective;
+    Cam.Projection.FOV = 45.0f;
+    Cam.Projection.Aspect = 1.0f;
+    Cam.Pitch = -15.0f;
+    Cam.Yaw = 45.0f;
+
+    const FMatrix Rot = FMatrix::MakeRotation(FVector(0.0f, Cam.Pitch, Cam.Yaw));
+    const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
+    Cam.Position = Center - Forward * Distance;
+
+    // 2. 머티리얼 맵 순회하며 스냅샷 렌더링
+    for (const auto& [Key, Mat] : AllMaterialMap)
+    {
+        if (!Mat) continue;
+
+        Renderer.RenderMaterialPreviewScene(ThumbnailRT, Cam, PreviewMesh, Mat, 128, 128, false);
+
+        D3D11_TEXTURE2D_DESC TexDesc = {};
+        TexDesc.Width = 128;
+        TexDesc.Height = 128;
+        TexDesc.MipLevels = 1;
+        TexDesc.ArraySize = 1;
+        TexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        TexDesc.SampleDesc.Count = 1;
+        TexDesc.Usage = D3D11_USAGE_DEFAULT;
+        TexDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> SnapshotTex;
+        if (SUCCEEDED(Device->CreateTexture2D(&TexDesc, nullptr, &SnapshotTex)))
+        {
+            Context->CopyResource(SnapshotTex.Get(), ThumbnailRT.ColorTexture.Get());
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+            SRVDesc.Format = TexDesc.Format;
+            SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            SRVDesc.Texture2D.MipLevels = 1;
+
+            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SnapshotSRV;
+            if (SUCCEEDED(Device->CreateShaderResourceView(SnapshotTex.Get(), &SRVDesc, &SnapshotSRV)))
+            {
+                auto ThumbTexture = std::shared_ptr<FTexture>(new FTexture());
+                ThumbTexture->Width = 128;
+                ThumbTexture->Height = 128;
+                ThumbTexture->Texture2D = SnapshotTex;
+                ThumbTexture->TextureSRV = SnapshotSRV;
+                AllMaterialThumbnailMap[Key] = ThumbTexture;
             }
         }
     }

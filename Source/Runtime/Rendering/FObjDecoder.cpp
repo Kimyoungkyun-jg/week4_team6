@@ -1721,7 +1721,7 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
     CachedMaterials.clear();
 
     const std::filesystem::path AssetPath(AssetRoot);
-    const auto BinaryPath = AssetPath / "Materials.bin";
+    const auto BinaryPath = AssetPath /  L"Bins" / "Materials.bin";
 
     TArray<FObjMaterialInfo> Loaded;
 	//TMap<FString, FObjMaterialInfo> loadedMaterialInfoMap;

@@ -76,21 +76,37 @@ public:
     // 스태틱 메시 썸네일 텍스처 보관 맵
     TMap<FName, TSharedPtr<FTexture>> AllMeshThumbnailMap;
 
-    // 전체 썸네일 맵 조회
-    [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
-        return AllMeshThumbnailMap;
-    }
+  // 머터리얼 썸네일 텍스처 보관 맵
+  TMap<FString, TSharedPtr<FTexture>> AllMaterialThumbnailMap;
 
-    // 스태틱 메시 썸네일 조회
-    [[nodiscard]] TSharedPtr<FTexture> GetMeshThumbnail(const FName& Id) const {
-        auto it = AllMeshThumbnailMap.find(Id);
-        if (it != AllMeshThumbnailMap.end())
-            return it->second;
-        return nullptr;
-    }
+  // 전체 썸네일 맵 조회
+  [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
+    return AllMeshThumbnailMap;
+  }
 
-    // 인스턴싱 배치 배열 맵
-    TMap<FInstanceBatchKey, TArray<FInstanceData>> AllInstancingArrayMap;
+
+  [[nodiscard]] const TMap<FString, TSharedPtr<FTexture>>& GetAllMaterialThumbnailMap() const {
+      return AllMaterialThumbnailMap;
+  }
+
+
+  // 스태틱 메시 썸네일 조회
+  [[nodiscard]] TSharedPtr<FTexture> GetMeshThumbnail(const FName& Id) const {
+    auto it = AllMeshThumbnailMap.find(Id);
+    if (it != AllMeshThumbnailMap.end())
+      return it->second;
+    return nullptr;
+  }
+
+  [[nodiscard]] TSharedPtr<FTexture> GetMaterialThumbnail(const FString& Id) const {
+      auto it = AllMaterialThumbnailMap.find(Id);
+      if (it != AllMaterialThumbnailMap.end())
+          return it->second;
+      return nullptr;
+  }
+
+  // 인스턴싱 배치 배열 맵
+  TMap<FInstanceBatchKey, TArray<FInstanceData>> AllInstancingArrayMap;
 
     // 인스턴싱 배열 조회
     TArray<FInstanceData>& GetInstancingArray(const FName& MatId, const FName& MeshId) {
@@ -234,10 +250,6 @@ public:
         return nullptr;
     }
 
-
-
-
-
     // 메쉬 전체 해제
     void DestroyAllMeshes() {
         AllFStaticMeshMap.clear();
@@ -280,8 +292,10 @@ public:
         const TArray<uint32>& Indices
     );
 
-    // 스태틱 메시 썸네일 일괄 생성
-    bool CreateMeshThumbnails();
+  // 스태틱 메시 썸네일 일괄 생성
+  bool CreateMeshThumbnails();
+  // 머터리얼 썸네일 일괄 생성
+  bool CreateMaterialThumbnails();
 
 private:
     bool InitializePipelines();
@@ -317,6 +331,9 @@ private:
 
     // 폰트 일괄 초기화
     bool CreateFonts();
+
+    // Todo: Make as static const
+    const char* OBJ_EXTENSION = ".obj";
 
     FRenderer* RendererRef = nullptr;
 };
