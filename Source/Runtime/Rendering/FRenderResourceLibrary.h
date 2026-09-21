@@ -267,6 +267,9 @@ public:
 
   void DestroyAllInstancingArray() { AllInstancingArrayMap.clear(); }
 
+  void UnregisterMaterial(const FString& InKey); //material 등록해제
+
+
   // 전체 머티리얼 맵 조회
   const TMap<FString, TSharedPtr<FMaterial>> &GetAllMaterials() const {
     return AllMaterialMap;
@@ -300,6 +303,8 @@ public:
   // 머터리얼 썸네일 일괄 생성
   bool CreateMaterialThumbnails();
 
+  void UpdateMaterialThumbnail(const FString& MatKey);
+  void UpdateMeshThumbnail(const FString& MatKey);
 private:
   bool InitializePipelines();
   bool CreateSolidWireframePipeline();
@@ -334,6 +339,9 @@ private:
 
   // 폰트 일괄 초기화
   bool CreateFonts();
+
+
+
 
   FRenderer *RendererRef = nullptr;
 };

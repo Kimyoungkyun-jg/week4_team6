@@ -366,18 +366,11 @@ void FImguiContentsDrawer::RenderContentView()
 			if (Item.Extension == ".staticmesh")
 			{
 				const FName MeshId(Item.DisplayName);
-				UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh(MeshId);
-				if (Mesh)
-				{
-					FEditorApplication::Get().OpenPreviewWindow(Mesh, EPrevType::Mesh);
-				}
+				FEditorApplication::Get().OpenPreviewWindow(MeshId, Item.DisplayName ,EPrevType::Mesh);
 			}
 			else if (Item.Extension == ".material")
 			{
-				UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh("Sphere_Mat");
-				Mesh->Materials[0] = Item.DisplayName;
-
-				FEditorApplication::Get().OpenPreviewWindow(Mesh, EPrevType::Material);
+				FEditorApplication::Get().OpenPreviewWindow("Sphere_Mat", Item.DisplayName,EPrevType::Material);
 			}
 		}
 

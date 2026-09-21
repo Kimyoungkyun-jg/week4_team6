@@ -164,14 +164,16 @@ void FEditorApplication::Tick(float DeltaTime) {
 #include "ThirdParty/Imgui/imgui_internal.h"
 #include <Runtime\CoreUObject\UMeshComponent.h>
 
-void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
+void FEditorApplication::OpenPreviewWindow(FName InMeshID, const FString& InMaterialKey, EPrevType type)
 {
+    // InMesh 변수 선언 및 유효성 검사
+    UStaticMesh* InMesh = FRenderResourceLibrary::Get().GetUStaticMesh(InMeshID.ToString());
     if (!InMesh)
     {
         return;
     }
 
-    // 1. 닫힌 창 정리
+    // 닫힌 창 정리
     PreviewWindows.erase(
         std::remove_if(PreviewWindows.begin(), PreviewWindows.end(),
             [](const TSharedPtr<FImguiPreviewEditorWindow>& Win) {
@@ -180,9 +182,12 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
         PreviewWindows.end()
     );
 
-    const FString CurrentMatName = (!InMesh->Materials.empty()) ? InMesh->Materials[0] : "";
+    // 머티리얼 키 결정: 인자로 넘어온 InMaterialKey 우선 사용
+    const FString CurrentMatName = !InMaterialKey.empty()
+        ? InMaterialKey
+        : (!InMesh->Materials.empty() ? InMesh->Materials[0] : "Material");
 
-    // 2. 이미 열려 있는 창인지 검사
+    // 이미 열려 있는 창인지 검사
     for (const auto& Window : PreviewWindows)
     {
         if (Window && Window->IsOpen())
@@ -198,7 +203,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
             else if (type == EPrevType::Material && Window->prevType == EPrevType::Material)
             {
                 // TitleString에 머티리얼 이름이 고유하게 들어가 있으므로 이를 기준으로 중복 검사
-                FString ExpectedTitle = CurrentMatName + "###PreviewMaterialEditor_" + CurrentMatName;
+                const FString ExpectedTitle = CurrentMatName + "###PreviewMaterialEditor_" + CurrentMatName;
                 if (Window->GetTitleString() == ExpectedTitle)
                 {
                     Window->BringToFront();
@@ -250,7 +255,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
 
     // 새 프리뷰 창 생성 및 등록
     auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
-    NewWindow->OpenPreview(InMesh, TargetDockID, type);
+    NewWindow->OpenPreview(InMesh, CurrentMatName, TargetDockID, type);
     PreviewWindows.push_back(NewWindow);
 }
 

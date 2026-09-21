@@ -1745,6 +1745,11 @@ bool FRenderResourceLibrary::CreateFonts() {
   return true;
 }
 
+void FRenderResourceLibrary::UnregisterMaterial(const FString& InKey)
+{
+    AllMaterialMap.erase(InKey);
+}
+
 bool FRenderResourceLibrary::CreateMeshThumbnails() {
   if (!RendererRef) {
     return false;
@@ -1821,28 +1826,25 @@ bool FRenderResourceLibrary::CreateMeshThumbnails() {
 
 bool FRenderResourceLibrary::CreateMaterialThumbnails()
 {
-    if (!RendererRef) {
-        return false;
-    }
+    if (!RendererRef) return false;
     FRenderer& Renderer = *RendererRef;
 
-    FPreviewRenderTarget ThumbnailRT;
     ID3D11Device* Device = Renderer.GetDevice();
     ID3D11DeviceContext* Context = Renderer.GetContext();
-    if (!Device || !Context) {
-        return false;
+    if (!Device || !Context) return false;
+
+    // 공용 렌더 타깃 준비 (클래스 멤버 또는 static 변수)
+    static FPreviewRenderTarget SharedThumbnailRT;
+    if (!SharedThumbnailRT.ColorTexture)
+    {
+        SharedThumbnailRT.Resize(Device, 128, 128);
     }
 
-    ThumbnailRT.Resize(Device, 128, 128);
-
-    // 머티리얼 프리뷰용 메시 (구체 권장, 필요 시 GetCubeMesh()로 변경 가능)
     auto PreviewMesh = GetSphereMesh();
-
     if (!PreviewMesh) return false;
 
-    // 1. 카메라 위치 고정 (중심 0,0,0 기준 알맞은 거리 설정)
     const FVector Center = { 0.0f, 0.0f, 0.0f };
-    const float Distance = 2.3f; // 128x128 뷰포트에 꽉 차게 나오는 최적 거리
+    const float Distance = 2.3f;
 
     FCamera Cam;
     Cam.Projection.ProjectionType = EProjectionType::Perspective;
@@ -1855,13 +1857,101 @@ bool FRenderResourceLibrary::CreateMaterialThumbnails()
     const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
     Cam.Position = Center - Forward * Distance;
 
-    // 2. 머티리얼 맵 순회하며 스냅샷 렌더링
+    // 텍스처 생성 스펙 구조체 (루프 밖에서 1회만 정의)
+    D3D11_TEXTURE2D_DESC TexDesc = {};
+    TexDesc.Width = 128;
+    TexDesc.Height = 128;
+    TexDesc.MipLevels = 1;
+    TexDesc.ArraySize = 1;
+    TexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    TexDesc.SampleDesc.Count = 1;
+    TexDesc.Usage = D3D11_USAGE_DEFAULT;
+    TexDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+    SRVDesc.Format = TexDesc.Format;
+    SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    SRVDesc.Texture2D.MipLevels = 1;
+
     for (const auto& [Key, Mat] : AllMaterialMap)
     {
         if (!Mat) continue;
 
-        Renderer.RenderMaterialPreviewScene(ThumbnailRT, Cam, PreviewMesh, Mat, 128, 128, false);
+        // 1. 공용 도화지에 구체 렌더링
+        Renderer.RenderMaterialPreviewScene(SharedThumbnailRT, Cam, PreviewMesh, Mat, 128, 128, false);
 
+        // 2. 머티리얼별 개별 Texture2D/SRV 생성 및 결과 복사
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> SnapshotTex;
+        if (SUCCEEDED(Device->CreateTexture2D(&TexDesc, nullptr, &SnapshotTex)))
+        {
+            Context->CopyResource(SnapshotTex.Get(), SharedThumbnailRT.ColorTexture.Get());
+
+            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SnapshotSRV;
+            if (SUCCEEDED(Device->CreateShaderResourceView(SnapshotTex.Get(), &SRVDesc, &SnapshotSRV)))
+            {
+                auto ThumbTexture = std::make_shared<FTexture>();
+                ThumbTexture->Width = 128;
+                ThumbTexture->Height = 128;
+                ThumbTexture->Texture2D = SnapshotTex;
+                ThumbTexture->TextureSRV = SnapshotSRV;
+                AllMaterialThumbnailMap[Key] = ThumbTexture;
+            }
+        }
+    }
+
+    Renderer.BindBackBufferWithDepth();
+    return true;
+}
+
+
+void FRenderResourceLibrary::UpdateMaterialThumbnail(const FString& MatKey)
+{
+    if (!RendererRef) return;
+    FRenderer& Renderer = *RendererRef;
+
+    ID3D11Device* Device = Renderer.GetDevice();
+    ID3D11DeviceContext* Context = Renderer.GetContext();
+    if (!Device || !Context) return;
+
+    auto MatIt = AllMaterialMap.find(MatKey);
+    if (MatIt == AllMaterialMap.end() || !MatIt->second) return;
+
+    auto PreviewMesh = GetSphereMesh();
+    if (!PreviewMesh) return;
+
+    // static 또는 클래스 멤버 변수: FPreviewRenderTarget SharedThumbnailRT;
+    static FPreviewRenderTarget SharedThumbnailRT;
+    if (!SharedThumbnailRT.ColorTexture)
+    {
+        SharedThumbnailRT.Resize(Device, 128, 128);
+    }
+
+    // 카메라 설정
+    const FVector Center = { 0.0f, 0.0f, 0.0f };
+    const float Distance = 2.3f;
+
+    FCamera Cam;
+    Cam.Projection.ProjectionType = EProjectionType::Perspective;
+    Cam.Projection.FOV = 45.0f;
+    Cam.Projection.Aspect = 1.0f;
+    Cam.Pitch = -15.0f;
+    Cam.Yaw = 45.0f;
+
+    const FMatrix Rot = FMatrix::MakeRotation(FVector(0.0f, Cam.Pitch, Cam.Yaw));
+    const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
+    Cam.Position = Center - Forward * Distance;
+
+    // 렌더링 수행
+    Renderer.RenderMaterialPreviewScene(SharedThumbnailRT, Cam, PreviewMesh, MatIt->second, 128, 128, false);
+
+    // 기존 텍스처가 있으면 VRAM 버퍼만 복사(CopyResource), 없을 때만 신규 생성
+    auto ThumbIt = AllMaterialThumbnailMap.find(MatKey);
+    if (ThumbIt != AllMaterialThumbnailMap.end() && ThumbIt->second && ThumbIt->second->Texture2D)
+    {
+        Context->CopyResource(ThumbIt->second->Texture2D.Get(), SharedThumbnailRT.ColorTexture.Get());
+    }
+    else
+    {
         D3D11_TEXTURE2D_DESC TexDesc = {};
         TexDesc.Width = 128;
         TexDesc.Height = 128;
@@ -1875,7 +1965,7 @@ bool FRenderResourceLibrary::CreateMaterialThumbnails()
         Microsoft::WRL::ComPtr<ID3D11Texture2D> SnapshotTex;
         if (SUCCEEDED(Device->CreateTexture2D(&TexDesc, nullptr, &SnapshotTex)))
         {
-            Context->CopyResource(SnapshotTex.Get(), ThumbnailRT.ColorTexture.Get());
+            Context->CopyResource(SnapshotTex.Get(), SharedThumbnailRT.ColorTexture.Get());
 
             D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
             SRVDesc.Format = TexDesc.Format;
@@ -1885,16 +1975,65 @@ bool FRenderResourceLibrary::CreateMaterialThumbnails()
             Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SnapshotSRV;
             if (SUCCEEDED(Device->CreateShaderResourceView(SnapshotTex.Get(), &SRVDesc, &SnapshotSRV)))
             {
-                auto ThumbTexture = std::shared_ptr<FTexture>(new FTexture());
+                auto ThumbTexture = std::make_shared<FTexture>();
                 ThumbTexture->Width = 128;
                 ThumbTexture->Height = 128;
                 ThumbTexture->Texture2D = SnapshotTex;
                 ThumbTexture->TextureSRV = SnapshotSRV;
-                AllMaterialThumbnailMap[Key] = ThumbTexture;
+                AllMaterialThumbnailMap[MatKey] = ThumbTexture;
             }
         }
     }
 
     Renderer.BindBackBufferWithDepth();
-    return true;
+}
+
+
+void FRenderResourceLibrary::UpdateMeshThumbnail(const FString& MeshKey)
+{
+    if (!RendererRef) return;
+    FRenderer& Renderer = *RendererRef;
+
+    ID3D11Device* Device = Renderer.GetDevice();
+    ID3D11DeviceContext* Context = Renderer.GetContext();
+    if (!Device || !Context) return;
+
+    // 해당 메시가 존재하는지 단일 조회
+    auto MeshIt = AllUStaticMeshMap.find(MeshKey);
+    if (MeshIt == AllUStaticMeshMap.end() || !MeshIt->second) return;
+
+    UStaticMesh* MeshPtr = MeshIt->second;
+
+
+    static FPreviewRenderTarget SharedThumbnailRT;
+    if (!SharedThumbnailRT.ColorTexture)
+    {
+        SharedThumbnailRT.Resize(Device, 128, 128);
+    }
+
+    const FAxisAlignedBoundingBox& Bounds = MeshPtr->GetBounds();
+    const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+    const float Extent = (Bounds.Max - Bounds.Min).Size();
+    const float Distance = (Extent > 0.1f) ? (Extent * 1.5f) : 2.5f;
+
+    FCamera Cam;
+    Cam.Projection.ProjectionType = EProjectionType::Perspective;
+    Cam.Projection.FOV = 45.0f;
+    Cam.Projection.Aspect = 1.0f;
+    Cam.Pitch = -20.0f;
+    Cam.Yaw = 45.0f;
+
+    const FMatrix Rot = FMatrix::MakeRotation(FVector(0.0f, Cam.Pitch, Cam.Yaw));
+    const FVector Forward{ Rot.M[0][0], Rot.M[0][1], Rot.M[0][2] };
+    Cam.Position = Center - Forward * Distance;
+
+    Renderer.RenderMeshPreviewScene(SharedThumbnailRT, Cam, MeshPtr, 128, 128, false);
+
+    auto ThumbIt = AllMeshThumbnailMap.find(MeshKey);
+    if (ThumbIt != AllMeshThumbnailMap.end() && ThumbIt->second && ThumbIt->second->Texture2D)
+    {
+        Context->CopyResource(ThumbIt->second->Texture2D.Get(), SharedThumbnailRT.ColorTexture.Get());
+    }
+
+    Renderer.BindBackBufferWithDepth();
 }
