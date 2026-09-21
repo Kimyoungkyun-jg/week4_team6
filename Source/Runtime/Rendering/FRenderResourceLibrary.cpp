@@ -1598,6 +1598,9 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     }
     */
 
+    // Todo: Move to class
+    const char* OBJ_EXTENSION = ".obj";
+
     for (const auto& Entry : Entries)
     {
         if (!Entry.is_regular_file())
@@ -1608,7 +1611,7 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         //.obj 확장자 체크
         std::string FileExtension = Entry.path().extension().string();
         //std::transform(FileExtension.begin(), FileExtension.end(), FileExtension.begin(), ::tolower);
-        if (FileExtension != ".obj")
+        if (FileExtension != OBJ_EXTENSION)
         {
             continue;
         }

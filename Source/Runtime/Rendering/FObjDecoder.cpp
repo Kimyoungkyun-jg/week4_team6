@@ -700,9 +700,7 @@ void FObjDecoder::ParseMtlFile(const FString& File)
 	}
 
 	// Todo: Bin - 실제 등록은 공유 Materials.bin 로딩 단계에서 수행한다.
-
 	DefiningMaterial = -1;
-
 }
 
 void FObjDecoder::ParseMtlLine(std::string_view Line)
@@ -1320,13 +1318,16 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
 {
 	std::ifstream File(Path);
-	if (!File) return false;
+	//if (!File) return false;
+	
 	std::stringstream Buffer;
 	Buffer << File.rdbuf();
-	if (File.bad()) return false;
+	//if (File.bad()) return false;
+	
 	FObjDecoder Decoder;
 	Decoder.ParseMtlFile(Buffer.str());
 	OutMaterials = std::move(Decoder.ObjInfo.Materials);
+	
 	return true;
 }
 
@@ -1521,7 +1522,6 @@ namespace
         return Archive.DeserializeString(Value.Name);
     }
 
-
     // Todo: Bin - 메시에는 MTL 경로만, Materials.bin에는 실제 정의를 저장한다.
     bool SerializeLibraryPath(FBinArchive& Archive, const FString& Path)
     {
@@ -1542,31 +1542,48 @@ namespace
 
     // 배열 객체의 메모리가 아닌 개수와 원소를 차례로 저장한다.
     template<typename T>
-    bool SerializeArray(FBinArchive& Archive, const TArray<T>& Values,
-        bool (*SerializeElement)(FBinArchive&, const T&))
+    bool SerializeArray(FBinArchive& Archive, const TArray<T>& Values, bool (*SerializeElement)(FBinArchive&, const T&))
     {
-        if (Values.size() > MaxElementCount
-            || !Archive.SerializeUInt32(static_cast<uint32>(Values.size()))) return false;
-        for (const T& Value : Values)
-            if (!SerializeElement(Archive, Value)) return false;
+		if (Values.size() > MaxElementCount || !Archive.SerializeUInt32(static_cast<uint32>(Values.size())))
+		{
+			return false;
+		}
+        
+		for (const T& Value : Values)
+		{
+			if (!SerializeElement(Archive, Value)) 
+			{
+				return false;
+			}
+		}
+
         return true;
     }
 
     template<typename T>
-    bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values,
-        bool (*DeserializeElement)(FBinArchive&, T&))
+    bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values, bool (*DeserializeElement)(FBinArchive&, T&))
     {
         uint32 Count = 0;
-        if (!Archive.DeserializeUInt32(Count) || Count > MaxElementCount
-            || Count > Archive.GetRemainingBytes()) return false;
+		if (!Archive.DeserializeUInt32(Count)
+			|| Count > MaxElementCount
+			|| Count > Archive.GetRemainingBytes())
+		{
+			return false;
+		}
+
         Values.clear();
-        // 손상된 파일의 개수로 미리 대량 할당하지 않고 읽은 원소만 추가한다.
+        // 손상된 파일의 개수로 미리 대량 할당하지 않고, 읽은 원소만 추가한다.
         for (uint32 i = 0; i < Count; ++i)
         {
             T Value{};
-            if (!DeserializeElement(Archive, Value)) return false;
+			if (!DeserializeElement(Archive, Value))
+			{
+				return false;
+			}
+				
             Values.push_back(std::move(Value));
         }
+
         return true;
     }
 
@@ -1660,18 +1677,29 @@ bool FObjDecoder::DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterial
     Archive.ResetReadPosition();
     uint32 FileSignature = 0;
     // Todo: Bin - 파일 종류만 확인한다.
-    if (!Archive.DeserializeUInt32(FileSignature)
-        || FileSignature != MaterialFileSignature) return false;
+    
+	if (!Archive.DeserializeUInt32(FileSignature) || FileSignature != MaterialFileSignature)
+	{
+		return false;
+	}
+
     TArray<FObjMaterialInfo> Loaded;
-    if (!DeserializeArray(Archive, Loaded, DeserializeMaterial)
-        || Archive.GetRemainingBytes() != 0) return false;
-    for (const FObjMaterialInfo& Material : Loaded)
+	if (!DeserializeArray(Archive, Loaded, DeserializeMaterial) || Archive.GetRemainingBytes() != 0)
+	{
+		return false;
+	}
+    
+	for (const FObjMaterialInfo& Material : Loaded)
     {
-        if (Material.MaterialName.empty()
-            || !std::isfinite(Material.Opacity)) return false;
+		if (Material.MaterialName.empty() || !std::isfinite(Material.Opacity))
+		{
+			return false;
+		}
     }
-    OutMaterials = std::move(Loaded);
-    return true;
+    
+	OutMaterials = std::move(Loaded);
+    
+	return true;
 }
 
 bool FObjDecoder::SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials)
@@ -1696,6 +1724,8 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
     const auto BinaryPath = AssetPath / "Materials.bin";
 
     TArray<FObjMaterialInfo> Loaded;
+	//TMap<FString, FObjMaterialInfo> loadedMaterialInfoMap;
+
     if (LoadMaterialsBinary(BinaryPath.string(), Loaded))
     {
         UE_LOG("[Material Cache] Hit: %s", BinaryPath.string().c_str());
@@ -1721,83 +1751,33 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
         std::filesystem::recursive_directory_iterator AssetIter(AssetPath, Error), End;
         //if (Error) return false;
 
-        while (AssetIter != End)
-        {
-            const bool Regular = AssetIter->is_regular_file(Error);
-            //if (Error) return false;
+		const char* MTL_EXTENSION = ".mtl";
 
-            if (Regular)
-            {
-                FString Extension = AssetIter->path().extension().string();
-				/*
-                std::transform(Extension.begin(), Extension.end(), Extension.begin(),
-                    [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
-				*/
+		for (const auto& Asset : std::filesystem::directory_iterator(AssetPath))
+		{
+			if (Asset.is_regular_file() == false)
+			{
+				continue;
+			}
 
-                if (Extension == ".mtl")
-                {
-                    Files.push_back(AssetIter->path());
-                }
-            }
+			if (Asset.path().extension() != MTL_EXTENSION)
+			{
+				continue;
+			}
 
-            AssetIter.increment(Error);
-            //if (Error) return false;
-        }
+			TArray<FObjMaterialInfo> Materials;
 
-        std::sort(Files.begin(), Files.end());
-        for (const auto& Path : Files)
-        {
-            TArray<FObjMaterialInfo> Materials;
-            if (!DecodeMaterialsFromFile(Path.string(), Materials)) return false;
-
-			/*
-            for (auto& Material : Materials)
-            {
-                // Todo: Bin - 전역적으로 유일한 이름만 허용하고 경로 기반 ID는 만들지 않는다.
-                const bool bDuplicate = std::any_of(Loaded.begin(), Loaded.end(),
-                    [&Material](const FObjMaterialInfo& Existing)
-                    {
-                        return Existing.MaterialName == Material.MaterialName;
-                    });
-                if (bDuplicate)
-                {
-                    // Todo: Bin - 같은 전역 이름이 여러 MTL에 선언되면 정렬상 먼저 읽은 정의를 공유한다.
-                    UE_LOG_WARN("[Material Cache] 중복 머티리얼 이름, 기존 정의 사용: %s",
-                        Material.MaterialName.c_str());
-                    continue;
-                }
-
-                Loaded.push_back(std::move(Material));
-            }
-			*/
+			// Todo: assert
+			DecodeMaterialsFromFile(Asset.path().string(), Materials);
 
 			for (FObjMaterialInfo& Material : Materials)
 			{
 				// Todo: Bin
 				// MTL 파일과 속성이 달라도 MaterialName이 같으면
 				// 이미 등록된 전역 머티리얼과 동일한 것으로 취급한다.
-				const bool bAlreadyRegistered =
-					std::any_of(
-						Loaded.begin(),
-						Loaded.end(),
-						[&Material](const FObjMaterialInfo& Existing)
-						{
-							return Existing.MaterialName
-								== Material.MaterialName;
-						});
-
-				if (bAlreadyRegistered)
-				{
-					// Todo: Bin
-					// 최초로 등록한 머티리얼의 속성을 유지하고
-					// 이후 같은 이름의 머티리얼 속성은 사용하지 않는다.
-					continue;
-				}
-
 				Loaded.push_back(std::move(Material));
 			}
-
-        }
+		}
 
 		SaveMaterialsBinary(BinaryPath.string(), Loaded);
 

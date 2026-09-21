@@ -49,8 +49,10 @@ public:
         if (ByteCount > GetRemainingBytes()) return false;
         if (ByteCount == 0) return true;
         if (!OutData) return false;
+        
         std::memcpy(OutData, Bytes.data() + ReadOffset, ByteCount);
         ReadOffset += ByteCount;
+
         return true;
     }
 
