@@ -274,8 +274,13 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 						{
 							if (TargetMesh.IsValid())
 							{
+							
+#if !IS_OBJ_VIEWER
 								TargetMesh->Destroy();
+#else
+#endif
 							}
+
 
 							OriginalMesh = OrigMesh;
 							TargetMesh = OrigMesh->ClonePreviewMesh();
