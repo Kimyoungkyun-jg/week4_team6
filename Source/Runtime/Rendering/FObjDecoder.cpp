@@ -19,262 +19,243 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace
-{
-    // Todo: Bin - 실제 파일이 없어도 캐시에 저장된 라이브러리 경로를 조회할 수 있다.
-    FString NormalizeMaterialPath(const std::filesystem::path& Path)
-    {
-        std::error_code Error;
-        // Todo: Bin - 캐시만 남아 있어도 조회 가능해야 하므로 원본 파일 상태를 검사하지 않는다.
-        FString Key = std::filesystem::absolute(Path, Error).lexically_normal().generic_string();
-		//if (Error) return {};
-
-        std::transform(Key.begin(), Key.end(), Key.begin(),
-            [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
-
-        return Key;
-    }
-
 	// 에셋 폴더는 실행 파일 기준으로 잡는다.
-	std::filesystem::path GetAssetDir()
+std::filesystem::path FObjDecoder::GetAssetDir()
+{
+	const std::filesystem::path ExeDir(GetExecutableDirectory());
+	return ExeDir.parent_path().parent_path().parent_path() / "Resources" / "Assets";
+}
+
+bool FObjDecoder::IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath)
+{
+	std::error_code Ec;
+	const auto NormalizedFile = std::filesystem::weakly_canonical(TargetPath, Ec);
+	const auto NormalizedRoot = std::filesystem::weakly_canonical(BasePath, Ec);
+
+	const auto RelativePath = std::filesystem::relative(NormalizedFile, NormalizedRoot, Ec);
+	return !RelativePath.empty() && RelativePath.begin()->string() != "..";
+}
+
+bool FObjDecoder::ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath)
+{
+	std::filesystem::path FilePath(FileName);
+
+	if (!FilePath.is_absolute())
 	{
-		const std::filesystem::path ExeDir(GetExecutableDirectory());
-		return ExeDir.parent_path().parent_path().parent_path() / "Resources" / "Assets";
+		FilePath = GetAssetDir() / FilePath;
 	}
 
-	bool IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath)
+	std::error_code Ec;
+	if (!std::filesystem::is_regular_file(FilePath, Ec))
 	{
-		std::error_code Ec;
-		const auto NormalizedFile = std::filesystem::weakly_canonical(TargetPath, Ec);
-		const auto NormalizedRoot = std::filesystem::weakly_canonical(BasePath, Ec);
-
-		const auto RelativePath = std::filesystem::relative(NormalizedFile, NormalizedRoot, Ec);
-		return !RelativePath.empty() && RelativePath.begin()->string() != "..";
+		return false;
 	}
 
-	bool ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath)
-	{
-		std::filesystem::path FilePath(FileName);
+	OutPath = FilePath;
+	return true;
+}
 
-		if (!FilePath.is_absolute())
+FString FObjDecoder::ReadFileToString(std::string_view FileName)
+{
+
+	std::filesystem::path FilePath(FileName);
+
+	if (!FilePath.is_absolute())
+	{
+		const std::filesystem::path AssetDir = GetAssetDir();
+		FilePath = AssetDir / FileName;
+
+		if (!IsUnder(FilePath, AssetDir))
 		{
-			FilePath = GetAssetDir() / FilePath;
+			UE_LOG_WARN("FObjDecoder : 에셋 폴더 외부 경로 접근 - %s", FilePath.string().c_str());
+			return FString();
 		}
+	}
 
-		std::error_code Ec;
-		if (!std::filesystem::is_regular_file(FilePath, Ec))
+	if (!std::filesystem::exists(FilePath))
+	{
+		UE_LOG_WARN("FObjDecoder : 파일이 존재하지 않음 - %s", FilePath.string().c_str());
+		return FString();
+	}
+
+	std::ifstream FileStream(FilePath, std::ios::in);
+	if (!FileStream.is_open())
+	{
+		UE_LOG_WARN("FObjDecoder : 파일 열기 실패 - %s", FilePath.string().c_str());
+		return FString();
+	}
+
+	std::stringstream Buffer;
+	Buffer << FileStream.rdbuf();
+	return Buffer.str();
+}
+
+std::string_view FObjDecoder::Trim(std::string_view Text)
+{
+	const size_t First = Text.find_first_not_of(Spaces);
+	if (First == std::string_view::npos)
+	{
+		return {};
+	}
+
+	const size_t Last = Text.find_last_not_of(Spaces);
+	return Text.substr(First, Last - First + 1);
+}
+
+// 앞 공백을 건너뛰고 첫 단어를 반환한다. Text 에서는 그 단어까지 제거된다.
+std::string_view FObjDecoder::NextWord(std::string_view& Text)
+{
+	const size_t Start = Text.find_first_not_of(Spaces);
+	if (Start == std::string_view::npos)
+	{
+		Text = {};
+		return {};
+	}
+
+	const size_t End = Text.find_first_of(Spaces, Start);
+	const std::string_view Word = Text.substr(Start, End - Start);
+	Text = (End == std::string_view::npos) ? std::string_view{} : Text.substr(End);
+	return Word;
+}
+
+bool FObjDecoder::StringToFloat(std::string_view Text, float& Value)
+{
+	const auto [Ptr, Ec] = std::from_chars(Text.data(), Text.data() + Text.size(), Value);
+	return Ec == std::errc{} && Ptr == Text.data() + Text.size();
+}
+
+bool FObjDecoder::StringToInt(std::string_view Text, int32& Value)
+{
+	const auto [Ptr, Ec] = std::from_chars(Text.data(), Text.data() + Text.size(), Value);
+	return Ec == std::errc{} && Ptr == Text.data() + Text.size();
+}
+
+int32 FObjDecoder::ReadFloats(std::string_view Line, float* Out, int32 MaxCount)
+{
+	int32 Count = 0;
+	while (Count < MaxCount)
+	{
+		const std::string_view Word = NextWord(Line);
+		if (Word.empty())
+		{
+			break;
+		}
+		if (!StringToFloat(Word, Out[Count]))
+		{
+			break;
+		}
+		++Count;
+	}
+	return Count;
+}
+
+// OBJ 인덱스는 1부터 시작해서 1빼준다 음수는 끝에서부터 센 상대 인덱스. 0 은 없음(-1 반환).
+int32 FObjDecoder::ToZeroBased(int32 ObjIndex, size_t ListSize)
+{
+	if (ObjIndex > 0)
+	{
+		return ObjIndex - 1;
+	}
+	if (ObjIndex < 0)
+	{
+		return static_cast<int32>(ListSize) + ObjIndex;
+	}
+	return -1;
+}
+
+// "v", "v/vt", "v//vn", "v/vt/vn" 하나를 파싱한다. 없는 항목은 0 으로 남는다.
+bool FObjDecoder::ParseFaceToken(std::string_view Token, int32& V, int32& VT, int32& VN)
+{
+	V = VT = VN = 0;
+	int32* Slots[3] = { &V, &VT, &VN };
+
+	for (int32 i = 0; i < 3 && !Token.empty(); ++i)
+	{
+		const size_t Slash = Token.find('/');
+		const std::string_view Part = Token.substr(0, Slash);
+
+		if (!Part.empty() && !StringToInt(Part, *Slots[i]))
 		{
 			return false;
 		}
 
-		OutPath = FilePath;
-		return true;
+		if (Slash == std::string_view::npos)
+		{
+			break;
+		}
+		Token.remove_prefix(Slash + 1);
 	}
 
-	FString ReadFileToString(std::string_view FileName)
+	return V != 0;
+}
+
+std::string_view FObjDecoder::NextLine(std::string_view& Remaining)
+{
+	const size_t NewLine = Remaining.find('\n');
+	if (NewLine == std::string_view::npos)
 	{
-
-		std::filesystem::path FilePath(FileName);
-
-		if (!FilePath.is_absolute())
-		{
-			const std::filesystem::path AssetDir = GetAssetDir();
-			FilePath = AssetDir / FileName;
-
-			if (!IsUnder(FilePath, AssetDir))
-			{
-				UE_LOG_WARN("FObjDecoder : 에셋 폴더 외부 경로 접근 - %s", FilePath.string().c_str());
-				return FString();
-			}
-		}
-
-		if (!std::filesystem::exists(FilePath))
-		{
-			UE_LOG_WARN("FObjDecoder : 파일이 존재하지 않음 - %s", FilePath.string().c_str());
-			return FString();
-		}
-
-		std::ifstream FileStream(FilePath, std::ios::in);
-		if (!FileStream.is_open())
-		{
-			UE_LOG_WARN("FObjDecoder : 파일 열기 실패 - %s", FilePath.string().c_str());
-			return FString();
-		}
-
-		std::stringstream Buffer;
-		Buffer << FileStream.rdbuf();
-		return Buffer.str();
-	}
-
-	constexpr std::string_view Spaces = " \t\r\n";
-
-	std::string_view Trim(std::string_view Text)
-	{
-		const size_t First = Text.find_first_not_of(Spaces);
-		if (First == std::string_view::npos)
-		{
-			return {};
-		}
-
-		const size_t Last = Text.find_last_not_of(Spaces);
-		return Text.substr(First, Last - First + 1);
-	}
-
-	// 앞 공백을 건너뛰고 첫 단어를 반환한다. Text 에서는 그 단어까지 제거된다.
-	std::string_view NextWord(std::string_view& Text)
-	{
-		const size_t Start = Text.find_first_not_of(Spaces);
-		if (Start == std::string_view::npos)
-		{
-			Text = {};
-			return {};
-		}
-
-		const size_t End = Text.find_first_of(Spaces, Start);
-		const std::string_view Word = Text.substr(Start, End - Start);
-		Text = (End == std::string_view::npos) ? std::string_view{} : Text.substr(End);
-		return Word;
-	}
-
-	bool StringToFloat(std::string_view Text, float& Value)
-	{
-		const auto [Ptr, Ec] = std::from_chars(Text.data(), Text.data() + Text.size(), Value);
-		return Ec == std::errc{} && Ptr == Text.data() + Text.size();
-	}
-
-	bool StringToInt(std::string_view Text, int32& Value)
-	{
-		const auto [Ptr, Ec] = std::from_chars(Text.data(), Text.data() + Text.size(), Value);
-		return Ec == std::errc{} && Ptr == Text.data() + Text.size();
-	}
-
-	int32 ReadFloats(std::string_view Line, float* Out, int32 MaxCount)
-	{
-		int32 Count = 0;
-		while (Count < MaxCount)
-		{
-			const std::string_view Word = NextWord(Line);
-			if (Word.empty())
-			{
-				break;
-			}
-			if (!StringToFloat(Word, Out[Count]))
-			{
-				break;
-			}
-			++Count;
-		}
-		return Count;
-	}
-
-	// OBJ 인덱스는 1부터 시작해서 1빼준다 음수는 끝에서부터 센 상대 인덱스. 0 은 없음(-1 반환).
-	int32 ToZeroBased(int32 ObjIndex, size_t ListSize)
-	{
-		if (ObjIndex > 0)
-		{
-			return ObjIndex - 1;
-		}
-		if (ObjIndex < 0)
-		{
-			return static_cast<int32>(ListSize) + ObjIndex;
-		}
-		return -1;
-	}
-
-	// "v", "v/vt", "v//vn", "v/vt/vn" 하나를 파싱한다. 없는 항목은 0 으로 남는다.
-	bool ParseFaceToken(std::string_view Token, int32& V, int32& VT, int32& VN)
-	{
-		V = VT = VN = 0;
-		int32* Slots[3] = { &V, &VT, &VN };
-
-		for (int32 i = 0; i < 3 && !Token.empty(); ++i)
-		{
-			const size_t Slash = Token.find('/');
-			const std::string_view Part = Token.substr(0, Slash);
-
-			if (!Part.empty() && !StringToInt(Part, *Slots[i]))
-			{
-				return false;
-			}
-
-			if (Slash == std::string_view::npos)
-			{
-				break;
-			}
-			Token.remove_prefix(Slash + 1);
-		}
-
-		return V != 0;
-	}
-
-	std::string_view NextLine(std::string_view& Remaining)
-	{
-		const size_t NewLine = Remaining.find('\n');
-		if (NewLine == std::string_view::npos)
-		{
-			const std::string_view Line = Remaining;
-			Remaining = {};
-			return Line;
-		}
-
-		const std::string_view Line = Remaining.substr(0, NewLine);
-		Remaining.remove_prefix(NewLine + 1);
+		const std::string_view Line = Remaining;
+		Remaining = {};
 		return Line;
 	}
 
+	const std::string_view Line = Remaining.substr(0, NewLine);
+	Remaining.remove_prefix(NewLine + 1);
+	return Line;
+}
+
 	// 옵션 인자로 볼 수 있는 토큰인지 (숫자 또는 on/off)
-	bool IsTextureOptionArg(std::string_view Word)
-	{
-		float Dummy = 0.0f;
-		return Word == "on" || Word == "off" || StringToFloat(Word, Dummy);
-	}
+bool FObjDecoder::IsTextureOptionArg(std::string_view Word)
+{
+	float Dummy = 0.0f;
+	return Word == "on" || Word == "off" || StringToFloat(Word, Dummy);
+}
 
-	// map_Kd 등의 텍스처 경로. "-s 1 1 1 -o 0 0 0 file name.png" 처럼 앞에 붙은
-	// 옵션 그룹(-이름 + 인자들)을 건너뛰고 남은 전체를 경로로 본다. 공백 포함 파일명도 유지된다.
-	FString ParseTexturePath(std::string_view Line)
-	{
-		Line = Trim(Line);
+// map_Kd 등의 텍스처 경로. "-s 1 1 1 -o 0 0 0 file name.png" 처럼 앞에 붙은
+// 옵션 그룹(-이름 + 인자들)을 건너뛰고 남은 전체를 경로로 본다. 공백 포함 파일명도 유지된다.
+FString FObjDecoder::ParseTexturePath(std::string_view Line)
+{
+	Line = Trim(Line);
 
-		while (!Line.empty() && Line.front() == '-')
+	while (!Line.empty() && Line.front() == '-')
+	{
+		const std::string_view Option = NextWord(Line);
+
+		// -type / -imfchan 은 인자가 단어 하나 (sphere, r, g, ...)
+		if (Option == "-type" || Option == "-imfchan")
 		{
-			const std::string_view Option = NextWord(Line);
-
-			// -type / -imfchan 은 인자가 단어 하나 (sphere, r, g, ...)
-			if (Option == "-type" || Option == "-imfchan")
+			NextWord(Line);
+		}
+		else
+		{
+			// 나머지 옵션은 숫자/on/off 인자를 0개 이상 가진다
+			while (true)
 			{
-				NextWord(Line);
-			}
-			else
-			{
-				// 나머지 옵션은 숫자/on/off 인자를 0개 이상 가진다
-				while (true)
+				std::string_view Peek = Line;
+				const std::string_view Arg = NextWord(Peek);
+				if (Arg.empty() || !IsTextureOptionArg(Arg))
 				{
-					std::string_view Peek = Line;
-					const std::string_view Arg = NextWord(Peek);
-					if (Arg.empty() || !IsTextureOptionArg(Arg))
-					{
-						break;
-					}
-					Line = Peek;
+					break;
 				}
+				Line = Peek;
 			}
-
-			Line = Trim(Line);
 		}
 
-		if (Line.empty())
-		{
-			return FString();
-		}
-
-		// 파일 경로 및 확장자(.png 등)를 제거하고 순수 파일명(stem)만 추출
-		std::string Stem = std::filesystem::path(Line).stem().string();
-
-		// 대소문자 불일치 방지를 위해 소문자로 변환
-		std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
-
-		return FString(Stem);
+		Line = Trim(Line);
 	}
+
+	if (Line.empty())
+	{
+		return FString();
+	}
+
+	// 파일 경로 및 확장자(.png 등)를 제거하고 순수 파일명(stem)만 추출
+	std::string Stem = std::filesystem::path(Line).stem().string();
+
+	// 대소문자 불일치 방지를 위해 소문자로 변환
+	std::transform(Stem.begin(), Stem.end(), Stem.begin(), ::tolower);
+
+	return FString(Stem);
 }
 
 // v x y z [w] [r g b]
@@ -308,7 +289,6 @@ void FObjDecoder::AddVertexList(std::string_view Line)
 
 
 // vt u [v] [w]
-
 void FObjDecoder::AddUVList(std::string_view Line)
 {
 	float Values[3] = { 0.0f, 0.0f, 0.0f };
@@ -590,11 +570,9 @@ bool FObjDecoder::ImportMaterialLibrary(const FString& Path)
 {
     if (Path.empty()) return false;
 
-    const FString NormalizedPath = NormalizeMaterialPath(Path);
-    if (std::find(ObjInfo.MaterialLibs.begin(), ObjInfo.MaterialLibs.end(), NormalizedPath)
-        == ObjInfo.MaterialLibs.end())
+    if (std::find(ObjInfo.MaterialLibs.begin(), ObjInfo.MaterialLibs.end(), Path) == ObjInfo.MaterialLibs.end())
     {
-        ObjInfo.MaterialLibs.push_back(NormalizedPath);
+        ObjInfo.MaterialLibs.push_back(Path);
     }
     return true;
 }
@@ -912,57 +890,40 @@ FObjInfo FObjDecoder::StartObjFileParser(const FString& PathFileName)
 	return FObjInfo{};
 }
 
-namespace
+
+// -1(없음)은 허용.
+bool FObjDecoder::IsIndexValid(int32 Index, size_t ListSize)
 {
-	// 한 코너를 식별하는 (v, vt, vn) 조합. 같은 조합은 같은 정점을 가리킨다.
-	struct FCornerKey
-	{
-		int32 V, VT, NormalKind, NormalId;
-		bool operator==(const FCornerKey&) const = default;
-	};
-
-	struct FCornerKeyHash
-	{
-		size_t operator()(const FCornerKey& Key) const noexcept
-		{
-			size_t Hash = std::hash<int32>{}(Key.V);
-			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VT));
-			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.NormalKind));
-			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.NormalId));
-			return Hash;
-		}
-	};
-
-	using FVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
-
-	struct FSmoothingKey
-	{
-		int32  VertexIndexNumber;
-		int32 SmoothingGroupNumber;
-		bool operator==(const FSmoothingKey&) const = default;
-	};
-
-	struct FSmoothingKeyHash
-	{
-		size_t operator()(const FSmoothingKey& Key) const noexcept
-		{
-			size_t Hash = std::hash<int32>{}(Key.SmoothingGroupNumber);
-			Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VertexIndexNumber));
-			return Hash;
-		}
-	};
-
-	using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHash>;
-
-	//-1(없음)은 허용.
-	bool IsIndexValid(int32 Index, size_t ListSize)
-	{
 		return Index == -1 || (Index >= 0 && static_cast<size_t>(Index) < ListSize);
-	}
+}
 
-	// 정점 하나를 (v, vt, vn) 로 조립한다.
-	FVertexData MakeVertex(const FObjInfo& Info, const FCornerKey& Key, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
+FCornerKey FObjDecoder::MakeCornerKey(int32 V, int32 VT, int32 VN, int32 S, int32 Triangle)
+{
+	FCornerKey CornerKey;
+
+	CornerKey.V = V;
+	CornerKey.VT = VT;
+	if (VN >= 0)
 	{
+		CornerKey.NormalKind = EXPLICIT;
+		CornerKey.NormalId = VN;
+	}
+	else if (S > 0)
+	{
+		CornerKey.NormalKind = SMOOTH;
+		CornerKey.NormalId = S;
+	}
+	else
+	{
+		CornerKey.NormalKind = FLAT;
+		CornerKey.NormalId = Triangle;
+	}
+	return (CornerKey);
+}
+
+// 정점 하나를 (v, vt, vn) 로 조립한다.
+FVertexData FObjDecoder::MakeVertex(const FObjInfo& Info, const FCornerKey& Key, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
+{
 		FVertexData Vertex{};
 
 		const FVector4& Pos = Info.VertexList[Key.V];
@@ -1029,16 +990,10 @@ namespace
 		}
 
 		return Vertex;
-	}
+}
 
-	uint32 GetOrAddVertex(
-		const FObjInfo& Info,
-		const FCornerKey& Key,
-		FVertexMap& Vertices,
-		FObjModelData& Out,
-		TArray<FVector>& NormalVectorList,
-		FSmoothingMap& SmoothingMap)
-	{
+uint32 FObjDecoder::GetOrAddVertex(const FObjInfo& Info, const FCornerKey& Key, FVertexMap& Vertices, FObjModelData& Out, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
+{
 		if (auto It = Vertices.find(Key); It != Vertices.end())
 		{
 			return It->second;
@@ -1048,36 +1003,11 @@ namespace
 		Out.Vertices.push_back(MakeVertex(Info, Key, NormalVectorList, SmoothingMap));
 		Vertices.emplace(Key, NewIndex);
 		return NewIndex;
-	}
-
-	FCornerKey MakeCornerKey(int32 V, int32 VT, int32 VN, int32 S, int32 Triangle)
-	{
-		FCornerKey CornerKey;
-
-
-		CornerKey.V = V;
-		CornerKey.VT = VT;
-		if (VN >= 0)
-		{
-			CornerKey.NormalKind = EXPLICIT;
-			CornerKey.NormalId = VN;
-		}
-		else if (S > 0)
-		{
-			CornerKey.NormalKind = SMOOTH;
-			CornerKey.NormalId = S;
-		}
-		else
-		{
-			CornerKey.NormalKind = FLAT;
-			CornerKey.NormalId = Triangle;
-		}
-		return (CornerKey);
-	}
 }
 
 
-void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
+
+void FObjDecoder::CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap)
 {
 	const size_t TriangleCount = Info.VertexIndexList.size();
 	for (size_t Index = 0; Index < TriangleCount; ++Index)
@@ -1114,7 +1044,6 @@ void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorLi
 		}
 	}
 }
-
 
 bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 {
@@ -1325,15 +1254,21 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
 {
 	std::ifstream File(Path);
-	//if (!File) return false;
+	if (!File)
+	{
+		return false;
+	}
 	
 	std::stringstream Buffer;
 	Buffer << File.rdbuf();
-	//if (File.bad()) return false;
+	if (File.bad())
+	{
+		return false;
+	}
 	
-	FObjDecoder Decoder;
-	Decoder.ParseMtlFile(Buffer.str());
-	OutMaterials = std::move(Decoder.ObjInfo.Materials);
+	ObjInfo = FObjInfo{};
+	ParseMtlFile(Buffer.str());
+	OutMaterials = std::move(ObjInfo.Materials);
 	
 	return true;
 }
@@ -1341,11 +1276,6 @@ bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMateri
 // Todo: Bin - 이 함수는 OBJ 텍스트 파싱만 수행하며 Materials.bin을 만들지 않는다.
 bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out)
 {
-	//if (auto It = ObjStaticMeshMap.find(AbsolutePath); It != ObjStaticMeshMap.end())
-	//{
-	//	return It->second;
-	//}
-
 	// Todo: Bin - 현재 디코더가 가진 CachedMaterials를 사용해 직접 OBJ를 파싱한다.
 	const FObjInfo Info = StartObjFileParser(AbsolutePath);
 	Out.PathFileName = AbsolutePath;
@@ -1364,302 +1294,33 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 		{
 			FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			
 			Out.TextureName = FName(TextureKey);
 		}
 		if (!Out.Materials.front().NormalTextureName.empty())
 		{
 			FString TextureKey = std::filesystem::path(Out.Materials.front().NormalTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			
 			Out.NormalTextureName = FName(TextureKey);
 		}
 		if (!Out.Materials.front().SpecularTextureName.empty())
 		{
 			FString TextureKey = std::filesystem::path(Out.Materials.front().SpecularTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			
 			Out.SpecularTextureName = FName(TextureKey);
 		}
 	}
+
 	// ObjStaticMeshMap.emplace(AbsolutePath, Out);
 	return true;
-}
-
-// Todo: Bin - 기존 FObjModelBinary의 직렬화/역직렬화 구현을 디코더로 통합.
-namespace
-{
-    constexpr uint32 ObjFileSignature = 0x4D4A424F; // "OBJM"
-    constexpr uint32 MaterialFileSignature = 0x4C54414D; // "MATL"
-    constexpr uint32 MaxElementCount = 16 * 1024 * 1024;
-
-    bool SerializeVector(FBinArchive& Archive, const FVector& V)
-    {
-        return Archive.SerializeFloat(V.X) && Archive.SerializeFloat(V.Y) && Archive.SerializeFloat(V.Z);
-    }
-    bool DeserializeVector(FBinArchive& Archive, FVector& V)
-    {
-        return Archive.DeserializeFloat(V.X) && Archive.DeserializeFloat(V.Y) && Archive.DeserializeFloat(V.Z);
-    }
-    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
-    bool SerializeVertex(FBinArchive& Archive, const FVertexData& Value)
-    {
-        return Archive.SerializeFloat(Value.x)
-            && Archive.SerializeFloat(Value.y)
-            && Archive.SerializeFloat(Value.z)
-            && Archive.SerializeFloat(Value.r)
-            && Archive.SerializeFloat(Value.g)
-            && Archive.SerializeFloat(Value.b)
-            && Archive.SerializeFloat(Value.a)
-            && Archive.SerializeFloat(Value.u)
-            && Archive.SerializeFloat(Value.v)
-            && Archive.SerializeFloat(Value.nx)
-            && Archive.SerializeFloat(Value.ny)
-            && Archive.SerializeFloat(Value.nz)
-            && Archive.SerializeFloat(Value.tx)
-            && Archive.SerializeFloat(Value.ty)
-            && Archive.SerializeFloat(Value.tz)
-            && Archive.SerializeFloat(Value.bx)
-            && Archive.SerializeFloat(Value.by)
-            && Archive.SerializeFloat(Value.bz);
-    }
-    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
-    bool DeserializeVertex(FBinArchive& Archive, FVertexData& Value)
-    {
-        return Archive.DeserializeFloat(Value.x)
-            && Archive.DeserializeFloat(Value.y)
-            && Archive.DeserializeFloat(Value.z)
-            && Archive.DeserializeFloat(Value.r)
-            && Archive.DeserializeFloat(Value.g)
-            && Archive.DeserializeFloat(Value.b)
-            && Archive.DeserializeFloat(Value.a)
-            && Archive.DeserializeFloat(Value.u)
-            && Archive.DeserializeFloat(Value.v)
-            && Archive.DeserializeFloat(Value.nx)
-            && Archive.DeserializeFloat(Value.ny)
-            && Archive.DeserializeFloat(Value.nz)
-            && Archive.DeserializeFloat(Value.tx)
-            && Archive.DeserializeFloat(Value.ty)
-            && Archive.DeserializeFloat(Value.tz)
-            && Archive.DeserializeFloat(Value.bx)
-            && Archive.DeserializeFloat(Value.by)
-            && Archive.DeserializeFloat(Value.bz);
-    }
-    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
-    bool SerializeSection(FBinArchive& Archive, const FMeshSection& Value)
-    {
-        return Archive.SerializeUInt32(Value.FirstIndex)
-            && Archive.SerializeUInt32(Value.IndexCount)
-            && Archive.SerializeString(Value.MaterialName)
-            && SerializeVector(Archive, Value.LocalBounds.Min)
-            && SerializeVector(Archive, Value.LocalBounds.Max);
-    }
-    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
-    bool DeserializeSection(FBinArchive& Archive, FMeshSection& Value)
-    {
-        return Archive.DeserializeUInt32(Value.FirstIndex)
-            && Archive.DeserializeUInt32(Value.IndexCount)
-            && Archive.DeserializeString(Value.MaterialName)
-            && DeserializeVector(Archive, Value.LocalBounds.Min)
-            && DeserializeVector(Archive, Value.LocalBounds.Max);
-    }
-    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
-    bool SerializeMaterial(FBinArchive& Archive, const FObjMaterialInfo& Value)
-    {
-        return Archive.SerializeString(Value.MaterialName)
-            && SerializeVector(Archive, Value.Ambient)
-            && SerializeVector(Archive, Value.Diffuse)
-            && SerializeVector(Archive, Value.Specular)
-            && SerializeVector(Archive, Value.Emissive)
-            && SerializeVector(Archive, Value.TransmissionFilter)
-            && Archive.SerializeFloat(Value.SpecularExponent)
-            && Archive.SerializeFloat(Value.Opacity)
-            && Archive.SerializeFloat(Value.OpticalDensity)
-            && Archive.SerializeInt32(Value.IlluminationModel)
-            && Archive.SerializeString(Value.DiffuseTextureName)
-            && Archive.SerializeString(Value.AmbientTextureName)
-            && Archive.SerializeString(Value.SpecularTextureName)
-            && Archive.SerializeString(Value.AlphaTextureName)
-            && Archive.SerializeString(Value.NormalTextureName)
-            && Archive.SerializeString(Value.EmissiveTexture)
-            && Archive.SerializeString(Value.SpecularExponentTexture)
-            && Archive.SerializeString(Value.ReflectionTexture)
-            && Archive.SerializeString(Value.DisplacementTexture)
-            && Archive.SerializeString(Value.DecalTexture);
-    }
-    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
-    bool DeserializeMaterial(FBinArchive& Archive, FObjMaterialInfo& Value)
-    {
-        return Archive.DeserializeString(Value.MaterialName)
-            && DeserializeVector(Archive, Value.Ambient)
-            && DeserializeVector(Archive, Value.Diffuse)
-            && DeserializeVector(Archive, Value.Specular)
-            && DeserializeVector(Archive, Value.Emissive)
-            && DeserializeVector(Archive, Value.TransmissionFilter)
-            && Archive.DeserializeFloat(Value.SpecularExponent)
-            && Archive.DeserializeFloat(Value.Opacity)
-            && Archive.DeserializeFloat(Value.OpticalDensity)
-            && Archive.DeserializeInt32(Value.IlluminationModel)
-            && Archive.DeserializeString(Value.DiffuseTextureName)
-            && Archive.DeserializeString(Value.AmbientTextureName)
-            && Archive.DeserializeString(Value.SpecularTextureName)
-            && Archive.DeserializeString(Value.AlphaTextureName)
-            && Archive.DeserializeString(Value.NormalTextureName)
-            && Archive.DeserializeString(Value.EmissiveTexture)
-            && Archive.DeserializeString(Value.SpecularExponentTexture)
-            && Archive.DeserializeString(Value.ReflectionTexture)
-            && Archive.DeserializeString(Value.DisplacementTexture)
-            && Archive.DeserializeString(Value.DecalTexture);
-    }
-    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
-    bool SerializeGroup(FBinArchive& Archive, const FObjGroupInfo& Value)
-    {
-        return Archive.SerializeString(Value.Name);
-    }
-    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
-    bool DeserializeGroup(FBinArchive& Archive, FObjGroupInfo& Value)
-    {
-        return Archive.DeserializeString(Value.Name);
-    }
-    // 저장 순서는 대응 함수와 반드시 동일해야 한다.
-    bool SerializeObjectName(FBinArchive& Archive, const FObjObjectInfo& Value)
-    {
-        return Archive.SerializeString(Value.Name);
-    }
-    // 복원 순서는 대응 함수와 반드시 동일해야 한다.
-    bool DeserializeObjectName(FBinArchive& Archive, FObjObjectInfo& Value)
-    {
-        return Archive.DeserializeString(Value.Name);
-    }
-
-    // Todo: Bin - 메시에는 MTL 경로만, Materials.bin에는 실제 정의를 저장한다.
-    bool SerializeLibraryPath(FBinArchive& Archive, const FString& Path)
-    {
-        return Archive.SerializeString(Path);
-    }
-    bool DeserializeLibraryPath(FBinArchive& Archive, FString& Path)
-    {
-        return Archive.DeserializeString(Path);
-    }
-    bool SerializeIndex(FBinArchive& Archive, const uint32& Index)
-    {
-        return Archive.SerializeUInt32(Index);
-    }
-    bool DeserializeIndex(FBinArchive& Archive, uint32& Index)
-    {
-        return Archive.DeserializeUInt32(Index);
-    }
-
-    // 배열 객체의 메모리가 아닌 개수와 원소를 차례로 저장한다.
-    template<typename T>
-    bool SerializeArray(FBinArchive& Archive, const TArray<T>& Values, bool (*SerializeElement)(FBinArchive&, const T&))
-    {
-		if (Values.size() > MaxElementCount || !Archive.SerializeUInt32(static_cast<uint32>(Values.size())))
-		{
-			return false;
-		}
-        
-		for (const T& Value : Values)
-		{
-			if (!SerializeElement(Archive, Value)) 
-			{
-				return false;
-			}
-		}
-
-        return true;
-    }
-
-    template<typename T>
-    bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values, bool (*DeserializeElement)(FBinArchive&, T&))
-    {
-        uint32 Count = 0;
-		if (!Archive.DeserializeUInt32(Count)
-			|| Count > MaxElementCount
-			|| Count > Archive.GetRemainingBytes())
-		{
-			return false;
-		}
-
-        Values.clear();
-        // 손상된 파일의 개수로 미리 대량 할당하지 않고, 읽은 원소만 추가한다.
-        for (uint32 i = 0; i < Count; ++i)
-        {
-            T Value{};
-			if (!DeserializeElement(Archive, Value))
-			{
-				return false;
-			}
-				
-            Values.push_back(std::move(Value));
-        }
-
-        return true;
-    }
-
-    bool ValidateObjModel(const FObjModelData& Model)
-    {
-        if (Model.Vertices.empty() || Model.Indices.empty()
-            || Model.Indices.size() % 3 != 0) return false;
-        for (const auto& V : Model.Vertices)
-        {
-            const float Fields[] = { V.x,V.y,V.z,V.r,V.g,V.b,V.a,V.u,V.v,
-                V.nx,V.ny,V.nz,V.tx,V.ty,V.tz,V.bx,V.by,V.bz };
-            for (float Field : Fields)
-                if (!std::isfinite(Field)) return false;
-        }
-        for (uint32 Index : Model.Indices)
-            if (Index >= Model.Vertices.size()) return false;
-        for (const auto& Section : Model.Sections)
-            if (Section.IndexCount == 0 || Section.IndexCount % 3 != 0
-                || Section.FirstIndex % 3 != 0
-                || Section.FirstIndex > Model.Indices.size()
-                || Section.IndexCount > Model.Indices.size() - Section.FirstIndex) return false;
-        return true;
-    }
-}
-
-bool FObjDecoder::SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model)
-{
-    if (!ValidateObjModel(Model)) return false;
-    // 한 Archive에는 완성된 모델 하나만 저장한다.
-    Archive.Clear();
-    return Archive.SerializeUInt32(ObjFileSignature)
-        // Todo: Bin - 버전은 저장하지 않고 다시 생성할 때 기존 파일을 덮어쓴다.
-        && Archive.SerializeString(Model.PathFileName)
-        && SerializeArray(Archive, Model.Vertices, SerializeVertex)
-        && SerializeArray(Archive, Model.Indices, SerializeIndex)
-        && SerializeArray(Archive, Model.Sections, SerializeSection)
-        && SerializeArray(Archive, Model.MaterialLibraryPaths, SerializeLibraryPath)
-        && SerializeArray(Archive, Model.Groups, SerializeGroup)
-        && SerializeArray(Archive, Model.ObjectNames, SerializeObjectName);
-}
-
-bool FObjDecoder::DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel)
-{
-    Archive.ResetReadPosition();
-    uint32 FileSignature = 0;
-    // Todo: Bin - 파일 종류만 확인한다.
-    if (!Archive.DeserializeUInt32(FileSignature)
-        || FileSignature != ObjFileSignature) return false;
-
-    // 복원이 끝나기 전에는 호출자의 모델을 변경하지 않는다.
-    FObjModelData Loaded;
-    if (!Archive.DeserializeString(Loaded.PathFileName)
-        || !DeserializeArray(Archive, Loaded.Vertices, DeserializeVertex)
-        || !DeserializeArray(Archive, Loaded.Indices, DeserializeIndex)
-        || !DeserializeArray(Archive, Loaded.Sections, DeserializeSection)
-        || !DeserializeArray(Archive, Loaded.MaterialLibraryPaths, DeserializeLibraryPath)
-        || !DeserializeArray(Archive, Loaded.Groups, DeserializeGroup)
-        || !DeserializeArray(Archive, Loaded.ObjectNames, DeserializeObjectName)
-        || Archive.GetRemainingBytes() != 0
-        || !ValidateObjModel(Loaded)) return false;
-    Loaded.bIsValid = true;
-    OutModel = std::move(Loaded);
-    return true;
 }
 
 bool FObjDecoder::SaveObjModelBinary(const FString& Path, const FObjModelData& Model)
 {
     FBinArchive Archive;
-    return SerializeObjModel(Archive, Model)
+    return Archive.SerializeObjModel(Model)
         && FWindowsBinWriter::Save(Path, Archive);
 }
 
@@ -1667,138 +1328,56 @@ bool FObjDecoder::LoadObjModelBinary(const FString& Path, FObjModelData& OutMode
 {
     FBinArchive Archive;
 
-    return FWindowsBinReader::Load(Path, Archive) && DeserializeObjModel(Archive, OutModel);
-}
-
-// Todo: Bin - Materials.bin은 공유 정의만 저장한다. 메시 데이터나 GPU 포인터는 포함하지 않는다.
-bool FObjDecoder::SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials)
-{
-    Archive.Clear();
-    // Todo: Bin - 별도 Entry와 버전 없이 머티리얼 배열을 직접 저장한다.
-
-    return Archive.SerializeUInt32(MaterialFileSignature)
-        && SerializeArray(Archive, Materials, SerializeMaterial);
-}
-
-bool FObjDecoder::DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials)
-{
-    Archive.ResetReadPosition();
-    uint32 FileSignature = 0;
-    // Todo: Bin - 파일 종류만 확인한다.
-    
-	if (!Archive.DeserializeUInt32(FileSignature) || FileSignature != MaterialFileSignature)
-	{
-		return false;
-	}
-
-    TArray<FObjMaterialInfo> Loaded;
-	if (!DeserializeArray(Archive, Loaded, DeserializeMaterial) || Archive.GetRemainingBytes() != 0)
-	{
-		return false;
-	}
-    
-	for (const FObjMaterialInfo& Material : Loaded)
-    {
-		if (Material.MaterialName.empty() || !std::isfinite(Material.Opacity))
-		{
-			return false;
-		}
-    }
-    
-	OutMaterials = std::move(Loaded);
-    
-	return true;
+    return FWindowsBinReader::Load(Path, &Archive)
+		&& Archive.DeserializeObjModel(OutModel);
 }
 
 bool FObjDecoder::SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials)
 {
     FBinArchive Archive;
-    return SerializeMaterials(Archive, Materials) && FWindowsBinWriter::Save(Path, Archive);
+    return Archive.SerializeMaterials(Materials)
+		&& FWindowsBinWriter::Save(Path, Archive);
 }
 
 bool FObjDecoder::LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
 {
     FBinArchive Archive;
-    return FWindowsBinReader::Load(Path, Archive) && DeserializeMaterials(Archive, OutMaterials);
+    return FWindowsBinReader::Load(Path, &Archive)
+		&& Archive.DeserializeMaterials(OutMaterials);
 }
 
-// Todo: Bin - 먼저 한 번 호출한다. 캐시 성공 시 MTL 탐색/파싱을 건너뛴다.
-bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
+bool FObjDecoder::LoadMaterials(
+    const FString& MtlPath,
+    const FString& BinaryPath,
+    TArray<FObjMaterialInfo>& OutMaterials)
 {
-    bMaterialsLoaded = false;
-    CachedMaterials.clear();
-
-    const std::filesystem::path AssetPath(AssetRoot);
-    const auto BinaryPath = AssetPath /  L"Bins" / "Materials.bin";
-
     TArray<FObjMaterialInfo> Loaded;
-	//TMap<FString, FObjMaterialInfo> loadedMaterialInfoMap;
 
-    if (LoadMaterialsBinary(BinaryPath.string(), Loaded))
+    if (LoadMaterialsBinary(BinaryPath, Loaded))
     {
-        UE_LOG("[Material Cache] Hit: %s", BinaryPath.string().c_str());
+        UE_LOG("[Material Cache] Hit: %s", BinaryPath.c_str());
     }
     else
     {
-		// Todo: Fix bug
+        UE_LOG("[Material Cache] Miss: MTL 파싱 %s", MtlPath.c_str());
 
-        UE_LOG("[Material Cache] Miss: 전체 MTL 파싱");
-        TArray<std::filesystem::path> Files;
-        std::error_code Error;
-		/*
-        if (!std::filesystem::exists(AssetPath, Error)
-            || Error
-            || !std::filesystem::is_directory(AssetPath, Error)
-            || Error)
+        if (DecodeMaterialsFromFile(MtlPath, Loaded) == false)
         {
             return false;
         }
-		*/
 
-        // Todo: Bin - Resources/Assets 하나만 순회해 모든 MTL을 찾는다.
-        std::filesystem::recursive_directory_iterator AssetIter(AssetPath, Error), End;
-        //if (Error) return false;
-
-		const char* MTL_EXTENSION = ".mtl";
-
-		for (const auto& Asset : std::filesystem::directory_iterator(AssetPath))
-		{
-			if (Asset.is_regular_file() == false)
-			{
-				continue;
-			}
-
-			if (Asset.path().extension() != MTL_EXTENSION)
-			{
-				continue;
-			}
-
-			TArray<FObjMaterialInfo> Materials;
-
-			// Todo: assert
-			DecodeMaterialsFromFile(Asset.path().string(), Materials);
-
-			for (FObjMaterialInfo& Material : Materials)
-			{
-				// Todo: Bin
-				// MTL 파일과 속성이 달라도 MaterialName이 같으면
-				// 이미 등록된 전역 머티리얼과 동일한 것으로 취급한다.
-				Loaded.push_back(std::move(Material));
-			}
-		}
-
-		SaveMaterialsBinary(BinaryPath.string(), Loaded);
-
-		/*
-        if (!SaveMaterialsBinary(BinaryPath.string(), Loaded))
+        if (SaveMaterialsBinary(BinaryPath, Loaded) == false)
         {
-            UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.string().c_str());
+            UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.c_str());
         }
-		*/
     }
 
-    // Todo: Bin - Materials.bin의 배열을 그대로 공유 머티리얼 목록으로 사용한다.
-    CachedMaterials = std::move(Loaded);
+    for (const FObjMaterialInfo& Material : Loaded)
+    {
+        CachedMaterials.push_back(Material);
+    }
+
+    OutMaterials = std::move(Loaded);
     bMaterialsLoaded = true;
 
     return true;
@@ -1870,11 +1449,12 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
     if (!bMaterialsLoaded)
     {
         UE_LOG_WARN("[OBJ Cache] LoadMaterials를 먼저 호출해야 합니다.");
+
         return false;
     }
 
     FObjModelData Loaded;
-    if (LoadObjModelBinary(BinaryPath, Loaded) && NormalizeMaterialPath(Loaded.PathFileName) == NormalizeMaterialPath(ObjPath))
+    if (LoadObjModelBinary(BinaryPath, Loaded) && Loaded.PathFileName == ObjPath)
     {
         UE_LOG("[OBJ Cache] Hit: %s", BinaryPath.c_str());
     }
@@ -1899,4 +1479,9 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
     OutModel = std::move(Loaded);
 
     return true;
+}
+
+const TArray<FObjMaterialInfo>& FObjDecoder::GetMaterials() const
+{
+	return CachedMaterials;
 }

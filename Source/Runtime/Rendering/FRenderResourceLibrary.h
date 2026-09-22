@@ -78,6 +78,9 @@ public:
   // 폰트 보관 맵
   TMap<FName, TSharedPtr<FFont>> AllFontMap;
 
+  // 현재 실행에서 처리한 MTL 파일 키
+  TSet<FString> AllMaterialFileSet;
+
     // 에디터용 아이콘 텍스쳐 보관 맵
     TMap<FString, TSharedPtr<FTexture>> AllEditorTextureMap;
 
@@ -283,7 +286,11 @@ public:
     }
 
     // 머티리얼 전체 해제
-    void DestroyAllMaterials() { AllMaterialMap.clear(); }
+    void DestroyAllMaterials()
+    {
+        AllMaterialMap.clear();
+        AllMaterialFileSet.clear();
+    }
 
     // 파이프라인 전체 해제
     void DestroyAllPipelines() { AllPipelineMap.clear(); }
@@ -366,6 +373,8 @@ private:
 
     // Todo: Make as static const
     const char* OBJ_EXTENSION = ".obj";
+    const char* MTL_EXTENSION = ".mtl";
+    const char* BIN_EXTENSION = ".bin";
 
     FRenderer* RendererRef = nullptr;
 };

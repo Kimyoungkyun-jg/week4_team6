@@ -1582,7 +1582,7 @@ bool FRenderResourceLibrary::CreateTextures() {
     return true;
 }
 
-// Todo: Bin - Materials.bin 초기화 후 메시별 캐시를 로딩한다.
+// MTL 파일별 Material 캐시와 메시별 OBJ 캐시를 로딩한다.
 bool FRenderResourceLibrary::CreateObjMeshes() 
 {
     if (!RendererRef)
@@ -1607,16 +1607,25 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     }
     */
 
-    FObjDecoder Decoder;
-    if (!Decoder.LoadMaterials(AssetRoot.string()))
+    const std::filesystem::path BinaryDirectory = AssetRoot / L"Bins";
+    std::filesystem::create_directories(BinaryDirectory, Error);
+    if (Error)
     {
+        UE_LOG_WARN("[Asset Loader] Bins 폴더 생성 실패: %s", BinaryDirectory.string().c_str());
         return false;
     }
 
-    for (const FObjMaterialInfo& Material : Decoder.GetMaterials())
+    TArray<std::filesystem::path> ObjFiles;
+    FObjDecoder Decoder;
+
+    std::filesystem::recursive_directory_iterator Entries(AssetRoot, Error);
+    /*
+    if (Error)
     {
-        CreateAndRegisterMaterialFromInfo(Material);
+        UE_LOG_WARN("[OBJ Loader] Assets 폴더 탐색 실패: %s", AssetRoot.string().c_str());
+        return false;
     }
+    */
 
     /*
     TArray<std::filesystem::path> SearchRoots = {
@@ -1628,30 +1637,59 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     };
     */
 
-    std::filesystem::recursive_directory_iterator Entries(AssetRoot, Error);
-    /*
-    if (Error)
-    {
-        UE_LOG_WARN("[OBJ Loader] Assets 폴더 탐색 실패: %s", AssetRoot.string().c_str());
-        return false;
-    }
-    */
-
     for (const auto& Entry : Entries)
     {
-        if (!Entry.is_regular_file())
+        if (Entry.is_regular_file() == false)
         {
             continue;
         }
 
-        std::string FileExtension = Entry.path().extension().string();
-        if (FileExtension != OBJ_EXTENSION)
+        const FString FileExtension = Entry.path().extension().string();
+        if (FileExtension == OBJ_EXTENSION)
         {
+            ObjFiles.push_back(Entry.path());
+
             continue;
         }
 
+        if (FileExtension == MTL_EXTENSION)
+        {
+            const FString MaterialFileKey = Entry.path().stem().string() + MTL_EXTENSION;
+            if (AllMaterialFileSet.find(MaterialFileKey) != AllMaterialFileSet.end())
+            {
+                continue;
+            }
+
+            const FString BinaryPath = (BinaryDirectory / (MaterialFileKey + BIN_EXTENSION)).string();
+            
+            TArray<FObjMaterialInfo> Materials;
+            if (Decoder.LoadMaterials(Entry.path().string(), BinaryPath, Materials) == false)
+            {
+                UE_LOG_WARN("[Material Loader] 로딩 실패: %s", Entry.path().string().c_str());
+
+                continue;
+            }
+
+            for (const FObjMaterialInfo& Material : Materials)
+            {
+                // 전역 Material Map에 이미 있으면 재등록하지 않는다.
+                if (AllMaterialMap.find(Material.MaterialName) != AllMaterialMap.end())
+                {
+                    continue;
+                }
+
+                CreateAndRegisterMaterialFromInfo(Material);
+            }
+
+            AllMaterialFileSet.insert(MaterialFileKey);
+        }
+
+    }
+
+    for (const std::filesystem::path& ObjFile : ObjFiles)
+    {
         // 파일명을 MeshID(FName)로 사용
-        std::string StemName = Entry.path().stem().string();
+        const std::string StemName = ObjFile.stem().string();
         FName MeshKey(StemName);
 
         if (AllFStaticMeshMap.find(StemName) != AllFStaticMeshMap.end())
@@ -1659,10 +1697,10 @@ bool FRenderResourceLibrary::CreateObjMeshes()
             continue;
         }
 
-        const FString ObjPath = std::filesystem::absolute(Entry.path()).string();
+        const FString ObjPath = std::filesystem::absolute(ObjFile).string();
 
         // Todo: Bin - OBJ 캐시는 Resources/Assets/<메시 이름>.bin으로 저장한다.
-        const FString CacheName = StemName + ".bin";
+        const FString CacheName = StemName + BIN_EXTENSION;
         const FString BinaryPath = (AssetRoot / "Bins" / CacheName).string();
 
         FObjModelData ModelData;
@@ -1697,7 +1735,7 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         }
         */
         
-        StaticMesh->PathFileName = Entry.path().string();
+        StaticMesh->PathFileName = ObjFile.string();
         StaticMesh->MeshId = MeshKey;
         StaticMesh->Sections = std::move(ModelData.Sections);
 
@@ -1706,14 +1744,14 @@ bool FRenderResourceLibrary::CreateObjMeshes()
             StemName.c_str(), ModelData.Vertices.size(),
             ModelData.Indices.size(), StaticMesh->Sections.size());
 
-        TArray<FString> mats;
-        mats.reserve(StaticMesh->Sections.size());
+        TArray<FString> MaterialStrings;
+        MaterialStrings.reserve(StaticMesh->Sections.size());
         for (const auto& Section : StaticMesh->Sections)
         {
-            mats.push_back(Section.MaterialName);
+            MaterialStrings.push_back(Section.MaterialName);
         }
 
-        CreateAndRegisterUStaticMesh(MeshKey, std::move(mats), StaticMesh);
+        CreateAndRegisterUStaticMesh(MeshKey, std::move(MaterialStrings), StaticMesh);
     }
 
     return true;
