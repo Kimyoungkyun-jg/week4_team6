@@ -1,5 +1,9 @@
 #pragma once
 
+#include <filesystem>
+#include <string_view>
+#include <unordered_map>
+
 #include "FMesh.h"
 #include "Runtime/Core/TSortedMap.h"
 #include "Runtime/Core/FString.h"
@@ -8,8 +12,9 @@
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Math/FVector2.h"
 #include "Runtime/Math/FVector4.h"
-#include <string_view>
 #include "FRenderResourceLibrary.h"
+
+// Todo: Need to split class
 
 #define EXPLICIT 0
 #define SMOOTH 1
@@ -23,7 +28,6 @@ struct FTriangleIndices {
 };
 
 struct FCorner { int32 V, VT, VN; };
-
 
 // 섹션 그룹화 키
 struct FSectionKey
@@ -80,7 +84,6 @@ struct FObjModelData
     bool HasSections() const { return !Sections.empty(); }
 };
 
-
 // 원시 파싱 데이터
 struct FObjInfo
 {
@@ -105,25 +108,115 @@ struct FObjInfo
     TArray<FObjObjectInfo> ObjectNames;
 };
 
+struct FCornerKey
+{
+    int32 V;
+    int32 VT;
+    int32 NormalKind;
+    int32 NormalId;
+    bool operator==(const FCornerKey&) const = default;
+};
+
+struct FCornerKeyHash
+{
+    size_t operator()(const FCornerKey& Key) const noexcept
+    {
+        size_t Hash = std::hash<int32>{}(Key.V);
+        Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VT));
+        Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.NormalKind));
+        Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.NormalId));
+        return Hash;
+    }
+};
+
+struct FSmoothingKey
+{
+    int32 VertexIndexNumber;
+    int32 SmoothingGroupNumber;
+    bool operator==(const FSmoothingKey&) const = default;
+};
+
+struct FSmoothingKeyHash
+{
+    size_t operator()(const FSmoothingKey& Key) const noexcept
+    {
+        size_t Hash = std::hash<int32>{}(Key.SmoothingGroupNumber);
+        Hash = EngineUtil::HashCombine(Hash, std::hash<int32>{}(Key.VertexIndexNumber));
+        return Hash;
+    }
+};
+
 // OBJ 디코더 클래스
 class FObjDecoder
 {
-private:
-    // Todo: Bin - 이름이 전역적으로 유일한 공유 머티리얼 목록.
-    TArray<FObjMaterialInfo> CachedMaterials;
+public:
+    // Todo: Bin - Materials.bin을 만들 때만 독립적으로 MTL을 파싱한다.
+    static bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
+    static bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
+    static bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
+    static bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
+    static bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
+    static bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
+    static bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
+    static bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
+    static bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
 
-    bool bMaterialsLoaded = false;
+    // Todo: Bin - 파싱/직렬화/역직렬화와 파일 로딩은 모두 FObjDecoder가 담당한다.
+    bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
+    bool LoadMaterials(const FString& AssetRoot);
+    bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
+    const TArray<FObjMaterialInfo>& GetMaterials() const { return CachedMaterials; }
+
+private:
+    using FVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
+    using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHash>;
+
+    static bool SerializeVector(FBinArchive& Archive, const FVector& Value);
+    static bool DeserializeVector(FBinArchive& Archive, FVector& Value);
+    static bool SerializeVertex(FBinArchive& Archive, const FVertexData& Value);
+    static bool DeserializeVertex(FBinArchive& Archive, FVertexData& Value);
+    static bool SerializeSection(FBinArchive& Archive, const FMeshSection& Value);
+    static bool DeserializeSection(FBinArchive& Archive, FMeshSection& Value);
+    static bool SerializeMaterial(FBinArchive& Archive, const FObjMaterialInfo& Value);
+    static bool DeserializeMaterial(FBinArchive& Archive, FObjMaterialInfo& Value);
+    static bool SerializeGroup(FBinArchive& Archive, const FObjGroupInfo& Value);
+    static bool DeserializeGroup(FBinArchive& Archive, FObjGroupInfo& Value);
+    static bool SerializeObjectName(FBinArchive& Archive, const FObjObjectInfo& Value);
+    static bool DeserializeObjectName(FBinArchive& Archive, FObjObjectInfo& Value);
+    static bool SerializeLibraryPath(FBinArchive& Archive, const FString& Path);
+    static bool DeserializeLibraryPath(FBinArchive& Archive, FString& Path);
+    static bool SerializeIndex(FBinArchive& Archive, const uint32& Index);
+    static bool DeserializeIndex(FBinArchive& Archive, uint32& Index);
+
+    template<typename T>
+    static bool SerializeArray(FBinArchive& Archive, const TArray<T>& Values, bool (*SerializeElement)(FBinArchive&, const T&));
+
+    template<typename T>
+    static bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values, bool (*DeserializeElement)(FBinArchive&, T&));
+
+    static bool ValidateObjModel(const FObjModelData& Model);
+    static FString NormalizeMaterialPath(const std::filesystem::path& Path);
+    static std::filesystem::path GetAssetDir();
+    static bool IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath);
+    static bool ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath);
+    static FString ReadFileToString(std::string_view FileName);
+    static std::string_view Trim(std::string_view Text);
+    static std::string_view NextWord(std::string_view& Text);
+    static bool StringToFloat(std::string_view Text, float& Value);
+    static bool StringToInt(std::string_view Text, int32& Value);
+    static int32 ReadFloats(std::string_view Line, float* Out, int32 MaxCount);
+    static int32 ToZeroBased(int32 ObjIndex, size_t ListSize);
+    static bool ParseFaceToken(std::string_view Token, int32& V, int32& VT, int32& VN);
+    static std::string_view NextLine(std::string_view& Remaining);
+    static bool IsTextureOptionArg(std::string_view Word);
+    static FString ParseTexturePath(std::string_view Line);
+    static bool IsIndexValid(int32 Index, size_t ListSize);
+    static FVertexData MakeVertex(const FObjInfo& Info, const FCornerKey& Key, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
+    static uint32 GetOrAddVertex(const FObjInfo& Info, const FCornerKey& Key, FVertexMap& Vertices, FObjModelData& Out, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
+    static FCornerKey MakeCornerKey(int32 V, int32 VT, int32 VN, int32 S, int32 Triangle);
+    static void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
     const FObjMaterialInfo* FindCachedMaterial(std::string_view MaterialName) const;
     void ResolveSectionMaterials(FObjModelData& Model) const;
-    FObjInfo ObjInfo;
-
-    FString ObjDirectory;
-    int32 CurrentMaterial = -1;
-    int32 DefiningMaterial = -1;
-
-    int32 CurrentGroup = -1;
-    int32 CurrentObjectName = -1;
-    int32 CurrentSmoothingGroup = 0; // 0 or off 사용안함
 
     // 정점 및 속성 추가
     void AddVertexList(std::string_view Line);
@@ -145,7 +238,6 @@ private:
     int32 FindOrAddGroup(std::string_view Name);
 
     void UseSmoothingGroup(std::string_view Line);
-
     void SetSmoothingGroup(std::string_view Line);
 
     void UseObjectName(std::string_view Line);
@@ -165,21 +257,23 @@ private:
 
     static bool CookStaticMesh(const FObjInfo& Info, FObjModelData& Out);
 
-public:
-    // Todo: Bin - Materials.bin을 만들 때만 독립적으로 MTL을 파싱한다.
-    static bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
-    // Todo: Bin - 파싱/직렬화/역직렬화와 파일 로딩은 모두 FObjDecoder가 담당한다.
-    bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
-    bool LoadMaterials(const FString& AssetRoot);
-    bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
-    const TArray<FObjMaterialInfo>& GetMaterials() const { return CachedMaterials; }
+private:
+    static constexpr std::string_view Spaces = " \t\r\n";
+    static constexpr uint32 ObjFileSignature = 0x4D4A424F; // "OBJM"
+    static constexpr uint32 MaterialFileSignature = 0x4C54414D; // "MATL"
+    static constexpr uint32 MaxElementCount = 16 * 1024 * 1024;
 
-    static bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
-    static bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
-    static bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
-    static bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
-    static bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
-    static bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
-    static bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
-    static bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
+    // Todo: Bin - 이름이 전역적으로 유일한 공유 머티리얼 목록.
+    TArray<FObjMaterialInfo> CachedMaterials;
+    bool bMaterialsLoaded = false;
+
+    FObjInfo ObjInfo;
+
+    FString ObjDirectory;
+    int32 CurrentMaterial = -1;
+    int32 DefiningMaterial = -1;
+
+    int32 CurrentGroup = -1;
+    int32 CurrentObjectName = -1;
+    int32 CurrentSmoothingGroup = 0; // 0 or off 사용안함
 };

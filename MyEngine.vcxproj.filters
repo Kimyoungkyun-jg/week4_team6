@@ -328,6 +328,15 @@
     <ClCompile Include="Source\Runtime\Rendering\FPreviewRenderTarget.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\Rendering\FBinArchive.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Rendering\FWindowsBinWriter.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Rendering\FWindowsBinReader.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Runtime\Rendering\FRenderer.h">
