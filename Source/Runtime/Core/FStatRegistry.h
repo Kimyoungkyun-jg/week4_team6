@@ -57,16 +57,31 @@ public:
 	void Initialize() // init static counter
 	{
 		TextureByte = 0;
-		for (auto It : FRenderResourceLibrary::Get().AllTextureMap) {
-			TextureByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333); // dds -> 픽셀 하나당 1바이트, 밉 체인 1.333배
+		for (auto& It : FRenderResourceLibrary::Get().AllTextureMap)
+		{
+			// nullptr 체크 추가
+			if (It.second)
+			{
+				TextureByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333f);
+			}
 		}
+
 		EditorTextureByte = 0;
-		for (auto It : FRenderResourceLibrary::Get().AllEditorTextureMap) {
-			EditorTextureByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333);
+		for (auto& It : FRenderResourceLibrary::Get().AllEditorTextureMap)
+		{
+			if (It.second)
+			{
+				EditorTextureByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333f);
+			}
 		}
+
 		MeshThumbnailByte = 0;
-		for (auto It : FRenderResourceLibrary::Get().AllMeshThumbnailMap) {
-			MeshThumbnailByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333);
+		for (auto& It : FRenderResourceLibrary::Get().AllMeshThumbnailMap)
+		{
+			if (It.second)
+			{
+				MeshThumbnailByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333f);
+			}
 		}
 		FStaticMeshCount = static_cast<uint32>(FRenderResourceLibrary::Get().AllFStaticMeshMap.size());
 		UStaticMeshCount = static_cast<uint32>(FRenderResourceLibrary::Get().AllUStaticMeshMap.size());

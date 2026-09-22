@@ -435,8 +435,16 @@ void FImguiContentsDrawer::RenderFolderTree()
 	}
 }
 
-void FImguiContentsDrawer::RenderFolderTreeNode(const std::filesystem::path& FolderPath)
-{
+void FImguiContentsDrawer::RenderFolderTreeNode(const std::filesystem::path& FolderPath) {
+	// 루트 폴더일 때 필수 폴더들이 없으면 자동 생성
+	if (FolderPath == RootPath)
+	{
+		std::error_code Ec;
+		std::filesystem::create_directories(RootPath / "StaticMesh", Ec);
+		std::filesystem::create_directories(RootPath / "Materials", Ec);
+		std::filesystem::create_directories(RootPath / "Assets" / "Bins", Ec);
+	}
+
 	FString folderName = FolderPath == RootPath ? "All" : WideToUTF8(FolderPath.filename().wstring());
 
 	std::error_code Ec;

@@ -23,7 +23,26 @@
 std::filesystem::path FObjDecoder::GetAssetDir()
 {
 	const std::filesystem::path ExeDir(GetExecutableDirectory());
-	return ExeDir.parent_path().parent_path().parent_path() / "Resources" / "Assets";
+
+	// 1. 실행 파일과 같은 폴더에 Resources가 있는 경우 (배포/독립 실행 모드)
+	if (std::filesystem::exists(ExeDir / "Resources" / "Assets"))
+	{
+		return ExeDir / "Resources" / "Assets";
+	}
+
+	// 2. Visual Studio 빌드 폴더(x64/Release 등)에서 상위 프로젝트를 거슬러 올라가는 경우
+	std::filesystem::path Probe = ExeDir;
+	for (int i = 0; i < 4; ++i)
+	{
+		Probe = Probe.parent_path();
+		if (std::filesystem::exists(Probe / "Resources" / "Assets"))
+		{
+			return Probe / "Resources" / "Assets";
+		}
+	}
+
+	// 기본값
+	return ExeDir / "Resources" / "Assets";
 }
 
 bool FObjDecoder::IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath)

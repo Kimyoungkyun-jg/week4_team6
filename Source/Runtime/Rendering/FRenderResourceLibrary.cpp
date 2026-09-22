@@ -16,6 +16,7 @@
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Core/FStatRegistry.h"
+#include "Runtime/Core/Log.h"
 #include <cmath>
 #include <d3dcompiler.h>
 #include <numbers>
@@ -1531,8 +1532,7 @@ bool FRenderResourceLibrary::CreateTextures() {
     FRenderer& Renderer = *RendererRef;
 
     const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot =
-        ExeDir.parent_path().parent_path().parent_path();
+    const std::filesystem::path ProjectRoot = ExeDir.parent_path().parent_path().parent_path();
 
     TArray<std::filesystem::path> SearchRoots = {
         ProjectRoot / L"Resources" / L"Textures",
@@ -1575,7 +1575,9 @@ bool FRenderResourceLibrary::CreateTextures() {
             if (!Texture)
                 continue;
 
-            RegisterTexture(TextureKey, Texture);
+            FString temp = TextureKey.ToString();
+
+            RegisterTexture(temp, Texture);
         }
     }
 
