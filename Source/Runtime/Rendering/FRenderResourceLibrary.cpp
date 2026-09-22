@@ -17,6 +17,7 @@
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Core/FStatRegistry.h"
+#include "Runtime/Core/Log.h"
 #include <cmath>
 #include <d3dcompiler.h>
 #include <numbers>
@@ -1581,7 +1582,9 @@ bool FRenderResourceLibrary::CreateTextures() {
             if (!Texture)
                 continue;
 
-            RegisterTexture(TextureKey, Texture);
+            FString temp = TextureKey.ToString();
+
+            RegisterTexture(temp, Texture);
         }
     }
 
