@@ -111,12 +111,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     EditorApp.Render();
     Renderer.SwapBuffer();
 
-    // EditorApp.CollectGarbage();
+    //EditorApp.CollectGarbage();
   }
 
   EditorApp.Shutdown();
   SceneManager.Release();
-  // EditorApp.CollectGarbage();
+  //EditorApp.CollectGarbage();
   Renderer.Shutdown();
 
   return 0;

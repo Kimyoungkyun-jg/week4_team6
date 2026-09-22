@@ -102,6 +102,7 @@ public:
 
 	virtual void Initialize();
 	virtual void Release();
+	virtual void Destroy();
 
 	virtual void AddReferencedObjects(FReferenceCollector& Collector);
 

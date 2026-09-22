@@ -10,7 +10,11 @@ class UObject;
 
 class FUObjectArray final
 {
+	friend class UObject;
+
 public:
+
+
 	static FUObjectArray& Get() {
 		static FUObjectArray Instance;
 		return Instance;

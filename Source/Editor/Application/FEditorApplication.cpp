@@ -194,7 +194,8 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
         {
             if (type == EPrevType::Mesh && Window->prevType == EPrevType::Mesh)
             {
-                if (Window->GetTargetMesh() == InMesh)
+                FString ExpectedTitle = InMesh->MeshId.ToString() + "###PreviewMeshEditor_" + InMesh->MeshId.ToString();
+                if (Window->GetTitleString() == ExpectedTitle)
                 {
                     Window->BringToFront();
                     return;

@@ -19,7 +19,7 @@ class FImguiPreviewEditorWindow final
 {
 public:
 	FImguiPreviewEditorWindow();
-	~FImguiPreviewEditorWindow() = default;
+	~FImguiPreviewEditorWindow();
 
 	FImguiPreviewEditorWindow(const FImguiPreviewEditorWindow&) = delete;
 	FImguiPreviewEditorWindow& operator=(const FImguiPreviewEditorWindow&) = delete;
@@ -55,9 +55,14 @@ public:
 	void SaveAsset();
 
 	TSharedPtr<FMaterial> GetPreviewMaterial() { return PreviewMaterialInstance; }
+
+	void DestroyPreviewResource();
+
 private:
 
 	void ProcessViewportInput(FEditor& Editor, const ImVec2& ViewportPos, const ImVec2& ViewportSize, float DeltaTime);
+
+
 
 	void DrawMeshDetailsPanel();
 	void DrawMaterialDetailsPanel();

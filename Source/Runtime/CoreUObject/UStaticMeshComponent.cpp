@@ -143,9 +143,9 @@ FName UStaticMeshComponent::GetMaterial(int32 Slot) const
         return OverrideMaterials[Slot];
     }
 
-    if (StaticMesh)
+    if (StaticMesh && StaticMesh->Materials.size() > Slot)
     {
-        return StaticMesh->Materials[Slot];
+        return FName(StaticMesh->Materials[Slot]);
     }
 
     return FName("Simple");
