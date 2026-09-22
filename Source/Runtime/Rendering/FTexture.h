@@ -16,7 +16,7 @@ public:
 	[[nodiscard]] uint32 GetWidth() const { return Width; }
 	[[nodiscard]] uint32 GetHeight() const { return Height; }
 
-private:
+public:
 	FTexture() = default;
 
 	uint32 Width = 0u;

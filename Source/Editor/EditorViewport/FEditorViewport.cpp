@@ -17,7 +17,7 @@ void FEditorViewport::UpdateViewAndCtx(FLightConstants GlobalLight, AActor& Sele
         sceneView.ShowFlags = ShowFlags,
         sceneView.LightConstants = GlobalLight;
 
-    // ø°µ≈Õ ∑ª¥ı∏µ ƒ¡≈ÿΩ∫∆Æ ±∏º∫
+    // ÏóêÎîîÌÑ∞ Î†åÎçîÎßÅ Ïª®ÌÖçÏä§Ìä∏ Íµ¨ÏÑ±
 
     editorCtx.SelectedActor = &SelectedActor;
     editorCtx.SelectedTransform = Transform;
@@ -35,32 +35,32 @@ void FEditorViewport::UpdateFocusedAndHovered(bool bFocused, bool bHovered)
 	return;
 }
 
-#include "Runtime/Input/FInputManager.h" // «¡∑Œ¡ß∆Æ¿« InputManager «Ï¥ı ¿ßƒ°ø° ∏¬∞‘ ∆˜«‘
+#include "Runtime/Input/FInputManager.h" // ÌîÑÎ°úÏ†ùÌä∏Ïùò InputManager Ìó§Îçî ÏúÑÏπòÏóê ÎßûÍ≤å Ìè¨Ìï®
 
 void FEditorViewport::Process()
 {
-    // 1. √ ±‚ ƒ⁄µÂ¿« ø¯∫ª ¡¬«• ∞ËªÍΩƒ ±◊¥Î∑Œ ∫πø¯
+    // 1. Ï¥àÍ∏∞ ÏΩîÎìúÏùò ÏõêÎ≥∏ Ï¢åÌëú Í≥ÑÏÇ∞Ïãù Í∑∏ÎåÄÎ°ú Î≥µÏõê
     const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
     if (!MainViewport) return;
 
     const ImVec2 MainOrigin = MainViewport->Pos;
     const ImVec2 MainSize = MainViewport->Size;
 
-    // ø¯∑° ¡§»Æ«ﬂ¥¯ «»ºø ø¿«¡º¬ (12.0f, 32.0f) ¿Ø¡ˆ
+    // ÏõêÎûò Ï†ïÌôïÌñàÎçò ÌîΩÏÖÄ Ïò§ÌîÑÏÖã (12.0f, 32.0f) Ïú†ÏßÄ
     const float StartX = MainOrigin.x + (TopLeftUV.X * MainSize.x) + 12.0f;
     const float StartY = MainOrigin.y + (TopLeftUV.Y * MainSize.y) + 32.0f;
 
-    // 2. FInputManager ∏∂øÏΩ∫ ∆«¡§
+    // 2. FInputManager ÎßàÏö∞Ïä§ ÌåêÏ†ï
     const FVector2 EngineMousePos = FInputManager::Get().GetMousePosition();
     const ImVec2 MousePos(EngineMousePos.X, EngineMousePos.Y);
     const bool bLButtonClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
-    // [«ŸΩ…] ForegroundDrawList(√÷ªÛ¥‹ ∞≠¡¶) ¥ÎΩ≈ WindowDrawList ªÁøÎ
-    // ∏ﬁ¿Œ ∫‰∆˜∆Æ √¢ ƒ¡≈ÿΩ∫∆Æ æ»ø°º≠ ∫“∏± ∞ÊøÏ «ÿ¥Á ¿©µµøÏ ∑π¿ÃæÓ∑Œ ±◊∑¡¡ˆπ«∑Œ
-    // ±◊ ¿ßø° ∂ﬂ¥¬ «¡∏Æ∫‰ ∏¥ﬁ √¢∫∏¥Ÿ ≥∑¿∫ z-order∏¶ ∞Æ∞‘ µÀ¥œ¥Ÿ.
+    // [ÌïµÏã¨] ForegroundDrawList(ÏµúÏÉÅÎã® Í∞ïÏ†ú) ÎåÄÏã† WindowDrawList ÏÇ¨Ïö©
+    // Î©îÏù∏ Î∑∞Ìè¨Ìä∏ Ï∞Ω Ïª®ÌÖçÏä§Ìä∏ ÏïàÏóêÏÑú Î∂àÎ¶¥ Í≤ΩÏö∞ Ìï¥Îãπ ÏúàÎèÑÏö∞ Î†àÏù¥Ïñ¥Î°ú Í∑∏Î†§ÏßÄÎØÄÎ°ú
+    // Í∑∏ ÏúÑÏóê Îú®Îäî ÌîÑÎ¶¨Î∑∞ Î™®Îã¨ Ï∞ΩÎ≥¥Îã§ ÎÇÆÏùÄ z-orderÎ•º Í∞ñÍ≤å Îê©ÎãàÎã§.
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
-    // 3. πˆ∆∞ ∑ª¥ı∏µ ∂˜¥Ÿ (±‚¡∏ ¿Ø¡ˆ)
+    // 3. Î≤ÑÌäº Î†åÎçîÎßÅ ÎûåÎã§ (Í∏∞Ï°¥ Ïú†ÏßÄ)
     auto DrawOverlayButton = [&](const char* Label, float PosX, float PosY, float Width, float Height, bool& outClicked) -> float
         {
             const ImVec2 Min(PosX, PosY);
@@ -85,7 +85,7 @@ void FEditorViewport::Process()
     const float BtnHeight = 22.0f;
     float CurX = StartX;
 
-    // --- (1) ≈ıøµ ∏µÂ ≈‰±€ πˆ∆∞ ---
+    // --- (1) Ìà¨ÏòÅ Î™®Îìú ÌÜ†Í∏Ä Î≤ÑÌäº ---
     bool bIsPerspective = (ViewportCamera.Projection.ProjectionType == EProjectionType::Perspective);
     const char* ProjLabel = bIsPerspective ? "Perspective" : "Orthographic";
     const float ProjWidth = ImGui::CalcTextSize(ProjLabel).x + 18.0f;
@@ -97,7 +97,7 @@ void FEditorViewport::Process()
         ViewportCamera.Projection.ProjectionType = bIsPerspective ? EProjectionType::Orthographic : EProjectionType::Perspective;
     }
 
-    // --- (2) ∫‰ ∏µÂ ≈‰±€ πˆ∆∞ ---
+    // --- (2) Î∑∞ Î™®Îìú ÌÜ†Í∏Ä Î≤ÑÌäº ---
     const char* ViewModeLabel = "Lit";
     if (ViewMode == EViewModeIndex::VMI_Unlit) ViewModeLabel = "Unlit";
     else if (ViewMode == EViewModeIndex::VMI_Wireframe) ViewModeLabel = "Wireframe";
@@ -112,7 +112,7 @@ void FEditorViewport::Process()
         else ViewMode = EViewModeIndex::VMI_Lit;
     }
 
-    // --- (3) Show µÂ∑”¥ŸøÓ πˆ∆∞ ---
+    // --- (3) Show ÎìúÎ°≠Îã§Ïö¥ Î≤ÑÌäº ---
     const char* ShowLabel = "Show";
     const float ShowWidth = ImGui::CalcTextSize(ShowLabel).x + 18.0f;
 
@@ -142,6 +142,12 @@ void FEditorViewport::Process()
         if (ImGui::Checkbox("Billboard Text", &bBillboard))
         {
             ToggleShowFlag(EEngineShowFlags::SF_BillboardText);
+        }
+
+        bool bBoundBox = HasShowFlag(EEngineShowFlags::SF_BoundBox);
+        if (ImGui::Checkbox("BoundBox", &bBoundBox))
+        {
+            ToggleShowFlag(EEngineShowFlags::SF_BoundBox);
         }
 
         ImGui::EndPopup();

@@ -76,6 +76,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     Renderer.GetDeviceAndContext_ImplDX11(Device, Context);
     EditorApp.Initialize_ImguiWin32DX11(Window, Device, Context);
   }
+
   EditorApp.Initialize_Runtime(&SceneManager, &RenderView);
 
   // 초기화가 끝났으니 로딩 화면을 닫고 메인 창을 띄운다
@@ -110,12 +111,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     EditorApp.Render();
     Renderer.SwapBuffer();
 
-    // EditorApp.CollectGarbage();
+    //EditorApp.CollectGarbage();
   }
 
   EditorApp.Shutdown();
   SceneManager.Release();
-  // EditorApp.CollectGarbage();
+  //EditorApp.CollectGarbage();
   Renderer.Shutdown();
 
   return 0;
@@ -239,7 +240,7 @@ HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
     return nullptr;
   }
 
-  //OutSplashWnd = ShowLoadingWindow(Instance);
+  OutSplashWnd = ShowLoadingWindow(Instance);
 
   const FWindowLayout WindowLayout = GetWindowLayout();
   constexpr DWORD MainStyle = WS_OVERLAPPEDWINDOW;
@@ -279,6 +280,7 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 
   const FVector2 MousePos{static_cast<float>(GET_X_LPARAM(LParam)),
                           static_cast<float>(GET_Y_LPARAM(LParam))};
+  const int16 WheelDelta = GET_WHEEL_DELTA_WPARAM(WParam);
 
   switch (Message) {
   case WM_DESTROY:
@@ -327,6 +329,10 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 
   case WM_MOUSEMOVE:
     FInputManager::Get().OnMouseMove(MousePos);
+    break;
+
+  case WM_MOUSEWHEEL:
+    FInputManager::Get().OnMouseWheelScroll(WheelDelta);
     break;
 
   // case WM_CAPTURECHANGED:

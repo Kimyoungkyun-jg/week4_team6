@@ -50,6 +50,8 @@ public:
 	[[nodiscard]] bool HasTexture() const { return !DefaultTextureId.empty() && DefaultTextureId != "None"; }
 	[[nodiscard]] bool HasNormalMap() const { return !DefaultNormalTextureId.IsNone() && DefaultNormalTextureId != FName("None"); }
 	[[nodiscard]] bool HasSpecularMap() const { return !DefaultSpecularTextureId.IsNone() && DefaultSpecularTextureId != FName("None"); }
+	[[nodiscard]] uint32 GetVertexBufferSize() { return VertexBufferSize; }
+	[[nodiscard]] uint32 GetIndexBufferSize() { return IndexBufferSize; }
 
 	// 버퍼 데이터 갱신
 	bool UpdateBuffers(ID3D11Device* Device, ID3D11DeviceContext* Context, const struct FMeshDesc& Desc);

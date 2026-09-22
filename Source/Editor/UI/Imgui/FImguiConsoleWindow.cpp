@@ -4,6 +4,7 @@
 #include "ThirdParty/Imgui/imgui_internal.h"
 #include "ThirdParty/Imgui/imgui_impl_dx11.h"
 #include "ThirdParty/Imgui/imgui_impl_win32.h"
+#include "Source/Runtime/Core/FStatRegistry.h"
 #include <string.h>
 #include <ctime>
 
@@ -319,6 +320,21 @@ void FImguiConsoleWindow::ExecCommand(const char* command_line)
 		int first = History.Size - 10;
 		for (int i = first > 0 ? first : 0; i < History.Size; i++)
 			UE_LOG("%3d: %s\n", i, History[i]);
+	}
+	else if (Stricmp(command_line, "stat fps") == 0)
+	{
+		if (STATS.IsStatFps()) STATS.OffStatFPS();
+		else STATS.OnStatFPS();
+	}
+	else if (Stricmp(command_line, "stat memory") == 0)
+	{
+		if (STATS.IsStatMemory()) STATS.OffStatMemory();
+		else STATS.OnStatMemory();
+	}
+	else if (Stricmp(command_line, "stat none") == 0)
+	{
+		STATS.OffStatFPS();
+		STATS.OffStatMemory();
 	}
 	else
 	{

@@ -10,6 +10,8 @@
 #include "Runtime/Core/PointerTypes.h"
 #include "Runtime/Core/TArray.h"
 #include "Runtime/Core/TMap.h"
+#include "Runtime/Engine/FDelegate.h"
+#include <unordered_set>
 #include "Vertices.h"
 
 class FRenderer;
@@ -57,22 +59,27 @@ public:
 
     bool Initialize(FRenderer& Renderer);
 
-    // 파이프라인 보관 맵
-    TMap<FName, TSharedPtr<FRenderPipeline>> AllPipelineMap;
-    // 저수준 렌더 정적 메시 보관 맵
-    TMap<FString, TSharedPtr<FStaticMesh>> AllFStaticMeshMap;
-    // 게임 및 에디터용 UStaticMesh 에셋 보관 맵
-    TMap<FString, UStaticMesh*> AllUStaticMeshMap;
-    // 머티리얼 보관 맵 (FName 기반)
-    TMap<FString, TSharedPtr<FMaterial>> AllMaterialMap;
-    // 텍스쳐 보관 맵 (FName 기반)
-    TMap<FName, TSharedPtr<FTexture>> AllTextureMap;
 
-    // 현재 실행에서 처리한 MTL 파일 키
-    TSet<FString> AllMaterialFileSet;
+  // 저장된 머티리얼 키를 넘겨주는 이벤트
+  TMulticastDelegate<const FString&> OnMaterialSaved;
 
-    // 폰트 보관 맵
-    TMap<FName, TSharedPtr<FFont>> AllFontMap;
+
+
+  // 파이프라인 보관 맵
+  TMap<FName, TSharedPtr<FRenderPipeline>> AllPipelineMap;
+  // 저수준 렌더 정적 메시 보관 맵
+  TMap<FString, TSharedPtr<FStaticMesh>> AllFStaticMeshMap;
+  // 게임 및 에디터용 UStaticMesh 에셋 보관 맵
+  TMap<FString, UStaticMesh*> AllUStaticMeshMap;
+  // 머티리얼 보관 맵 (FName 기반)
+  TMap<FString, TSharedPtr<FMaterial>> AllMaterialMap;
+  // 텍스쳐 보관 맵 (FName 기반)
+  TMap<FName, TSharedPtr<FTexture>> AllTextureMap;
+  // 폰트 보관 맵
+  TMap<FName, TSharedPtr<FFont>> AllFontMap;
+
+  // 현재 실행에서 처리한 MTL 파일 키
+  TSet<FString> AllMaterialFileSet;
 
     // 에디터용 아이콘 텍스쳐 보관 맵
     TMap<FString, TSharedPtr<FTexture>> AllEditorTextureMap;
@@ -82,6 +89,13 @@ public:
 
   // 머터리얼 썸네일 텍스처 보관 맵
   TMap<FString, TSharedPtr<FTexture>> AllMaterialThumbnailMap;
+
+  // 머터리얼 참조 메시 보관 맵
+  TMap<FString, std::unordered_set<FString>> AllMaterialToMeshDependencyMap;
+
+
+
+
 
   // 전체 썸네일 맵 조회
   [[nodiscard]] const TMap<FName, TSharedPtr<FTexture>>& GetAllMeshThumbnailMap() const {
@@ -172,52 +186,63 @@ public:
     TSharedPtr<FStaticMesh> CreateStaticMesh(const FName& ID, const TArray<FVertexData>& Vertices, const TArray<uint32>& Indices);
 
 
-    // 개별 메쉬 접근자
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetCubeMesh() const {
-        return GetMesh(FName("Cube"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetCylinderMesh() const {
-        return GetMesh(FName("Cylinder"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetConeMesh() const {
-        return GetMesh(FName("Cone"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetSpotlightConeMesh() const {
-        return GetMesh(FName("SpotlightCone"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetArrowMesh() const {
-        return GetMesh(FName("Arrow"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetCircleMesh() const {
-        return GetMesh(FName("Circle"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetRotationGizmoMesh() const {
-        return GetMesh(FName("RotGizmo"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetSquareArrowMesh() const {
-        return GetMesh(FName("SquareArrow"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetGridMesh() const {
-        return GetMesh(FName("Grid"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetSphereMesh() const {
-        return GetMesh(FName("Sphere"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetLineMesh() const {
-        return GetMesh(FName("Line"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetPlaneMesh() const {
-        return GetMesh(FName("Plane"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetRectMesh() const {
-        return GetMesh(FName("Rect"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetTextMesh() const {
-        return GetMesh(FName("TextMesh"));
-    }
-    [[nodiscard]] TSharedPtr<FStaticMesh> GetMasterYiMesh() const {
-        return GetMesh(FName("MasterYi"));
-    }
+  // material 참조하는 mesh 넣어주기
+  void RegisterMeshMaterialDependency(FString MeshId, const FString& MaterialKey);
+
+  // 머티리얼 키를 받아서 자기 자신 썸네일과 의존성이 걸린 메시 썸네일들을 한 번에 갱신
+  void RefreshMaterialAndDependentThumbnails(const FString& InMaterialKey);
+
+
+  void UpdateMeshMaterialDependency(const FString& MeshId, const FString& OldMatKey, const FString& NewMatKey);
+
+  void UnregisterMeshMaterialDependency(const FString& MeshId, const FString& MaterialKey);
+
+  // 개별 메쉬 접근자
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetCubeMesh() const {
+    return GetMesh(FName("Cube"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetCylinderMesh() const {
+    return GetMesh(FName("Cylinder"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetConeMesh() const {
+    return GetMesh(FName("Cone"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetSpotlightConeMesh() const {
+    return GetMesh(FName("SpotlightCone"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetArrowMesh() const {
+    return GetMesh(FName("Arrow"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetCircleMesh() const {
+    return GetMesh(FName("Circle"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetRotationGizmoMesh() const {
+    return GetMesh(FName("RotGizmo"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetSquareArrowMesh() const {
+    return GetMesh(FName("SquareArrow"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetGridMesh() const {
+    return GetMesh(FName("Grid"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetSphereMesh() const {
+    return GetMesh(FName("Sphere"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetLineMesh() const {
+    return GetMesh(FName("Line"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetPlaneMesh() const {
+    return GetMesh(FName("Plane"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetRectMesh() const {
+    return GetMesh(FName("Rect"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetTextMesh() const {
+    return GetMesh(FName("TextMesh"));
+  }
+  [[nodiscard]] TSharedPtr<FStaticMesh> GetMasterYiMesh() const {
+    return GetMesh(FName("MasterYi"));
+  }
 
     // 머티리얼 등록
     TSharedPtr<FMaterial> RegisterMaterial(const FString& Id, TSharedPtr<FMaterial> inMaterial);
@@ -293,18 +318,25 @@ public:
         return nullptr;
     }
 
+  void UnregisterMaterial(const FString& InKey); //material 등록해제
 
-    TSharedPtr<FStaticMesh> CreateAndRegisterStaticMesh(
-        const FName& ID,
-        const TArray<FVertexData>& Vertices,
-        const TArray<uint32>& Indices
-    );
+
+  TSharedPtr<FStaticMesh> CreateAndRegisterStaticMesh(
+      const FName& ID,
+      const TArray<FVertexData>& Vertices,
+      const TArray<uint32>& Indices
+  );
 
   // 스태틱 메시 썸네일 일괄 생성
   bool CreateMeshThumbnails();
   // 머터리얼 썸네일 일괄 생성
   bool CreateMaterialThumbnails();
 
+  void UpdateMaterialThumbnail(const FString& MatKey);
+  void UpdateMeshThumbnail(const FString& MatKey);
+
+  // 모든 obj 만드는 용도
+  bool CreateObjMeshes();
 private:
     bool InitializePipelines();
     bool CreateSolidWireframePipeline();
@@ -334,8 +366,7 @@ private:
     bool InitializeMaterials();
     bool CreateEditTextures();
 
-    // 모든 obj 만드는 용도
-    bool CreateObjMeshes();
+
 
     // 폰트 일괄 초기화
     bool CreateFonts();

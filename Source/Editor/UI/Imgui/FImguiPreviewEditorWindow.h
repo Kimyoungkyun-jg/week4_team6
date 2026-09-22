@@ -19,7 +19,7 @@ class FImguiPreviewEditorWindow final
 {
 public:
 	FImguiPreviewEditorWindow();
-	~FImguiPreviewEditorWindow() = default;
+	~FImguiPreviewEditorWindow();
 
 	FImguiPreviewEditorWindow(const FImguiPreviewEditorWindow&) = delete;
 	FImguiPreviewEditorWindow& operator=(const FImguiPreviewEditorWindow&) = delete;
@@ -51,9 +51,18 @@ public:
 	bool bShowGrid = true;
 
 	EPrevType prevType = EPrevType::Mesh;
+
+	void SaveAsset();
+
+	TSharedPtr<FMaterial> GetPreviewMaterial() { return PreviewMaterialInstance; }
+
+	void DestroyPreviewResource();
+
 private:
 
 	void ProcessViewportInput(FEditor& Editor, const ImVec2& ViewportPos, const ImVec2& ViewportSize, float DeltaTime);
+
+
 
 	void DrawMeshDetailsPanel();
 	void DrawMaterialDetailsPanel();
@@ -77,8 +86,14 @@ private:
 	FVector MeshCenter = { 0.0f, 0.0f, 0.0f };
 	float MeshExtent = 5.0f;
 
-
-
 	// 캐싱된 창 제목 문자열
 	FString TitleString;
+
+
+
+	//TODO 되게 미련한 방법...직렬화 역직렬화를 사용해서 undo buffer를 만들고 싶음
+	TSharedPtr<FMaterial> PreviewMaterialInstance; // 프리뷰 전용 복사본 
+	FString OriginalMatKey;                                      // 원본 머티리얼 키
+	UStaticMesh* OriginalMesh = nullptr; // 원본 메시 포인터
+	bool bIsDirty = false;
 };

@@ -2,6 +2,7 @@
 #include "Runtime/CoreUObject/UClass.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
+#include "Runtime/Rendering/FRenderResourceLibrary.h"
 
 IMPLEMENT_UCLASS(AMasterYi, AActor)
 UCLASS_META(AMasterYi, DisplayName, "MasterYi Actor")
@@ -14,8 +15,7 @@ AMasterYi::AMasterYi()
 	if (auto* MeshComp = GetStaticMeshComponent())
 	{
 
-
-		MeshComp->SetStaticMesh(NewObject<UStaticMesh>(FName("MasterYi"), FName("Textured")));
+		MeshComp->SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("MasterYi"));
 		MeshComp->SetTextureID(FName("MasterYi_Head"));
 	}
 

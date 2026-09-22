@@ -9,6 +9,7 @@
 #include "Editor/UI/Imgui/FImguiDragDrop.h"
 #include <algorithm>
 #include <filesystem>
+#include <Runtime/Core/TObjectIterator.h>
 
 FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 {
@@ -20,6 +21,11 @@ FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 	CameraController.CameraRotateSpeed = 0.5f;
 }
 
+FImguiPreviewEditorWindow::~FImguiPreviewEditorWindow()
+{
+	DestroyPreviewResource();
+}
+
 void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, ImGuiID InDockID, EPrevType type)
 {
 	if (!InMesh)
@@ -27,29 +33,48 @@ void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, ImGuiID InDockI
 		return;
 	}
 
-	TargetMesh = InMesh;
 	bIsOpen = true;
 	InitialDockID = InDockID;
 	bFocusRequested = true;
 	bNeedInitialDock = true;
 	prevType = type;
+	bIsDirty = false;
 
 #if IS_OBJ_VIEWER
-	TitleString += "OBJ_Viewer###PreviewEditor";
+	TitleString = "OBJ_Viewer###PreviewEditor";
+	TargetMesh = InMesh;
 #else
 	switch (type)
 	{
 	case EPrevType::Mesh:
-		TitleString = TargetMesh->MeshId.ToString();
-		TitleString += "###PreviewMeshEditor";
-		TitleString += TargetMesh->MeshId.ToString();
-		break;
-	case EPrevType::Material:
 	{
-		const FString MatName = InMesh->Materials.empty() ? "Material" : InMesh->Materials[0];
-		TitleString = MatName + "###PreviewMaterialEditor_" + MatName;
+		OriginalMesh = InMesh;
+		TitleString = OriginalMesh->MeshId.ToString() + "###PreviewMeshEditor_" + OriginalMesh->MeshId.ToString();
+
+		// 원본 메시를 복제하여 프리뷰 렌더링용 TargetMesh로 사용
+		TargetMesh = OriginalMesh->ClonePreviewMesh();
 		break;
 	}
+
+	case EPrevType::Material:
+	{
+		OriginalMesh = InMesh; // 원본 구체 메시 보관
+
+		OriginalMatKey = InMesh->Materials[0];
+
+		TitleString = OriginalMatKey + "###PreviewMaterialEditor_" + OriginalMatKey;
+
+		// 프리뷰 구체 메시 복제
+		TargetMesh = InMesh->ClonePreviewMesh();
+
+		// 원본 머티리얼 복제 (전역 등록 없이 독립 인스턴스로 멤버 변수에만 보관)
+		if (auto OrigMat = FRenderResourceLibrary::Get().GetMaterial(OriginalMatKey))
+		{
+			PreviewMaterialInstance = OrigMat->Clone();
+		}
+		break;
+	}
+
 	default:
 		break;
 	}
@@ -157,29 +182,116 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		}
 
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth(200.0f);
-
-		const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
-		if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
+		if (bIsDirty)
 		{
-			const auto& MeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
-			for (const auto& [Key, MeshPtr] : MeshMap)
+			// 수정 사항이 있을 때 버튼 강조
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.45f, 0.1f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.55f, 0.2f, 1.0f));
+		}
+		else
+		{
+			// 수정 사항이 없으면 어두운 버튼
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.22f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.32f, 1.0f));
+		}
+
+#if IS_OBJ_VIEWER
+
+		ImGui::PopStyleColor(2);
+
+#else
+		const std::string SaveBtnLabel = bIsDirty ? "Save *" : "Save";
+		const bool bSaveClicked = ImGui::Button(SaveBtnLabel.c_str(), ImVec2(65.0f, 0.0f));
+		ImGui::PopStyleColor(2);
+
+		// Ctrl + S 단축키 검사
+		const bool bCtrlSPressed = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+			ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false);
+
+		if (bSaveClicked || bCtrlSPressed)
+		{
+			SaveAsset();
+		}
+
+#endif
+
+		ImGui::SetNextItemWidth(200.0f);
+		if (prevType == EPrevType::Material)
+		{
+			const std::string CurrentMatName = !OriginalMatKey.empty() ? OriginalMatKey : "Select Material";
+
+			if (ImGui::BeginCombo("##MaterialSelectCombo", CurrentMatName.c_str()))
 			{
-				const std::string ItemName = Key;
-				const bool bIsSelected = (TargetMesh.IsValid() && TargetMesh->MeshId == Key);
-
-				if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+				const auto& AllMaterials = FRenderResourceLibrary::Get().GetAllMaterials();
+				for (const auto& [MatKey, MatAsset] : AllMaterials)
 				{
-					TargetMesh = MeshPtr;
-					FocusOnMesh();
-				}
+					const bool bIsSelected = (OriginalMatKey == MatKey);
 
-				if (bIsSelected)
-				{
-					ImGui::SetItemDefaultFocus();
+					if (ImGui::Selectable(MatKey.c_str(), bIsSelected))
+					{
+						// 다른 머티리얼을 선택한 경우 타겟 교체
+						OriginalMatKey = MatKey;
+						TitleString = OriginalMatKey + "###PreviewMaterialEditor_" + OriginalMatKey;
+
+						if (auto OrigMat = FRenderResourceLibrary::Get().GetMaterial(OriginalMatKey))
+						{
+							PreviewMaterialInstance = OrigMat->Clone();
+						}
+
+						bIsDirty = false;
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
 				}
+				ImGui::EndCombo();
 			}
-			ImGui::EndCombo();
+		}
+		else if (prevType == EPrevType::Mesh)
+		{
+			const std::string CurrentMeshName = TargetMesh.IsValid() ? TargetMesh->MeshId.ToString() : "Select Mesh";
+
+			if (ImGui::BeginCombo("##MeshSelectCombo", CurrentMeshName.c_str()))
+			{
+				const auto& AllMeshes = FRenderResourceLibrary::Get().AllUStaticMeshMap;
+				for (const auto& [MeshKey, MeshAsset] : AllMeshes)
+				{
+					const FString ItemName = MeshKey;
+
+					// 프리뷰용 전용 구체 메시는 메시 에디터 목록에서 제외
+					if (ItemName == "Sphere_Mat")
+					{
+						continue;
+					}
+
+					const bool bIsSelected = (TargetMesh.IsValid() && TargetMesh->MeshId == MeshKey);
+
+					if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+					{
+						if (auto OrigMesh = FRenderResourceLibrary::Get().GetUStaticMesh(ItemName))
+						{
+							if (TargetMesh.IsValid())
+							{
+								TargetMesh->Destroy();
+							}
+
+							OriginalMesh = OrigMesh;
+							TargetMesh = OrigMesh->ClonePreviewMesh();
+							TitleString = OriginalMesh->MeshId.ToString() + "###PreviewMeshEditor_" + OriginalMesh->MeshId.ToString();
+							bIsDirty = false;
+							FocusOnMesh();
+						}
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
 		}
 
 		ImGui::Separator();
@@ -209,6 +321,7 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 		const ImVec2 ViewportPos = ImGui::GetCursorScreenPos();
+
 		if (RenderTarget.IsValid())
 		{
 			ImGui::Image(reinterpret_cast<ImTextureID>(RenderTarget.ShaderResourceView.Get()),
@@ -217,10 +330,9 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 		ProcessViewportInput(Editor, ViewportPos, ImVec2(ViewWidth, ViewHeight), DeltaTime);
 
-		ImGui::EndChild();
+		ImGui::EndChild(); 
 
-		ImGui::SameLine();
-
+		ImGui::SameLine(); 
 		// 우측 세부 정보 패널
 		switch (prevType)
 		{
@@ -239,6 +351,86 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		}
 	}
 	ImGui::End();
+
+	if (!bIsOpen)
+	{
+		DestroyPreviewResource();
+	}
+}
+
+void FImguiPreviewEditorWindow::SaveAsset()
+{
+	if (!bIsDirty || !TargetMesh.IsValid())
+	{
+		return;
+	}
+
+	switch (prevType)
+	{
+	case EPrevType::Material:
+	{
+		if (PreviewMaterialInstance && !OriginalMatKey.empty())
+		{
+			if (auto OrigMat = FRenderResourceLibrary::Get().GetMaterial(OriginalMatKey))
+			{
+				//복제본의 모든 텍스처 슬롯을 원본에 복사
+				const size_t SlotCount = static_cast<size_t>(EMaterialTextureSlot::Count);
+				for (size_t i = 0; i < SlotCount; ++i)
+				{
+					const auto Slot = static_cast<EMaterialTextureSlot>(i);
+					OrigMat->SetTexture(Slot, PreviewMaterialInstance->GetTexture(Slot));
+				}
+
+				// 델리게이트 브로드캐스트 (자체 및 참조 메시 썸네일 일괄 갱신)
+				FRenderResourceLibrary::Get().OnMaterialSaved.Broadcast(OriginalMatKey);
+			}
+		}
+		break;
+	}
+	case EPrevType::Mesh:
+	{
+		if (OriginalMesh && TargetMesh.IsValid())
+		{
+			const FString MeshKey = OriginalMesh->MeshId.ToString();
+
+			// 변경된 슬롯들을 순회하며 라이브러리 의존성 테이블 갱신
+			const size_t SlotCount = std::min(OriginalMesh->Materials.size(), TargetMesh->Materials.size());
+			for (size_t i = 0; i < SlotCount; ++i)
+			{
+				const FString& OldMat = OriginalMesh->Materials[i];
+				const FString& NewMat = TargetMesh->Materials[i];
+
+				if (OldMat != NewMat)
+				{
+					FRenderResourceLibrary::Get().UpdateMeshMaterialDependency(MeshKey, OldMat, NewMat);
+				}
+			}
+
+			// 복사본 데이터를 원본에 덮어쓰기
+			OriginalMesh->Materials = TargetMesh->Materials;
+
+			// 메시 썸네일 최종 갱신
+			FRenderResourceLibrary::Get().UpdateMeshThumbnail(MeshKey);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+	bIsDirty = false;
+}
+
+void FImguiPreviewEditorWindow::DestroyPreviewResource()
+{
+	if (TargetMesh.IsValid())
+	{
+		TargetMesh->Destroy();
+	}
+
+	// 임시 머티리얼 인스턴스 해제
+	PreviewMaterialInstance.reset();
+	RenderTarget.Release();
 }
 
 void FImguiPreviewEditorWindow::ProcessViewportInput(FEditor& Editor, const ImVec2& ViewportPos, const ImVec2& ViewportSize, float DeltaTime)
@@ -302,7 +494,6 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 		ImGui::Text("Size: %.1f, %.1f, %.1f", Size.X, Size.Y, Size.Z);
 	}
 
-	// ---------------- Materials 편집 섹션 ----------------
 	ImGui::Spacing();
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Materials");
@@ -323,7 +514,6 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 
 		ImGui::TextDisabled("Slot [%d]", SlotIdx);
 
-		// 머티리얼 썸네일 SRV 조회
 		ID3D11ShaderResourceView* ThumbnailSRV = nullptr;
 		if (auto MatTex = FRenderResourceLibrary::Get().GetMaterialThumbnail(CurrentSlotMat))
 		{
@@ -340,7 +530,6 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 		ImGui::PopStyleColor();
 		ImGui::PopStyleVar();
 
-		// 머티리얼 드롭 수신
 		if (ImGui::BeginDragDropTarget())
 		{
 			if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
@@ -349,12 +538,12 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 				if (DragData && DragData->Kind == FContentDragPayload::EKind::Material)
 				{
 					CurrentSlotMat = DragData->Key;
+					bIsDirty = true;
 				}
 			}
 			ImGui::EndDragDropTarget();
 		}
 
-		// 하단 머티리얼 인디케이터 (초록색 바)
 		const ImVec2 Min = ImGui::GetItemRectMin();
 		const ImVec2 Max = ImGui::GetItemRectMax();
 		constexpr float LineHeight = 3.5f;
@@ -382,6 +571,7 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 				if (ImGui::Selectable(MatName.c_str(), bMatSelected))
 				{
 					CurrentSlotMat = MatName;
+					bIsDirty = true;
 				}
 
 				if (bMatSelected)
@@ -396,7 +586,6 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 		ImGui::PopID();
 	}
 
-	// ---------------- 카메라 정보 ----------------
 	ImGui::Spacing();
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Camera (Free Flight)");
@@ -420,31 +609,23 @@ void FImguiPreviewEditorWindow::DrawMeshDetailsPanel()
 
 void FImguiPreviewEditorWindow::DrawMaterialDetailsPanel()
 {
-	if (!TargetMesh.IsValid() || TargetMesh->Materials.empty())
+	// [수정] 복제본 인스턴스(PreviewMaterialInstance) 유효성 검사
+	if (!PreviewMaterialInstance)
 	{
-		ImGui::TextDisabled("No material selected");
+		ImGui::TextDisabled("No material preview instance available");
 		return;
 	}
-
-	const FString& MatName = TargetMesh->Materials[0];
-	auto Material = FRenderResourceLibrary::Get().GetMaterial(MatName);
 
 	ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "Material Details");
 	ImGui::Separator();
-	ImGui::Text("Material Name: %s", MatName.c_str());
-
-	if (!Material)
-	{
-		ImGui::TextDisabled("Material resource not found");
-		return;
-	}
+	ImGui::Text("Material Name: %s", OriginalMatKey.c_str());
 
 	ImGui::Spacing();
 	ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Texture Parameters");
 	ImGui::TextDisabled("Base Color / Diffuse");
 
-	// 1. 머티리얼에서 현재 FTexture 객체 및 SRV 가져오기
-	auto DiffuseTex = Material->GetDiffuseMap();
+	// [수정] PreviewMaterialInstance에서 텍스처 조회
+	auto DiffuseTex = PreviewMaterialInstance->GetDiffuseMap();
 	ID3D11ShaderResourceView* DiffuseSRV = DiffuseTex ? DiffuseTex->GetSRV() : nullptr;
 
 	constexpr float ThumbWidth = 72.0f;
@@ -467,17 +648,14 @@ void FImguiPreviewEditorWindow::DrawMaterialDetailsPanel()
 			const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
 			if (DragData && DragData->Kind == FContentDragPayload::EKind::Texture)
 			{
-				// 1. stem 추출 후 소문자 변환
 				std::filesystem::path FilePath(DragData->Path);
 				std::string CleanKey = FilePath.stem().string();
 				std::transform(CleanKey.begin(), CleanKey.end(), CleanKey.begin(), [](unsigned char c) {
 					return static_cast<char>(std::tolower(c));
 					});
 
-				// 2. 라이브러리 캐시 조회
 				auto NewTex = FRenderResourceLibrary::Get().GetTexture(CleanKey);
 
-				// 3. 미캐시 시 디스크에서 즉시 로드 후 라이브러리 등록
 				if (!NewTex)
 				{
 					if (auto Renderer = FRenderResourceLibrary::Get().GetRenderer())
@@ -490,10 +668,11 @@ void FImguiPreviewEditorWindow::DrawMaterialDetailsPanel()
 					}
 				}
 
-				// 4. 머티리얼에 디퓨즈 맵 반영
 				if (NewTex)
 				{
-					Material->SetDiffuseMap(NewTex);
+					// [수정] 원본이 아닌 복제본(PreviewMaterialInstance)에 세팅
+					PreviewMaterialInstance->SetDiffuseMap(NewTex);
+					bIsDirty = true;
 				}
 			}
 		}
@@ -529,7 +708,6 @@ void FImguiPreviewEditorWindow::DrawMaterialDetailsPanel()
 
 	ImGui::PopID();
 
-	// ---------------- 카메라 조작 안내 ----------------
 	ImGui::Spacing();
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Camera (Free Flight)");

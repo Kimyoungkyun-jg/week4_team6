@@ -1,6 +1,7 @@
 #include "FLineBatcher.h"
 #include "FRenderer.h"
 #include "ShaderConstants.h"
+#include "Source/Runtime/Core/FStatRegistry.h"
 
 #include <cmath>
 #include <numbers>
@@ -115,6 +116,8 @@ void FLineBatcher::Flush(ID3D11DeviceContext& Context,
 	if (LineVertices.empty() || !DynamicLineVertexBuffer) {
 		return;
 	}
+
+	STATS.AddLineBatchNum(static_cast<uint32>(LineVertices.size()));
 
 	// 정점 버퍼 매핑 및 데이터 복사
 	D3D11_MAPPED_SUBRESOURCE MappedVb{};

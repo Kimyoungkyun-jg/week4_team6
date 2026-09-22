@@ -22,6 +22,7 @@
 #include "Runtime/Actors/TestTextActor.h"
 #include "Runtime/CoreUObject/UPlaneComp.h"
 #include "Runtime/CoreUObject/USphereComp.h"
+#include "Runtime/Core/FStatRegistry.h"
 
 #include "Editor/Visualizer/IVisualizer.h"
 
@@ -56,6 +57,8 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager, FRender
   this->CurrentScene = SceneManager->CurrentScene;
 
   Editor.Initialize(SceneManager);
+  STATS.Initialize();
+  STATS.Reset();
 
 #if IS_OBJ_VIEWER
 
@@ -123,7 +126,7 @@ void FEditorApplication::Tick(float DeltaTime) {
     {
         bFirstInit = false;
         UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh("Cube");
-        OpenPreviewWindow(Mesh);
+        OpenPreviewWindow(Mesh, EPrevType::Mesh);
     }
 
     for (const auto& Window : PreviewWindows)
@@ -147,6 +150,8 @@ void FEditorApplication::Tick(float DeltaTime) {
     PropertyWindow.Process(Editor);
     ConsoleWindow.Process(Editor);
     ContentsDrawer.Process(Editor);
+    OverlayStat.Process(Editor, DeltaTime);
+    STATS.Reset();
 
     for (const auto& Window : PreviewWindows)
     {
@@ -171,7 +176,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
         return;
     }
 
-    // 1. 닫힌 창 정리
+    // 닫힌 창 정리
     PreviewWindows.erase(
         std::remove_if(PreviewWindows.begin(), PreviewWindows.end(),
             [](const TSharedPtr<FImguiPreviewEditorWindow>& Win) {
@@ -182,14 +187,15 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
 
     const FString CurrentMatName = (!InMesh->Materials.empty()) ? InMesh->Materials[0] : "";
 
-    // 2. 이미 열려 있는 창인지 검사
+    // 이미 열려 있는 창인지 검사
     for (const auto& Window : PreviewWindows)
     {
         if (Window && Window->IsOpen())
         {
             if (type == EPrevType::Mesh && Window->prevType == EPrevType::Mesh)
             {
-                if (Window->GetTargetMesh() == InMesh)
+                FString ExpectedTitle = InMesh->MeshId.ToString() + "###PreviewMeshEditor_" + InMesh->MeshId.ToString();
+                if (Window->GetTitleString() == ExpectedTitle)
                 {
                     Window->BringToFront();
                     return;
@@ -250,7 +256,7 @@ void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
 
     // 새 프리뷰 창 생성 및 등록
     auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
-    NewWindow->OpenPreview(InMesh, TargetDockID, type);
+    NewWindow->OpenPreview(InMesh,TargetDockID, type);
     PreviewWindows.push_back(NewWindow);
 }
 
@@ -266,7 +272,7 @@ void FEditorApplication::Render() {
         if (Window && Window->IsOpen())
         {
             RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
-                Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
+                Window->GetTargetMesh(), Window->GetPreviewMaterial(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
         }
     }
 
@@ -311,7 +317,7 @@ void FEditorApplication::Render() {
         if (Window && Window->IsOpen())
         {
             RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
-                Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
+                Window->GetTargetMesh(), Window->GetPreviewMaterial(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid, Window->prevType);
         }
     }
 
@@ -323,11 +329,10 @@ void FEditorApplication::Render() {
 
 void FEditorApplication::OnWindowSize(UINT Width, UINT Height) {
   // 뷰포트 종횡비 갱신
+  FVector2 WindowSize = FVector2(static_cast<float>(Width), static_cast<float>(Height));
+  STATS.UpdateWindowSize(WindowSize);
   for (auto &Viewport : Editor.GetViewports()) {
-    const FVector2 SizePixels =
-        Viewport.LengthUV *
-        FVector2{static_cast<float>(Width), static_cast<float>(Height)};
-
+    const FVector2 SizePixels = Viewport.LengthUV * WindowSize;
     auto &Camera = Viewport.ViewportCamera;
     Camera.Projection.Aspect = SizePixels.X / SizePixels.Y;
   }

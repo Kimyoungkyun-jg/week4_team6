@@ -11,11 +11,13 @@
 #include "Runtime/Rendering/FLineBatcher.h"
 #include "ShaderConstants.h"
 #include "Vertices.h"
+#include "Runtime/Core/FStatRegistry.h"
 
 #include <Windows.h>
 #include <d3d11.h>
 #include <filesystem>
 #include <wrl/client.h>
+#include <WICTextureLoader.h>
 
 class FTexture;
 struct FTextureDesc;
@@ -82,12 +84,13 @@ public:
     void BindBackBufferWithDepth();
     ID3D11RenderTargetView* GetBackBuffer() { return BackBufferRTV.Get(); }
 
-    void RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid = false);
-    void RenderMaterialPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, TSharedPtr<FStaticMesh>,  TSharedPtr<FMaterial> Material, uint32 Width, uint32 Height, bool bDrawGrid = false);
+    void RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid = false, TSharedPtr<FMaterial> OverrideMaterial=nullptr);
+    void RenderMaterialPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, TSharedPtr<FStaticMesh> Meshasset,  TSharedPtr<FMaterial> Material, uint32 Width, uint32 Height, bool bDrawGrid = false);
 private:
     bool InitializeDeviceAndSwapChain(HWND Window);
     bool InitializeBackBufferAndDepthStencil();
     bool InitializeConstantBuffers();
+    bool InitializeTextureLoader();
 
 private:
     FLineBatcher LineBatcher;
@@ -151,6 +154,8 @@ public:
 
         Material.BindResources(*Context.Get());
         Mesh.BindResources(*Context.Get());
+
+        STATS.UpdateDrawCallCount(Mesh.GetIndexCount(), Mesh.GetVertexCount());
 
         // 외부에서 indicesCount를 양수로 지정한 경우 해당 섹션 범위만 1회 드로우
         if (indicesCount > 0)

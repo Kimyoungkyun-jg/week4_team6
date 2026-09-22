@@ -272,7 +272,8 @@ void FObjDecoder::AddVertexList(std::string_view Line)
 		return;
 	}
 
-	ObjInfo.VertexList.push_back(FVector4(Values[0], Values[1], Values[2], Values[3]));
+	// OBJ(오른손 Y-up) -> 엔진(왼손 Z-up). Y/Z 스왑은 det = -1 이라 손좌표계까지 바뀐다.
+	ObjInfo.VertexList.push_back(FVector4(Values[0], Values[2], Values[1], Values[3]));
 
 	// 색상은 x y z r g b (6개) 또는 x y z w r g b (7개) 형식일 때만 존재
 	if (Count == 6)
@@ -316,7 +317,8 @@ void FObjDecoder::AddNormalList(std::string_view Line)
 		return;
 	}
 
-	ObjInfo.NormalList.push_back(FVector(Values[0], Values[1], Values[2]));
+	// 위치와 같은 매핑
+	ObjInfo.NormalList.push_back(FVector(Values[0], Values[2], Values[1]));
 }
 
 
@@ -1026,7 +1028,9 @@ void FObjDecoder::CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& N
 		const FVector VertexC = Info.VertexList[V.Index[2]];
 		const int32 SmoothingGroupNumber = Info.SmoothingGroupsList[Index];
 
-		NormalVectorList.push_back((VertexB - VertexA).Cross(VertexC - VertexA));
+		// 크로스곱은 유사벡터라 det = -1 매핑 아래에서 부호가 뒤집힌다.
+		// 순서를 바꿔 바깥을 향하는 면 노멀을 얻는다.
+		NormalVectorList.push_back((VertexC - VertexA).Cross(VertexB - VertexA));
 
 		if (SmoothingGroupNumber > 0)
 		{
@@ -1149,8 +1153,12 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 				MakeCornerKey(static_cast<int32>(V.Index[2]), static_cast<int32>(VT.Index[2]), static_cast<int32>(VN.Index[2]), S, Triangle)
 			};
 
-			for (const FCornerKey& Corner : Corners)
+			// 좌표 변환이 det = -1 (Y/Z 스왑) 이라 화면 공간 와인딩이 뒤집힌다.
+			// 코너를 역순으로 방출해 엔진의 기본 도형(Cube, Sphere 등)과 같은
+			// 와인딩 규약(FrontCounterClockwise = false)에 맞춘다.
+			for (int32 c = 2; c >= 0; --c)
 			{
+				const FCornerKey& Corner = Corners[c];
 				Out.Indices.push_back(GetOrAddVertex(Info, Corner, Vertices, Out, NormalVectorList, SmoothingMap));
 
 				for (int i = 0; i < 3; i++)

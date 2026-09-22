@@ -5,6 +5,7 @@
 #include "Editor/Visualizer/FVisualizerRegistry.h"
 #include "Editor/Visualizer/IVisualizer.h"
 #include "Runtime/Actors/AActor.h"
+#include "Editor/UI/Imgui/FImguiPreviewEditorWindow.h"
 #include "Runtime/CoreUObject/UBillBoardComp.h"
 #include "Runtime/CoreUObject/UClass.h"
 #include "Runtime/Engine/FCamera.h"
@@ -16,6 +17,7 @@
 #include "Runtime/Rendering/FPreviewRenderTarget.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Engine/UScene.h"
+
 #include <fstream>
 
 FRenderView::FRenderView(FRenderer &Renderer) : Renderer(Renderer) {}
@@ -110,7 +112,9 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
         DrawGrid(*View.Camera, *EditorCtx.Grid);
     }
 
-    if (EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
+    const bool bShowBounds = (View.ShowFlags & static_cast<uint64>(EEngineShowFlags::SF_BoundBox)) != 0;
+    
+    if (bShowBounds && EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
 
         UClass* ClassType = EditorCtx.SelectedMeshComp->GetClass();
         FVisualizerRegistry& Registry = *EditorCtx.VisualizerRegistry;
@@ -157,8 +161,8 @@ void FRenderView::DrawGrid(const FCamera& Camera, FGrid& Grid)
     FGridLineConstants Constants{};
     Constants.MVP = Camera.CreateViewProjectionMatrix();
     Constants.CameraPosition = Camera.Position;
-    Constants.FadeStartDistance = 3.0f;
-    Constants.FadeEndDistance = 75.0f;
+    Constants.FadeStartDistance = 300.0f;
+    Constants.FadeEndDistance = 500.0f;
     Renderer.FlushLineBatch(Constants, FName("Grid"));
 }
 
@@ -409,18 +413,35 @@ void FRenderView::FlushQueue(const FCamera& Camera)
         Renderer.ClearTextInstances();
     }
 
+    STATS.UpdateRenderQueueNum(RenderQueue.GetOpaqueRenderQ().size(), RenderQueue.GetTranslucentRenderQ().size(), RenderQueue.GetTextRenderQ().size(), RenderQueue.GetInstancingRenderQ().size());
+
     RenderQueue.Clear();
 }
 
-void FRenderView::RenderPreviewScene(
+void FRenderView::RenderPreviewScene( 
     FPreviewRenderTarget& RenderTarget,
     const FCamera& Camera,
     UStaticMesh* TargetMesh,
+    TSharedPtr<FMaterial> OverrideMaterial,
     uint32 Width,
     uint32 Height,
-    bool bDrawGrid)
+    bool bDrawGrid,
+    EPrevType prevType)
 {
-    Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+    switch (prevType)
+    {
+    case EPrevType::Mesh:
+        Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+        break;
+    case EPrevType::Material:
+
+
+        Renderer.RenderMaterialPreviewScene(RenderTarget, Camera, TargetMesh->GetStaticMeshAsset(), OverrideMaterial, Width, Height, bDrawGrid);
+        break;
+    default:
+        break;
+    }
+    
 }
 
 
