@@ -517,7 +517,7 @@ bool FRenderResourceLibrary::InitializePipelines() {
 
 bool FRenderResourceLibrary::Initialize(FRenderer& Renderer) {
     RendererRef = &Renderer;
-    if (!InitializePipelines() // 파이프라인 먼저 생성
+    if (!InitializePipelines() || !CreateRenderTargetResource()
         || !CreateCubeMesh() ||
         !CreateCylinderMesh(1.0f, 24u, 1.0f, 1.0f) ||
         !CreateConeMesh() || !CreateSpotlightConeMesh() ||
@@ -1505,6 +1505,130 @@ bool FRenderResourceLibrary::CreateEditTextures() {
             RegisterEditTexture(KeyWide, Texture);
         }
     }
+
+    return true;
+}
+
+bool FRenderResourceLibrary::CreateRenderTargetResource()
+{
+    if (!RendererRef->GetDevice() || !RendererRef->GetSwapChain())
+    {
+        return false;
+    }
+
+    
+
+    // 일반 오프스크린 렌더 타깃 생성 람다 (Texture2D + RTV + SRV + DSV)
+    auto CreateOffscreenTarget = [this](const FString& TargetId, uint32 Width, uint32 Height) -> bool
+        {
+            ID3D11Device* Device = RendererRef->GetDevice();
+
+            FRenderTargetResource NewTarget;
+            NewTarget.TargetId = TargetId;
+            NewTarget.Width = Width;
+            NewTarget.Height = Height;
+
+            // 1. Color Texture2D (RTV, SRV 겸용)
+            D3D11_TEXTURE2D_DESC TexDesc = {};
+            TexDesc.Width = Width;
+            TexDesc.Height = Height;
+            TexDesc.MipLevels = 1;
+            TexDesc.ArraySize = 1;
+            TexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            TexDesc.SampleDesc.Count = 1;
+            TexDesc.SampleDesc.Quality = 0;
+            TexDesc.Usage = D3D11_USAGE_DEFAULT;
+            TexDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+            if (FAILED(Device->CreateTexture2D(&TexDesc, nullptr, NewTarget.Texture2D.GetAddressOf())))
+            {
+                return false;
+            }
+
+            // 2. RTV
+            if (FAILED(Device->CreateRenderTargetView(NewTarget.Texture2D.Get(), nullptr, NewTarget.RTV.GetAddressOf())))
+            {
+                return false;
+            }
+
+            // 3. SRV
+            if (FAILED(Device->CreateShaderResourceView(NewTarget.Texture2D.Get(), nullptr, NewTarget.SRV.GetAddressOf())))
+            {
+                return false;
+            }
+
+            // 4. Depth Stencil Texture2D & DSV
+            D3D11_TEXTURE2D_DESC DepthDesc = TexDesc;
+            DepthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            DepthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> DepthTexture;
+            if (FAILED(Device->CreateTexture2D(&DepthDesc, nullptr, DepthTexture.GetAddressOf())))
+            {
+                return false;
+            }
+
+            if (FAILED(Device->CreateDepthStencilView(DepthTexture.Get(), nullptr, NewTarget.DSV.GetAddressOf())))
+            {
+                return false;
+            }
+
+            AllRTVMap[TargetId] = NewTarget;
+            return true;
+        };
+
+    // ------------------------------------------------------------------------
+    // EditorViewport 타깃 생성 (기본 해상도 세팅, 차후 패널 리사이즈로 갱신)
+    // ------------------------------------------------------------------------
+    const uint32 DefaultViewportWidth = 1920;
+    const uint32 DefaultViewportHeight = 1080;
+    if (!CreateOffscreenTarget("EditorViewport", DefaultViewportWidth, DefaultViewportHeight))
+    {
+        return false;
+    }
+
+    // ------------------------------------------------------------------------
+    // PreviewTarget 타깃 생성 (프리뷰 창 전용)
+    // ------------------------------------------------------------------------
+    const uint32 DefaultPreviewWidth = 1024;
+    const uint32 DefaultPreviewHeight = 1024;
+    if (!CreateOffscreenTarget("PreviewTarget", DefaultPreviewWidth, DefaultPreviewHeight))
+    {
+        return false;
+    }
+
+    // ------------------------------------------------------------------------
+    // BackBuffer 타깃 등록 (스왑체인 버퍼로부터 RTV 획득)
+    // ------------------------------------------------------------------------
+    FRenderTargetResource BackBufferTarget;
+    BackBufferTarget.TargetId = "BackBuffer";
+
+    ID3D11Device* Device = RendererRef->GetDevice();
+    IDXGISwapChain* SwapChain = RendererRef->GetSwapChain();
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> BackBufferTex;
+    if (FAILED(SwapChain->GetBuffer(0, IID_PPV_ARGS(BackBufferTex.GetAddressOf()))))
+    {
+        return false;
+    }
+
+    D3D11_TEXTURE2D_DESC BackBufferDesc = {};
+    BackBufferTex->GetDesc(&BackBufferDesc);
+
+    BackBufferTarget.Width = BackBufferDesc.Width;
+    BackBufferTarget.Height = BackBufferDesc.Height;
+    BackBufferTarget.Texture2D = BackBufferTex;
+
+    if (FAILED(Device->CreateRenderTargetView(BackBufferTex.Get(), nullptr, BackBufferTarget.RTV.GetAddressOf())))
+    {
+        return false;
+    }
+
+    // 백버퍼 전용 Depth 버퍼/DSV 연결 (기존 메인 DSV가 있다면 꽂아줌)
+    BackBufferTarget.DSV = RendererRef->GetDSV();
+    BackBufferTarget.SRV = nullptr; // 백버퍼는 SRV를 쓰지 않음
+
+    AllRTVMap["BackBuffer"] = BackBufferTarget;
 
     return true;
 }

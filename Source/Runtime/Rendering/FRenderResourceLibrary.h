@@ -52,6 +52,17 @@ struct FObjMaterialInfo
 };
 
 
+struct FRenderTargetResource
+{
+    FString TargetId;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture2D;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> RTV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> SRV;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilView> DSV; // 깊이 버퍼가 필요한 경우 함께 관리
+    uint32 Width = 0;
+    uint32 Height = 0;
+};
+
 class FRenderResourceLibrary final {
 public:
     // 전역 싱글톤 접근자
@@ -78,11 +89,11 @@ public:
   // 폰트 보관 맵
   TMap<FName, TSharedPtr<FFont>> AllFontMap;
 
-    // 에디터용 아이콘 텍스쳐 보관 맵
-    TMap<FString, TSharedPtr<FTexture>> AllEditorTextureMap;
+  // 에디터용 아이콘 텍스쳐 보관 맵
+  TMap<FString, TSharedPtr<FTexture>> AllEditorTextureMap;
 
-    // 스태틱 메시 썸네일 텍스처 보관 맵
-    TMap<FName, TSharedPtr<FTexture>> AllMeshThumbnailMap;
+  // 스태틱 메시 썸네일 텍스처 보관 맵
+  TMap<FName, TSharedPtr<FTexture>> AllMeshThumbnailMap;
 
   // 머터리얼 썸네일 텍스처 보관 맵
   TMap<FString, TSharedPtr<FTexture>> AllMaterialThumbnailMap;
@@ -90,6 +101,8 @@ public:
   // 머터리얼 참조 메시 보관 맵
   TMap<FString, std::unordered_set<FString>> AllMaterialToMeshDependencyMap;
 
+  // 렌더링 rtv 보관 맵
+  TMap<FString, FRenderTargetResource> AllRTVMap;
 
 
 
@@ -118,6 +131,16 @@ public:
       if (it != AllMaterialThumbnailMap.end())
           return it->second;
       return nullptr;
+  }
+
+  // RendertargetResource가져오기
+  [[nodiscard]] FRenderTargetResource* GetRenderTargetResource(const FString& TargetId)
+  {
+      auto it = AllRTVMap.find(TargetId);
+      if (it != AllRTVMap.end())
+          return &it->second; 
+
+      return nullptr; 
   }
 
   // 인스턴싱 배치 배열 맵
@@ -355,6 +378,10 @@ private:
     bool CreateTextures();
     bool InitializeMaterials();
     bool CreateEditTextures();
+
+    // 사용되는 모든 rtv 생성 및 등록
+    bool CreateRenderTargetResource();
+
 
     // 모든 obj 만드는 용도
     bool CreateObjMeshes();

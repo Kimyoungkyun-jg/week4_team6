@@ -70,6 +70,30 @@ void FRenderer::BindEditorViewportRenderTargets() {
                               DepthStencilView.Get());
 }
 
+void FRenderer::BindRenderTarget(const FString& TargetId)
+{
+    auto* Target = FRenderResourceLibrary::Get().GetRenderTargetResource(TargetId);
+    if (!Target || !Target->RTV)
+    {
+        return;
+    }
+
+    // 1. 뷰포트 설정 (해당 타깃의 해상도에 맞춤)
+    D3D11_VIEWPORT VP = {};
+    VP.Width = static_cast<float>(Target->Width);
+    VP.Height = static_cast<float>(Target->Height);
+    VP.MinDepth = 0.0f;
+    VP.MaxDepth = 1.0f;
+    VP.TopLeftX = 0.0f;
+    VP.TopLeftY = 0.0f;
+    Context->RSSetViewports(1, &VP);
+
+    // 2. RTV 및 DSV 바인딩
+    ID3D11RenderTargetView* RTVs[] = { Target->RTV.Get() };
+    ID3D11DepthStencilView* DSV = Target->DSV.Get();
+    Context->OMSetRenderTargets(1, RTVs, DSV);
+}
+
 void FRenderer::SetViewportUV(FVector2 TopLeftUV, FVector2 LengthUV) {
   // 유효성 검사
   if (Viewport.Width <= 0.0f || Viewport.Height <= 0.0f ||

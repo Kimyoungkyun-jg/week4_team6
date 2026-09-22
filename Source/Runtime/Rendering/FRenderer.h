@@ -38,6 +38,7 @@ public:
     void Shutdown();
     void BeginFrame();
     void BindEditorViewportRenderTargets();
+    void BindRenderTarget(const FString& TargetId);
     void SetViewportUV(FVector2 TopLeftUV, FVector2 LengthUV);
     void ClearDepth();
     void SwapBuffer();
@@ -59,6 +60,10 @@ public:
     [[nodiscard]] ID3D11DeviceContext* GetContext() const {
         return Context.Get();
     }
+
+    [[nodiscard]] IDXGISwapChain* GetSwapChain() const { return SwapChain.Get(); }
+    [[nodiscard]] ID3D11DepthStencilView* GetDSV() const { return DepthStencilView.Get(); }
+
 
     [[nodiscard]]
     TSharedPtr<FRenderPipeline>

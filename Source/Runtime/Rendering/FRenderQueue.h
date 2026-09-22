@@ -18,6 +18,7 @@ struct FRenderData
     int32 indicesCount = -1;
     bool bSelected = false;
     TArray<FInstanceData> Instances;
+    FString RenderTargetId;
 };
 
 // 한 프레임의 드로우 요청을 수집하는 큐
