@@ -280,6 +280,7 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 
   const FVector2 MousePos{static_cast<float>(GET_X_LPARAM(LParam)),
                           static_cast<float>(GET_Y_LPARAM(LParam))};
+  const int16 WheelDelta = GET_WHEEL_DELTA_WPARAM(WParam);
 
   switch (Message) {
   case WM_DESTROY:
@@ -328,6 +329,10 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 
   case WM_MOUSEMOVE:
     FInputManager::Get().OnMouseMove(MousePos);
+    break;
+
+  case WM_MOUSEWHEEL:
+    FInputManager::Get().OnMouseWheelScroll(WheelDelta);
     break;
 
   // case WM_CAPTURECHANGED:

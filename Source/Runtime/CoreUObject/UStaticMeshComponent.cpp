@@ -4,6 +4,7 @@
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include "Runtime/Core/Log.h"
 #include "UClass.h"
+#include "Source/Runtime/Input/FInputManager.h"
 
 
 
@@ -83,7 +84,9 @@ TArray<FRenderData> UStaticMeshComponent::GetRenderDatas(const FCamera& Camera)
 
             if (bIsMovingUV)
             {
-                offset = fmodf(offset + UVSpeed, 1.0f);
+                float MouseDelta = FInputManager::Get().GetMouseWheelScroll();
+                offset -= MouseDelta * 0.05f;
+                offset -= floorf(offset);
                 rdata.Constants.UVOffset.X = offset;
             }
 

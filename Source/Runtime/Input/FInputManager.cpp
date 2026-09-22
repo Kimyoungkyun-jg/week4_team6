@@ -14,6 +14,8 @@ void FInputManager::BeginFrame()
 
 	MouseDelta = CurrentMousePosition - PreviousMousePosition;
 	PreviousMousePosition = CurrentMousePosition;
+	WheelMoveAccumLast = WheelMoveAccum;
+	WheelMoveAccum = 0.f;
 }
 
 
@@ -102,6 +104,16 @@ void FInputManager::OnMouseButtonUp(EMouseButton Button, FVector2 Position)
 	PreviousMousePosition = Position;
 }
 
+void FInputManager::OnMouseWheelScroll(int16 WheelDelta)
+{
+	WheelMoveAccum += static_cast<float>(WheelDelta) / WHEEL_DELTA;
+}
+
+float FInputManager::GetMouseWheelScroll()
+{
+	return WheelMoveAccumLast;
+}
+
 FVector2 FInputManager::GetMousePosition() const
 {
 	return CurrentMousePosition;
@@ -120,3 +132,4 @@ bool FInputManager::IsPrevKeyDown(uint32 Key) const
 	}
 	return PreviousKeyStates[Key];
 }
+

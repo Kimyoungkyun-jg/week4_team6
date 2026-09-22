@@ -22,12 +22,18 @@ public:
 	[[nodiscard]] bool IsKeyJustPressed(uint32 Key) const;
 	[[nodiscard]] bool IsKeyJustReleased(uint32 Key) const;
 
+	[[nodiscard]] bool IsWheelDown(uint32 Key) const;
+	[[nodiscard]] bool IsWheelUp(uint32 Key) const;
+
 	[[nodiscard]] bool IsMouseDown(EMouseButton Button) const;
 	[[nodiscard]] FVector2 GetMousePosition() const;
 	[[nodiscard]] FVector2 GetMouseDelta() const;
 	void OnMouseMove(FVector2 Position);
 	void OnMouseButtonDown(EMouseButton Button, FVector2 Position);
 	void OnMouseButtonUp(EMouseButton Button, FVector2 Position);
+
+	void OnMouseWheelScroll(int16 WheelDelta);
+	float GetMouseWheelScroll();
 
 	FInputManager(const FInputManager&) = delete;
 	FInputManager& operator=(const FInputManager&) = delete;
@@ -51,6 +57,9 @@ private:
 	bool bMouseRightPressed = false;
 	bool bMouseMiddlePressed = false;
 	FVector2 MouseDelta{ 0.0f, 0.0f };
+
+	float WheelMoveAccum = 0.f;
+	float WheelMoveAccumLast = 0.f;
 };
 
 enum class EMouseButton : uint8
