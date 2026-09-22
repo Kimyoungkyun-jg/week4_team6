@@ -550,7 +550,9 @@ bool FRenderResourceLibrary::Initialize(FRenderer& Renderer) {
 
 TSharedPtr<FMaterial> FRenderResourceLibrary::CreateAndRegisterMaterialFromInfo(const FObjMaterialInfo& Info) {
     // Todo: Bin - 모든 OBJ 머티리얼 이름은 전역적으로 유일하므로 이름을 등록 키로 사용한다.
-    const FString& MaterialKey = Info.MaterialName;
+    FString MaterialKey = Info.MaterialName;
+    std::transform(MaterialKey.begin(), MaterialKey.end(), MaterialKey.begin(), ::tolower);
+
     if (auto ExistingMtl = GetMaterial(MaterialKey))
     {
         return ExistingMtl;

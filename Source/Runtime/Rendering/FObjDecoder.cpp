@@ -807,7 +807,7 @@ void FObjDecoder::ParseMtlLine(std::string_view Line)
 	{
 		Material.AlphaTextureName = ParseTexturePath(Line);
 	}
-	else if (Keyword == "map_bump" || Keyword == "bump") // 범프 맵
+	else if (Keyword == "map_bump" || Keyword == "map_Bump" || Keyword == "bump") // 범프 맵
 	{
 		Material.NormalTextureName = ParseTexturePath(Line);
 	}
