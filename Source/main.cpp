@@ -14,7 +14,10 @@
 #include <Windows.h>
 #include <windowsx.h>
 
-#include "ThirdParty/stb/stb_image.h"
+#include "ThirdParty/DirectXTK/Inc/DDSTextureLoader.h"
+#include "ThirdParty/DirectXTK/Inc/WICTextureLoader.h"
+#include <d3dcompiler.h>
+#include <objbase.h>
 #include "Runtime/Rendering/FObjDecoder.h"
 
 
@@ -40,6 +43,10 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
+  struct FComScope {
+    HRESULT Result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    ~FComScope() { if (SUCCEEDED(Result)) CoUninitialize(); }
+  } ComScope;
   HWND SplashWindow = nullptr;
   HWND Window = CreateWindowHandle(hInstance, SplashWindow);
   if (!Window) {
@@ -52,12 +59,18 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
   FRenderer Renderer;
   if (!Renderer.Initialize(Window)) {
+    if (SplashWindow) DestroyWindow(SplashWindow);
+    MessageBoxW(Window, L"Failed to initialize Direct3D.", L"Startup error", MB_OK | MB_ICONERROR);
     return -1;
   }
   FRenderView RenderView(Renderer);
 
   FRenderResourceLibrary &RenderResources = FRenderResourceLibrary::Get();
   if (!RenderResources.Initialize(Renderer)) {
+    if (SplashWindow) DestroyWindow(SplashWindow);
+    const auto& Logs = FLogManager::Get().GetLogs();
+    const FString Detail = Logs.empty() ? "Resource initialization failed." : Logs.back();
+    MessageBoxA(Window, Detail.c_str(), "Startup error", MB_OK | MB_ICONERROR);
     return -1;
   }
 
@@ -161,70 +174,131 @@ RECT ToWindowRect(const FWindowLayout& Layout, DWORD Style, DWORD ExStyle) {
 
 HWND ShowLoadingWindow(HINSTANCE hInstance)
 {
-    int ImageW = 0, ImageH = 0, Channels = 0;
-    stbi_uc* Pixels = stbi_load("./Resources/Textures/LoadingImage.png",
-        &ImageW, &ImageH, &Channels, 4);
-    if (!Pixels)
+    const auto ResourcesDir = GetResourcesDirectory();
+    if (ResourcesDir.empty()) return nullptr;
+
+    // DDS uses the GPU decoder; PNG/JPG use WIC. The splash is optional.
+    const auto WindowLayout = GetWindowLayout();
+    WNDCLASSW SplashClass{};
+    SplashClass.lpfnWndProc = DefWindowProcW;
+    SplashClass.hInstance = hInstance;
+    SplashClass.lpszClassName = L"JungleSplash";
+    RegisterClassW(&SplashClass);
+    constexpr DWORD Style = WS_POPUP;
+    constexpr DWORD ExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+    const RECT Bounds = ToWindowRect(WindowLayout, Style, ExStyle);
+    HWND Splash = CreateWindowExW(ExStyle, SplashClass.lpszClassName, L"", Style,
+        Bounds.left, Bounds.top, Bounds.right - Bounds.left, Bounds.bottom - Bounds.top,
+        nullptr, nullptr, hInstance, nullptr);
+    if (!Splash) return nullptr;
+
+    auto Fail = [&]() -> HWND { DestroyWindow(Splash); return nullptr; };
+    try
     {
-        return nullptr;
-    }
+        DXGI_SWAP_CHAIN_DESC Desc{};
+        Desc.BufferDesc.Width = WindowLayout.Width;
+        Desc.BufferDesc.Height = WindowLayout.Height;
+        Desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        Desc.SampleDesc.Count = 1;
+        Desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        Desc.BufferCount = 1;
+        Desc.OutputWindow = Splash;
+        Desc.Windowed = TRUE;
+        Microsoft::WRL::ComPtr<ID3D11Device> Device;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> Context;
+        Microsoft::WRL::ComPtr<IDXGISwapChain> SwapChain;
+        if (FAILED(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE,
+            nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &Desc, &SwapChain,
+            &Device, nullptr, &Context))) return Fail();
 
-    // stb 는 RGBA 순서, Windows DIB 는 BGRA 순서라 R/B 를 맞바꾼다.
-    for (int i = 0; i < ImageW * ImageH; ++i)
+        Microsoft::WRL::ComPtr<ID3D11Resource> Resource;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> Image;
+        for (const auto* Extension : { L".dds", L".png", L".jpg" })
+        {
+            const auto File = ResourcesDir / L"Textures" / (std::wstring(L"LoadingImage") + Extension);
+            std::error_code Error;
+            if (!std::filesystem::is_regular_file(File, Error)) continue;
+            Resource.Reset();
+            Image.Reset();
+            const HRESULT Result = std::wstring_view(Extension) == L".dds"
+                ? DirectX::CreateDDSTextureFromFile(Device.Get(), File.c_str(), &Resource, &Image)
+                : DirectX::CreateWICTextureFromFile(Device.Get(), File.c_str(), &Resource, &Image);
+            if (SUCCEEDED(Result)) break;
+            UE_LOG_WARN("[Splash] Failed to load %s (HRESULT=0x%08lX)",
+                File.string().c_str(), static_cast<unsigned long>(Result));
+            Image.Reset();
+        }
+        if (!Image) return Fail();
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
+        if (FAILED(Resource.As(&Texture))) return Fail();
+        D3D11_TEXTURE2D_DESC ImageDesc{};
+        Texture->GetDesc(&ImageDesc);
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> BackBuffer;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> Target;
+        if (FAILED(SwapChain->GetBuffer(0, IID_PPV_ARGS(&BackBuffer)))
+            || FAILED(Device->CreateRenderTargetView(BackBuffer.Get(), nullptr, &Target))) return Fail();
+        Context->OMSetRenderTargets(1, Target.GetAddressOf(), nullptr);
+        const float Black[] = { 0, 0, 0, 1 };
+        Context->ClearRenderTargetView(Target.Get(), Black);
+        D3D11_VIEWPORT Viewport{};
+        Viewport.Width = static_cast<float>(WindowLayout.Width);
+        Viewport.Height = static_cast<float>(WindowLayout.Height);
+        Viewport.MaxDepth = 1;
+        Context->RSSetViewports(1, &Viewport);
+        const LONG Height = static_cast<LONG>(WindowLayout.Height * 0.3f);
+        const LONG Width = static_cast<LONG>(static_cast<double>(Height) * ImageDesc.Width / ImageDesc.Height);
+        const LONG Left = (WindowLayout.Width - Width) / 2;
+        const LONG Top = (WindowLayout.Height - Height) / 2;
+        const RECT Destination{ Left, Top, Left + Width, Top + Height };
+        // Built-in splash shaders do not depend on the packaged Shader folder.
+        constexpr char Shader[] = R"(
+            struct VOut { float4 position : SV_Position; float2 uv : TEXCOORD0; };
+            VOut VS(uint id : SV_VertexID) {
+                VOut result;
+                result.uv = float2((id << 1) & 2, id & 2);
+                result.position = float4(result.uv * float2(2, -2) + float2(-1, 1), 0, 1);
+                return result;
+            }
+            Texture2D image : register(t0);
+            SamplerState imageSampler : register(s0);
+            float4 PS(VOut input) : SV_Target { return image.Sample(imageSampler, input.uv); }
+        )";
+        Microsoft::WRL::ComPtr<ID3DBlob> VSCode, PSCode;
+        if (FAILED(D3DCompile(Shader, sizeof(Shader), nullptr, nullptr, nullptr,
+            "VS", "vs_4_0", 0, 0, &VSCode, nullptr))
+            || FAILED(D3DCompile(Shader, sizeof(Shader), nullptr, nullptr, nullptr,
+                "PS", "ps_4_0", 0, 0, &PSCode, nullptr))) return Fail();
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> VS;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> PS;
+        if (FAILED(Device->CreateVertexShader(VSCode->GetBufferPointer(), VSCode->GetBufferSize(), nullptr, &VS))
+            || FAILED(Device->CreatePixelShader(PSCode->GetBufferPointer(), PSCode->GetBufferSize(), nullptr, &PS))) return Fail();
+        D3D11_SAMPLER_DESC SamplerDesc{};
+        SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        SamplerDesc.AddressU = SamplerDesc.AddressV = SamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        SamplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+        Microsoft::WRL::ComPtr<ID3D11SamplerState> Sampler;
+        if (FAILED(Device->CreateSamplerState(&SamplerDesc, &Sampler))) return Fail();
+        Viewport.TopLeftX = static_cast<float>(Destination.left);
+        Viewport.TopLeftY = static_cast<float>(Destination.top);
+        Viewport.Width = static_cast<float>(Width);
+        Viewport.Height = static_cast<float>(Height);
+        Context->RSSetViewports(1, &Viewport);
+        Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        Context->VSSetShader(VS.Get(), nullptr, 0);
+        Context->PSSetShader(PS.Get(), nullptr, 0);
+        Context->PSSetSamplers(0, 1, Sampler.GetAddressOf());
+        Context->PSSetShaderResources(0, 1, Image.GetAddressOf());
+        Context->Draw(3, 0);
+        ShowWindow(Splash, SW_SHOWNOACTIVATE);
+        if (FAILED(SwapChain->Present(0, 0))) return Fail();
+        return Splash;
+    }
+    catch (const std::exception& Error)
     {
-        stbi_uc* P = Pixels + i * 4;
-        const int A = P[3];
-        const stbi_uc R = static_cast<stbi_uc>(P[0] * A / 255);
-        const stbi_uc G = static_cast<stbi_uc>(P[1] * A / 255);
-        const stbi_uc B = static_cast<stbi_uc>(P[2] * A / 255);
-        P[0] = B; P[1] = G; P[2] = R; P[3] = 255;
+        UE_LOG_WARN("[Splash] Skipped: %s", Error.what());
+        return Fail();
     }
-
-    const FWindowLayout WindowLayout = GetWindowLayout();
-
-    constexpr DWORD SplashStyle = WS_POPUP | WS_VISIBLE;
-    constexpr DWORD SplashExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
-   
-    WNDCLASSW splashClass = { 0, DefWindowProcW, 0, 0, 0, 0, 0, 0, 0, L"JungleSplash" };
-    RegisterClassW(&splashClass);
-
-    const RECT WindowRect = ToWindowRect(WindowLayout, SplashStyle, SplashExStyle);
-
-    HWND splashWnd = CreateWindowExW(SplashExStyle, L"JungleSplash", L"", SplashStyle,
-        WindowRect.left, WindowRect.top, WindowRect.right - WindowRect.left, 
-        WindowRect.bottom - WindowRect.top, nullptr, nullptr, hInstance, nullptr);
-
-    HDC dc = GetDC(splashWnd);
-
-    // 검은 배경
-    RECT full = { 0, 0, WindowLayout.Width, WindowLayout.Height};
-    FillRect(dc, &full, (HBRUSH)GetStockObject(BLACK_BRUSH));
-
-    // 로딩이미지를 비율 유지해서 가운데. 화면 높이의 30% 로 맞춘다
-    const int drawH = static_cast<int>(WindowLayout.Height * 0.3f);
-    const int drawW = drawH * ImageW / ImageH;
-    const int drawX = (WindowLayout.Width - drawW) / 2;
-    const int drawY = (WindowLayout.Height - drawH) / 2;
-
-    BITMAPINFO Info{};
-    Info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    Info.bmiHeader.biWidth = ImageW;
-    Info.bmiHeader.biHeight = -ImageH; // 음수 = 위에서 아래로 저장된 이미지
-    Info.bmiHeader.biPlanes = 1;
-    Info.bmiHeader.biBitCount = 32;
-    Info.bmiHeader.biCompression = BI_RGB;
-
-    SetStretchBltMode(dc, HALFTONE);
-    SetBrushOrgEx(dc, 0, 0, nullptr);
-    StretchDIBits(dc,
-        drawX, drawY, drawW, drawH,
-        0, 0, ImageW, ImageH,
-        Pixels, &Info, DIB_RGB_COLORS, SRCCOPY);
-
-    ReleaseDC(splashWnd, dc);
-    stbi_image_free(Pixels);
-
-    return splashWnd;
 }
 
 // TODO: Resizing 처리

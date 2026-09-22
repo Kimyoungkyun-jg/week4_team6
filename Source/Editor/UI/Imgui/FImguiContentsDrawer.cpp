@@ -4,6 +4,7 @@
 #include "ThirdParty/Imgui/imgui_impl_dx11.h"
 #include "ThirdParty/Imgui/imgui_impl_win32.h"
 #include "Runtime/Core/FString.h"
+#include "Runtime/Core/Log.h"
 #include "Runtime/Engine/FRenderView.h"
 #include "Runtime/Rendering/FRenderResourceLibrary.h"
 #include "Runtime/Rendering/FRenderer.h"
@@ -21,13 +22,35 @@ constexpr uint32_t HashStr(const char* str, uint32_t hash = 2166136261u)
 
 FImguiContentsDrawer::FImguiContentsDrawer() : LeftPanelWidth(200.0f)
 {
-	RootPath = std::filesystem::current_path() / "Resources";
+	RootPath = GetResourcesDirectory();
 	CurrentPath = RootPath;
+
+	// These folders expose in-memory assets and must exist before navigation.
+	if (!RootPath.empty())
+	{
+		for (const auto* FolderName : { L"StaticMesh", L"Materials" })
+		{
+			const auto FolderPath = RootPath / FolderName;
+			std::error_code Error;
+			std::filesystem::create_directories(FolderPath, Error);
+			if (Error)
+			{
+				UE_LOG_WARN("[Content Drawer] Failed to create folder: %s (%s)",
+					FolderPath.string().c_str(), Error.message().c_str());
+			}
+		}
+	}
 }
 
 void FImguiContentsDrawer::Process(FEditor& Editor)
 {
 	ImGui::Begin("Content Drawer");
+	if (RootPath.empty())
+	{
+		ImGui::TextUnformatted("Resources directory not found.");
+		ImGui::End();
+		return;
+	}
 
 	// GetContentRegionAvail은 Begin 다음에 불러야 이 창의 남은 영역이 나온다.
 	// Begin 이전에 부르면 직전 창의 값이라 자식 패널이 창 밖으로 삐져나간다.

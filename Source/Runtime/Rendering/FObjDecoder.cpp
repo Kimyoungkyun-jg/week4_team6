@@ -22,8 +22,10 @@
 	// 에셋 폴더는 실행 파일 기준으로 잡는다.
 std::filesystem::path FObjDecoder::GetAssetDir()
 {
-	const std::filesystem::path ExeDir(GetExecutableDirectory());
-	return ExeDir.parent_path().parent_path().parent_path() / "Resources" / "Assets";
+	const auto ResourcesDir = GetResourcesDirectory();
+	return ResourcesDir.empty()
+		? std::filesystem::path{}
+		: ResourcesDir / L"Assets";
 }
 
 bool FObjDecoder::IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath)
@@ -42,7 +44,10 @@ bool FObjDecoder::ResolveExistingFile(std::string_view FileName, std::filesystem
 
 	if (!FilePath.is_absolute())
 	{
-		FilePath = GetAssetDir() / FilePath;
+		const auto AssetDir = GetAssetDir();
+		if (AssetDir.empty())
+			return false;
+		FilePath = AssetDir / FilePath;
 	}
 
 	std::error_code Ec;
@@ -63,6 +68,11 @@ FString FObjDecoder::ReadFileToString(std::string_view FileName)
 	if (!FilePath.is_absolute())
 	{
 		const std::filesystem::path AssetDir = GetAssetDir();
+		if (AssetDir.empty())
+		{
+			UE_LOG_WARN("FObjDecoder: Resources directory not found.");
+			return {};
+		}
 		FilePath = AssetDir / FileName;
 
 		if (!IsUnder(FilePath, AssetDir))
@@ -1446,12 +1456,7 @@ void FObjDecoder::ResolveSectionMaterials(FObjModelData& Model) const
 // Todo: Bin - Materials.bin은 건드리지 않고 이 OBJ의 캐시만 처리한다.
 bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel)
 {
-    if (!bMaterialsLoaded)
-    {
-        UE_LOG_WARN("[OBJ Cache] LoadMaterials를 먼저 호출해야 합니다.");
-
-        return false;
-    }
+    // Missing MTL files are allowed; ResolveSectionMaterials uses Simple.
 
     FObjModelData Loaded;
     if (LoadObjModelBinary(BinaryPath, Loaded) && Loaded.PathFileName == ObjPath)

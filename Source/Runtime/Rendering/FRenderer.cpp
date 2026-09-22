@@ -11,6 +11,8 @@
 #include "Runtime/Rendering/FTexture.h"
 #include "ShaderConstants.h"
 #include "ThirdParty/DirectXTK/Inc/DDSTextureLoader.h"
+#include "ThirdParty/DirectXTK/Inc/WICTextureLoader.h"
+#include <cwctype>
 #include "Vertices.h"
 #include "FPreviewRenderTarget.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
@@ -456,10 +458,16 @@ FRenderer::CreateRenderPipeline(const FRenderPipelineDesc &Desc,
 TSharedPtr<FTexture> FRenderer::CreateTexture(const wchar_t *path) {
   auto Texture = TSharedPtr<FTexture>{new FTexture()};
   Microsoft::WRL::ComPtr<ID3D11Resource> TempResource;
-  HRESULT hr = DirectX::CreateDDSTextureFromFile(
-      Device.Get(), path, TempResource.GetAddressOf(),
-      Texture->TextureSRV.GetAddressOf());
+  std::wstring Extension = std::filesystem::path(path).extension().wstring();
+  std::transform(Extension.begin(), Extension.end(), Extension.begin(), ::towlower);
+  HRESULT hr = Extension == L".dds"
+      ? DirectX::CreateDDSTextureFromFile(Device.Get(), path,
+          TempResource.GetAddressOf(), Texture->TextureSRV.GetAddressOf())
+      : DirectX::CreateWICTextureFromFile(Device.Get(), path,
+          TempResource.GetAddressOf(), Texture->TextureSRV.GetAddressOf());
   if (FAILED(hr)) {
+    UE_LOG_WARN("[Texture Loader] Failed: %s (HRESULT=0x%08lX)",
+        std::filesystem::path(path).string().c_str(), static_cast<unsigned long>(hr));
     return nullptr;
   }
 
@@ -889,8 +897,10 @@ void FRenderer::RenderOutline(FVector2 TopLeftUV, FVector2 LengthUV) {
                                       DepthStencilSRV.Get()};
   Context->PSSetShaderResources(0, 2, SRVs);
 
-  FRenderResourceLibrary::Get().GetPipeline(FName("PostProcess"))->Bind(*Context.Get());
-  Context->Draw(3, 0);
+  if (auto Pipeline = FRenderResourceLibrary::Get().GetPipeline(FName("PostProcess"))) {
+    Pipeline->Bind(*Context.Get());
+    Context->Draw(3, 0);
+  }
 
   // 슬롯 해제
   ID3D11ShaderResourceView *NullSRVs[] = {nullptr, nullptr};

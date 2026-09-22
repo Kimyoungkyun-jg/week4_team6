@@ -32,6 +32,25 @@ inline FWString GetExecutableDirectory() {
     return std::filesystem::path(Buffer).parent_path();
 }
 
+inline std::filesystem::path GetResourcesDirectory()
+{
+    const std::filesystem::path ExeDir(GetExecutableDirectory());
+    const std::filesystem::path Candidates[] = {
+        ExeDir / L"Resources",
+        ExeDir.parent_path().parent_path().parent_path() / L"Resources"
+    };
+
+    for (const auto& Candidate : Candidates)
+    {
+        std::error_code Error;
+        if (std::filesystem::is_directory(Candidate, Error))
+        {
+            return Candidate;
+        }
+    }
+    return {};
+}
+
 #include "Runtime/Engine/ShowFlags.h"
 
 class FRenderer final {

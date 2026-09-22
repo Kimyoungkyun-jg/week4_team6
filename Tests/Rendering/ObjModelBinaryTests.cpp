@@ -209,7 +209,19 @@ int main()
         Check(RecoveryDecoder.LoadMaterials((Fixture / "Common.mtl").string(), CommonMaterialCache.string(), LoadedMaterials), "corrupt material cache recovery");
         Check(RecoveryDecoder.LoadObj((Fixture / "First.obj").string(), (Fixture / "First.bin").string(), FirstMesh), "corrupt OBJ cache recovery");
 
-        std::cout << "PASS: serialization, corruption, file IO, OBJ/MTL cache combinations, shared material references\n";
+        // Optional MTL and cache output must not prevent geometry from loading.
+        WriteText(Fixture / "NoMaterial.obj", "mtllib Missing.mtl\n" + Geometry);
+        FObjDecoder NoMaterialDecoder;
+        FObjModelData NoMaterialMesh;
+        Check(NoMaterialDecoder.LoadObj((Fixture / "NoMaterial.obj").string(),
+            (Fixture / "MissingCacheDirectory" / "NoMaterial.bin").string(), NoMaterialMesh),
+            "missing MTL and unwritable cache preserve OBJ geometry");
+        Check(!NoMaterialMesh.Vertices.empty() && !NoMaterialMesh.Sections.empty(),
+            "geometry retained without MTL");
+        Check(NoMaterialMesh.Sections.front().MaterialName == "Simple",
+            "missing MTL uses Simple material");
+
+        std::cout << "PASS: serialization, corruption, file IO, OBJ/MTL cache combinations, shared material references, missing MTL/cache fallback\n";
         return 0;
     }
     catch (const std::exception& Error)

@@ -672,8 +672,10 @@
       <Message Condition="'$(Configuration)|$(Platform)'=='ObjViewerDebug|x64'">Convert Png to dds</Message>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>if exist "$(SolutionDir)Resources\Textures" xcopy /Y /D /I /E "$(SolutionDir)Resources\Textures\" "$(OutDir)Textures\" &amp; if exist "$(SolutionDir)Resources\Edit" xcopy /Y /D /I /E "$(SolutionDir)Resources\Edit\" "$(OutDir)Edit\" &amp; if exist "$(SolutionDir)Resources\Textures\Fonts" xcopy /Y /D /I /E "$(SolutionDir)Resources\Textures\" "$(OutDir)Textures\" &amp; if exist "$(SolutionDir)Fonts" xcopy /Y /D /I /E "$(SolutionDir)Fonts\" "$(OutDir)Fonts\"</Command>
-      <Message>Copying textures to output directory...</Message>
+      <Command>if exist "$(SolutionDir)Resources\Textures" xcopy /Y /D /I /E "$(SolutionDir)Resources\Textures\" "$(OutDir)Textures\" &amp; if exist "$(SolutionDir)Resources\Edit" xcopy /Y /D /I /E "$(SolutionDir)Resources\Edit\" "$(OutDir)Edit\" &amp; if exist "$(SolutionDir)Resources\Textures\Fonts" xcopy /Y /D /I /E "$(SolutionDir)Resources\Textures\" "$(OutDir)Textures\" &amp; if exist "$(SolutionDir)Fonts" xcopy /Y /D /I /E "$(SolutionDir)Fonts\" "$(OutDir)Fonts\"
+xcopy /Y /D /I /E "$(ProjectDir)Resources" "$(OutDir)Resources"
+if errorlevel 1 exit /b 1</Command>
+      <Message>Copying resources to output directory...</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
 </Project>

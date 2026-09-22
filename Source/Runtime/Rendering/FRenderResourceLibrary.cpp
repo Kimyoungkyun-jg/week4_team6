@@ -7,6 +7,7 @@
 #include "FRenderer.h"
 #include "FTexture.h"
 #include "Runtime/Core/TArray.h"
+#include "Runtime/Core/Log.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Engine/FRenderView.h"
@@ -477,9 +478,22 @@ bool FRenderResourceLibrary::InitializePipelines() {
     FRenderer& Renderer = *RendererRef;
 
     // 솔리드 및 와이어프레임 파이프라인 개별 생성
-    CreateSolidWireframePipeline();
-    CreateOutlinePipeline();
-    CreatePostProcessPipeline();
+    const std::filesystem::path ShaderRoot = std::filesystem::path(GetExecutableDirectory()) / L"Shader";
+    auto RequireShader = [&](const wchar_t* Name) {
+        const auto File = ShaderRoot / Name;
+        std::error_code Error;
+        if (std::filesystem::is_regular_file(File, Error)) return true;
+        UE_LOG_ERROR("[Shader Loader] Required file missing: %s", File.string().c_str());
+        return false;
+    };
+    for (const auto& Entry : pipelineTable) {
+        if (!RequireShader(Entry.VertexShader) || !RequireShader(Entry.PixelShader)) return false;
+    }
+    if (!RequireShader(L"ScreenQuadVS.cso") || !RequireShader(L"OutlinePostProcessPS.cso")) return false;
+    if (!CreateSolidWireframePipeline() || !CreateOutlinePipeline() || !CreatePostProcessPipeline()) {
+        UE_LOG_ERROR("[Shader Loader] Failed to initialize built-in pipelines.");
+        return false;
+    }
 
     const FWString Path = GetExecutableDirectory();
 
@@ -492,7 +506,9 @@ bool FRenderResourceLibrary::InitializePipelines() {
         const FWString PsPath = Path + L"/Shader/" + Entry.PixelShader;
 
         if (!std::filesystem::exists(VsPath) || !std::filesystem::exists(PsPath)) {
-            continue;
+            UE_LOG_ERROR("[Shader Loader] Required shader missing: %s / %s",
+                std::filesystem::path(VsPath).string().c_str(), std::filesystem::path(PsPath).string().c_str());
+            return false;
         }
 
         FRenderPipelineDesc PipelineDesc = {
@@ -508,6 +524,8 @@ bool FRenderResourceLibrary::InitializePipelines() {
         TSharedPtr<FRenderPipeline> Pipeline =
             Renderer.CreateRenderPipeline(PipelineDesc, EViewModeIndex::VMI_Lit);
         if (!Pipeline) {
+            UE_LOG_ERROR("[Shader Loader] Pipeline creation failed: %s / %s",
+                std::filesystem::path(VsPath).string().c_str(), std::filesystem::path(PsPath).string().c_str());
             return false;
         }
 
@@ -1464,16 +1482,10 @@ bool FRenderResourceLibrary::CreateEditTextures() {
     FRenderer& Renderer = *RendererRef;
 
     const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot =
-        ExeDir.parent_path().parent_path().parent_path();
-
-    TArray<std::filesystem::path> SearchRoots = {
-        ProjectRoot / L"Resources" / L"Edit",
-        std::filesystem::current_path() / L"Resources" / L"Edit",
-        ProjectRoot / L"Edit",
-        std::filesystem::current_path() / L"Edit",
-        ExeDir / L"Edit",
-    };
+    const auto ResourcesDir = GetResourcesDirectory();
+    TArray<std::filesystem::path> SearchRoots;
+    if (!ResourcesDir.empty()) SearchRoots.push_back(ResourcesDir / L"Edit");
+    SearchRoots.push_back(ExeDir / L"Edit");
 
     for (const auto& Root : SearchRoots) {
         std::error_code Ec;
@@ -1531,16 +1543,10 @@ bool FRenderResourceLibrary::CreateTextures() {
     FRenderer& Renderer = *RendererRef;
 
     const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot =
-        ExeDir.parent_path().parent_path().parent_path();
-
-    TArray<std::filesystem::path> SearchRoots = {
-        ProjectRoot / L"Resources" / L"Textures",
-        std::filesystem::current_path() / L"Resources" / L"Textures",
-        ProjectRoot / L"Textures",
-        std::filesystem::current_path() / L"Textures",
-        ExeDir / L"Textures",
-    };
+    const auto ResourcesDir = GetResourcesDirectory();
+    TArray<std::filesystem::path> SearchRoots;
+    if (!ResourcesDir.empty()) SearchRoots.push_back(ResourcesDir / L"Textures");
+    SearchRoots.push_back(ExeDir / L"Textures");
 
     for (const auto& Root : SearchRoots) {
         std::error_code Ec;
@@ -1593,49 +1599,38 @@ bool FRenderResourceLibrary::CreateObjMeshes()
     // Todo: Make as static constant, move to header
     FRenderer& Renderer = *RendererRef;
     const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot = ExeDir.parent_path().parent_path().parent_path();
-    const std::filesystem::path AssetRoot = ProjectRoot / L"Resources" / L"Assets";
+    const auto ResourcesDir = GetResourcesDirectory();
+    if (ResourcesDir.empty())
+    {
+        UE_LOG_WARN("[Asset Loader] Resources directory not found: %s", ExeDir.string().c_str());
+        return true;
+    }
+    const std::filesystem::path AssetRoot = ResourcesDir / L"Assets";
     std::error_code Error;
-    /*
     if (!std::filesystem::exists(AssetRoot, Error)
         || Error
         || !std::filesystem::is_directory(AssetRoot, Error)
         || Error)
     {
         UE_LOG_WARN("[OBJ Loader] Assets 폴더를 찾을 수 없습니다: %s", AssetRoot.string().c_str());
-        return false;
+        return true;
     }
-    */
-
     const std::filesystem::path BinaryDirectory = AssetRoot / L"Bins";
     std::filesystem::create_directories(BinaryDirectory, Error);
     if (Error)
     {
         UE_LOG_WARN("[Asset Loader] Bins 폴더 생성 실패: %s", BinaryDirectory.string().c_str());
-        return false;
     }
 
     TArray<std::filesystem::path> ObjFiles;
     FObjDecoder Decoder;
 
     std::filesystem::recursive_directory_iterator Entries(AssetRoot, Error);
-    /*
     if (Error)
     {
         UE_LOG_WARN("[OBJ Loader] Assets 폴더 탐색 실패: %s", AssetRoot.string().c_str());
-        return false;
+        return true;
     }
-    */
-
-    /*
-    TArray<std::filesystem::path> SearchRoots = {
-        ProjectRoot / L"Resources" / L"Assets",
-        std::filesystem::current_path() / L"Resources" / L"Assets",
-        ProjectRoot / L"Assets",
-        std::filesystem::current_path() / L"Assets",
-        ExeDir / L"Assets",
-    };
-    */
 
     for (const auto& Entry : Entries)
     {
@@ -1727,13 +1722,11 @@ bool FRenderResourceLibrary::CreateObjMeshes()
         };
 
         TSharedPtr<FStaticMesh> StaticMesh = Renderer.CreateMesh(Desc);
-        /*
         if (!StaticMesh)
         {
             UE_LOG_WARN("[OBJ Loader] GPU 메시 생성 실패: %s", ObjPath.c_str());
             continue;
         }
-        */
         
         StaticMesh->PathFileName = ObjFile.string();
         StaticMesh->MeshId = MeshKey;
@@ -1802,17 +1795,14 @@ FRenderResourceLibrary::GetOrCreateMesh(const FName& ID,
 
 bool FRenderResourceLibrary::CreateFonts() {
     const std::filesystem::path ExeDir(GetExecutableDirectory());
-    const std::filesystem::path ProjectRoot =
-        ExeDir.parent_path().parent_path().parent_path();
-
-    TArray<std::filesystem::path> SearchRoots = {
-        ProjectRoot / L"Fonts",
-        std::filesystem::current_path() / L"Fonts",
-        ProjectRoot / L"Resources" / L"Textures" / L"Fonts",
-        std::filesystem::current_path() / L"Resources" / L"Textures" / L"Fonts",
-        ExeDir / L"Fonts",
-        ExeDir / L"Textures" / L"Fonts",
-    };
+    const auto ResourcesDir = GetResourcesDirectory();
+    TArray<std::filesystem::path> SearchRoots = { ExeDir / L"Fonts" };
+    if (!ResourcesDir.empty()) {
+        SearchRoots.push_back(ResourcesDir / L"Fonts");
+        SearchRoots.push_back(ResourcesDir / L"Textures" / L"Fonts");
+        SearchRoots.push_back(ResourcesDir.parent_path() / L"Fonts");
+    }
+    SearchRoots.push_back(ExeDir / L"Textures" / L"Fonts");
 
     for (const auto& Root : SearchRoots) {
         std::error_code Ec;
