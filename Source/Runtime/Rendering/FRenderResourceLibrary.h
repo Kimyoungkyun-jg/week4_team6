@@ -327,6 +327,9 @@ public:
 
   void UpdateMaterialThumbnail(const FString& MatKey);
   void UpdateMeshThumbnail(const FString& MatKey);
+
+  // 모든 obj 만드는 용도
+  bool CreateObjMeshes();
 private:
     bool InitializePipelines();
     bool CreateSolidWireframePipeline();
@@ -356,8 +359,7 @@ private:
     bool InitializeMaterials();
     bool CreateEditTextures();
 
-    // 모든 obj 만드는 용도
-    bool CreateObjMeshes();
+
 
     // 폰트 일괄 초기화
     bool CreateFonts();
