@@ -9,6 +9,7 @@
 #include "Editor/UI/Imgui/FImguiWorldOutliner.h"
 #include "Editor/UI/Imgui/FImguiContentsDrawer.h"
 #include "Editor/UI/Imgui/FImguiPreviewEditorWindow.h"
+#include "Editor/UI/Imgui/FImguiOverlayStat.h"
 #include "Runtime/Engine/FRenderView.h"
 #include "Runtime/Input/FCameraInputController.h"
 
@@ -29,6 +30,7 @@ class FEditorApplication final {
 	FImguiConsoleWindow ConsoleWindow;
 	FImguiWorldOutliner WorldOutliner;
 	FImguiContentsDrawer ContentsDrawer;
+	FImguiOverlayStat OverlayStat;
 	TArray<TSharedPtr<FImguiPreviewEditorWindow>> PreviewWindows;
 
 	FVisualizerRegistry VisualizerRegistry;

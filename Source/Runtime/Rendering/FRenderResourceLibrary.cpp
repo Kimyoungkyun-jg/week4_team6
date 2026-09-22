@@ -15,6 +15,7 @@
 #include "Runtime/Geometry/Sphere.h"
 #include "Runtime/Math/FVector.h"
 #include "Runtime/Rendering/FRenderer.h"
+#include "Runtime/Core/FStatRegistry.h"
 #include <cmath>
 #include <d3dcompiler.h>
 #include <numbers>
@@ -633,7 +634,9 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
     for (const auto& [Key, Mesh] : AllFStaticMeshMap) {
         if (!Mesh) continue;
 
-        // 이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
+        STATS.AddStaticMeshByte(Mesh->GetIndices().size() * sizeof(int32), Mesh->GetVertexCount() * sizeof(FVertexData));
+
+        //  이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
         if (AllUStaticMeshMap.find(Key) != AllUStaticMeshMap.end()) {
             continue;
         }

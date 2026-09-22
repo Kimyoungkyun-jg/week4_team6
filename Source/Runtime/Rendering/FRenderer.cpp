@@ -472,7 +472,7 @@ TSharedPtr<FTexture> FRenderer::CreateTexture(const wchar_t *path) {
   Texture->Texture2D->GetDesc(&desc);
   Texture->Width = desc.Width;
   Texture->Height = desc.Height;
-
+  
   return Texture;
 }
 

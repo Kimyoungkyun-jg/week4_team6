@@ -22,6 +22,7 @@
 #include "Runtime/Actors/TestTextActor.h"
 #include "Runtime/CoreUObject/UPlaneComp.h"
 #include "Runtime/CoreUObject/USphereComp.h"
+#include "Runtime/Core/FStatRegistry.h"
 
 #include "Editor/Visualizer/IVisualizer.h"
 
@@ -56,6 +57,8 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager, FRender
   this->CurrentScene = SceneManager->CurrentScene;
 
   Editor.Initialize(SceneManager);
+  STATS.Initialize();
+  STATS.Reset();
 
 #if IS_OBJ_VIEWER
 
@@ -147,6 +150,8 @@ void FEditorApplication::Tick(float DeltaTime) {
     PropertyWindow.Process(Editor);
     ConsoleWindow.Process(Editor);
     ContentsDrawer.Process(Editor);
+    OverlayStat.Process(Editor, DeltaTime);
+    STATS.Reset();
 
     for (const auto& Window : PreviewWindows)
     {
@@ -323,11 +328,10 @@ void FEditorApplication::Render() {
 
 void FEditorApplication::OnWindowSize(UINT Width, UINT Height) {
   // 뷰포트 종횡비 갱신
+  FVector2 WindowSize = FVector2(static_cast<float>(Width), static_cast<float>(Height));
+  STATS.UpdateWindowSize(WindowSize);
   for (auto &Viewport : Editor.GetViewports()) {
-    const FVector2 SizePixels =
-        Viewport.LengthUV *
-        FVector2{static_cast<float>(Width), static_cast<float>(Height)};
-
+    const FVector2 SizePixels = Viewport.LengthUV * WindowSize;
     auto &Camera = Viewport.ViewportCamera;
     Camera.Projection.Aspect = SizePixels.X / SizePixels.Y;
   }

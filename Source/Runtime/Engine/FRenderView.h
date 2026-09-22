@@ -8,6 +8,7 @@
 #include "Runtime/Rendering/FRenderQueue.h"
 #include "Runtime/Engine/FSceneView.h"
 #include <Editor\UI\Imgui\FImguiPreviewEditorWindow.h>
+#include "Runtime/Core/FStatRegistry.h"
 
 struct FCamera;
 class FGizmo;
