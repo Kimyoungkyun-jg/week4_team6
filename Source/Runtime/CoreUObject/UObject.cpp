@@ -2,6 +2,7 @@
 #include "Runtime/Engine/FArchive.h"
 #include "Runtime/CoreUObject/UClass.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "FUObjectArray.h"
 
 IMPLEMENT_ROOT_UCLASS(UObject)
 UCLASS_META(UObject, DisplayName, "Object")
@@ -12,6 +13,11 @@ void UObject::Initialize()
 
 void UObject::Release()
 {
+}
+
+void UObject::Destroy()
+{
+	FUObjectArray::Get().DestroyObject(this);
 }
 
 void UObject::Serialize(FArchive& Archive) const

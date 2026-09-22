@@ -21,6 +21,11 @@ FImguiPreviewEditorWindow::FImguiPreviewEditorWindow()
 	CameraController.CameraRotateSpeed = 0.5f;
 }
 
+FImguiPreviewEditorWindow::~FImguiPreviewEditorWindow()
+{
+	DestroyPreviewResource();
+}
+
 void FImguiPreviewEditorWindow::OpenPreview(UStaticMesh* InMesh, ImGuiID InDockID, EPrevType type)
 {
 	if (!InMesh)
@@ -260,6 +265,11 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 					{
 						if (auto OrigMesh = FRenderResourceLibrary::Get().GetUStaticMesh(ItemName))
 						{
+							if (TargetMesh.IsValid())
+							{
+								TargetMesh->Destroy();
+							}
+
 							OriginalMesh = OrigMesh;
 							TargetMesh = OrigMesh->ClonePreviewMesh();
 							TitleString = OriginalMesh->MeshId.ToString() + "###PreviewMeshEditor_" + OriginalMesh->MeshId.ToString();
@@ -334,6 +344,11 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		}
 	}
 	ImGui::End();
+
+	if (!bIsOpen)
+	{
+		DestroyPreviewResource();
+	}
 }
 
 void FImguiPreviewEditorWindow::SaveAsset()
@@ -397,6 +412,18 @@ void FImguiPreviewEditorWindow::SaveAsset()
 	}
 
 	bIsDirty = false;
+}
+
+void FImguiPreviewEditorWindow::DestroyPreviewResource()
+{
+	if (TargetMesh.IsValid())
+	{
+		TargetMesh->Destroy();
+	}
+
+	// 임시 머티리얼 인스턴스 해제
+	PreviewMaterialInstance.reset();
+	RenderTarget.Release();
 }
 
 void FImguiPreviewEditorWindow::ProcessViewportInput(FEditor& Editor, const ImVec2& ViewportPos, const ImVec2& ViewportSize, float DeltaTime)

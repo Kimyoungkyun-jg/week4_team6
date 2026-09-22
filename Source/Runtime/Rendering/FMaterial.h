@@ -72,8 +72,6 @@ private:
   TSharedPtr<FRenderPipeline> WireframePipeline;
 
   TSharedPtr<FTexture> Textures[static_cast<size_t>(EMaterialTextureSlot::Count)];
-
-
 };
 
 
