@@ -16,6 +16,7 @@ public:
 	[[nodiscard]] LARGE_INTEGER GetFrequency() { return Frequency; }
 	void Update();
 	void SetTargetFPS(float InTargetFPS) { TargetFPS = InTargetFPS; }
+	float GetTargetFPS() { return TargetFPS; }
 
 	FTimeManager(const FTimeManager&) = delete;
 	FTimeManager& operator=(const FTimeManager&) = delete;

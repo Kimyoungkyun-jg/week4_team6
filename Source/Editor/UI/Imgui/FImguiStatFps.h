@@ -39,7 +39,7 @@ struct FImguiStatFps final
 		std::snprintf(DeltaTimeBuf, sizeof(DeltaTimeBuf), "%.2f ms", DeltaTime);
 
 		ImDrawList* DrawList = ImGui::GetForegroundDrawList();
-		DrawList->AddText(Font, FontSize, ImVec2(PosPixel.X, PosPixel.Y), IM_COL32(0, 255, 0, 255), FpsBuf);
-		DrawList->AddText(Font, FontSize, ImVec2(PosPixel.X, PosPixel.Y + RowMargin), IM_COL32(0, 255, 0, 255), DeltaTimeBuf);
+		DrawList->AddText(Font, FontSize, ImVec2(PosPixel.X, PosPixel.Y), IM_COL32(75, 255, 75, 255), FpsBuf);
+		DrawList->AddText(Font, FontSize, ImVec2(PosPixel.X, PosPixel.Y + RowMargin), IM_COL32(75, 255, 75, 255), DeltaTimeBuf);
 	}
 };

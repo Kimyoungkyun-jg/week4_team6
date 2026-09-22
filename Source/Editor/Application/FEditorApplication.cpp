@@ -29,9 +29,6 @@
 void FEditorApplication::Initialize_ImguiWin32DX11(
     HWND &Window, ID3D11Device *Device, ID3D11DeviceContext *Context) {
   ImguiManager.Initialize_ImplWin32DX11(Window, Device, Context);
-
-
-
 }
 
 void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
@@ -42,6 +39,7 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
 
   Editor.Initialize(SceneManager);
   STATS.Initialize();
+  STATS.Reset();
 
   FEditorViewport PerspViewport;
   PerspViewport.TopLeftUV = {0.5f, 0.0f};
