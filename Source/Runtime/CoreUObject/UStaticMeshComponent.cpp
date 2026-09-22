@@ -83,7 +83,7 @@ TArray<FRenderData> UStaticMeshComponent::GetRenderDatas(const FCamera& Camera)
 
             if (bIsMovingUV)
             {
-                offset = fmodf(offset + 0.1f, 1.0f);
+                offset = fmodf(offset + UVSpeed, 1.0f);
                 rdata.Constants.UVOffset.X = offset;
             }
 

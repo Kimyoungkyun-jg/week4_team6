@@ -195,6 +195,11 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.32f, 1.0f));
 		}
 
+#if IS_OBJ_VIEWER
+
+		ImGui::PopStyleColor(2);
+
+#else
 		const std::string SaveBtnLabel = bIsDirty ? "Save *" : "Save";
 		const bool bSaveClicked = ImGui::Button(SaveBtnLabel.c_str(), ImVec2(65.0f, 0.0f));
 		ImGui::PopStyleColor(2);
@@ -207,6 +212,8 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 		{
 			SaveAsset();
 		}
+
+#endif
 
 		ImGui::SetNextItemWidth(200.0f);
 		if (prevType == EPrevType::Material)

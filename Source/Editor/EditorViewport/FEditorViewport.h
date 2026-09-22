@@ -33,8 +33,8 @@ public:
 	// 뷰포트 렌더 모드 및 쇼 플래그
 	EViewModeIndex ViewMode = EViewModeIndex::VMI_Lit;
 	uint64 ShowFlags = static_cast<uint64>(EEngineShowFlags::SF_Primitives) |
-	                   static_cast<uint64>(EEngineShowFlags::SF_BillboardText);
-
+		static_cast<uint64>(EEngineShowFlags::SF_BillboardText) |
+		static_cast<uint64>(EEngineShowFlags::SF_BoundBox);
 
 
 	void UpdateViewAndCtx(FLightConstants GlobalLight, AActor& SelectedActor, FTransform Transform, FGizmo& Gizmo, UTextInstanceComponent& Textcomp, FGrid& Grid, FVisualizerRegistry* Visual);

@@ -41,8 +41,6 @@ void FRenderer::Shutdown() {
     Context->Flush();
   }
 
-  CoUninitialize();
-
   LineBatcher.Shutdown();
 
   b0ConstantBuffer.Reset();
@@ -462,15 +460,12 @@ TSharedPtr<FTexture> FRenderer::CreateTexture(const wchar_t *path) {
       Device.Get(), path, TempResource.GetAddressOf(),
       Texture->TextureSRV.GetAddressOf());
   if (FAILED(hr)) {
-      hr = DirectX::CreateWICTextureFromFile(Device.Get(), path, TempResource.GetAddressOf(), Texture->TextureSRV.GetAddressOf());
-      if (FAILED(hr)) {
-          return nullptr;
-      }
+    return nullptr;
   }
 
   hr = TempResource.As(&Texture->Texture2D);
   if (FAILED(hr)) {
-       return nullptr;
+    return nullptr;
   }
 
   D3D11_TEXTURE2D_DESC desc;
@@ -680,13 +675,6 @@ bool FRenderer::InitializeConstantBuffers() {
   }
 
   return true;
-}
-
-bool InitializeTextureLoader() {
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    if (FAILED(hr))
-        return false;
-    return true;
 }
 
 void FRenderer::UpdateLightConstants(const FLightConstants &Constants,

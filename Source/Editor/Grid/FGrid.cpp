@@ -18,7 +18,7 @@
 void FGrid::DrawLine(FRenderer &Renderer, const FCamera &Camera) {
   auto &LineBatcher = Renderer.GetLineBatcher();
 
-  const int32 HalfLineCount = static_cast<int32>(500.0f / CellSize);
+  const int32 HalfLineCount = static_cast<int32>(2000.0f / CellSize);
   const float Extent = HalfLineCount * CellSize;
 
   const float SnapX = std::floor(Camera.Position.X / CellSize) * CellSize;

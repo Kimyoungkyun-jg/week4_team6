@@ -112,7 +112,9 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
         DrawGrid(*View.Camera, *EditorCtx.Grid);
     }
 
-    if (EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
+    const bool bShowBounds = (View.ShowFlags & static_cast<uint64>(EEngineShowFlags::SF_BoundBox)) != 0;
+
+    if (bShowBounds && EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
 
         UClass* ClassType = EditorCtx.SelectedMeshComp->GetClass();
         FVisualizerRegistry& Registry = *EditorCtx.VisualizerRegistry;
@@ -159,8 +161,8 @@ void FRenderView::DrawGrid(const FCamera& Camera, FGrid& Grid)
     FGridLineConstants Constants{};
     Constants.MVP = Camera.CreateViewProjectionMatrix();
     Constants.CameraPosition = Camera.Position;
-    Constants.FadeStartDistance = 3.0f;
-    Constants.FadeEndDistance = 75.0f;
+    Constants.FadeStartDistance = 300.0f;
+    Constants.FadeEndDistance = 500.0f;
     Renderer.FlushLineBatch(Constants, FName("Grid"));
 }
 

@@ -29,6 +29,7 @@ public:
     FName GetMaterial(int32 Slot = 0) const;
 
     bool bIsMovingUV = false;
+    float UVSpeed = 0.1f;
 
     virtual void Serialize(FArchive& Archive) const override;
     virtual void Deserialize(const FArchive& Archive) override;

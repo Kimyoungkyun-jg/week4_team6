@@ -13,5 +13,5 @@ enum class EViewModeIndex : uint8 {
 enum class EEngineShowFlags : uint64 {
   SF_Primitives = 1ULL << 0,
   SF_BillboardText = 1ULL << 1,
-
+  SF_BoundBox = 1ULL <<2,
 };

@@ -397,6 +397,7 @@ void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMe
 	// UV 애니메이션 토글
 	ImGui::Spacing();
 	ImGui::Checkbox("Animate UV (bIsMovingUV)", &StaticMeshComp.bIsMovingUV);
+	ImGui::SliderFloat("UV Speed", &StaticMeshComp.UVSpeed, -1.0f, 1.0f, "%.01f");
 }
 
 void FImguiPropertyWindow::ShowTransform(FEditor& Editor, USceneComponent& Comp, bool bIsRoot) const

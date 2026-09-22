@@ -144,6 +144,12 @@ void FEditorViewport::Process()
             ToggleShowFlag(EEngineShowFlags::SF_BillboardText);
         }
 
+        bool bBoundBox = HasShowFlag(EEngineShowFlags::SF_BoundBox);
+        if (ImGui::Checkbox("BoundBox", &bBoundBox))
+        {
+            ToggleShowFlag(EEngineShowFlags::SF_BoundBox);
+        }
+
         ImGui::EndPopup();
     }
 }
