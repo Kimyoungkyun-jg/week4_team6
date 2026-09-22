@@ -50,9 +50,6 @@ struct FObjObjectInfo
     FString Name;
 };
 
-// Todo: Bin - 바이너리 직렬화에 사용하는 바이트 저장소.
-class FBinArchive;
-
 // Cooked Data
 struct FObjModelData
 {
@@ -146,11 +143,13 @@ struct FSmoothingKeyHash
     }
 };
 
+using FVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
+using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHash>;
+
 // OBJ 디코더 클래스
 class FObjDecoder
 {
 public:
-    // Todo: Bin - 파싱/직렬화/역직렬화와 파일 로딩은 모두 FObjDecoder가 담당한다.
     bool LoadMaterials(const FString& AssetRoot);
     bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
     
@@ -158,11 +157,6 @@ public:
 
 private:
     bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
-    bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
-    bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
-
-    bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
-    bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
 
     bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
     bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
@@ -171,52 +165,25 @@ private:
     bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
     bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
 
-    using FVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
-    using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHash>;
-
-    static bool SerializeVector(FBinArchive& Archive, const FVector& Value);
-    static bool DeserializeVector(FBinArchive& Archive, FVector& Value);
-    static bool SerializeVertex(FBinArchive& Archive, const FVertexData& Value);
-    static bool DeserializeVertex(FBinArchive& Archive, FVertexData& Value);
-    static bool SerializeSection(FBinArchive& Archive, const FMeshSection& Value);
-    static bool DeserializeSection(FBinArchive& Archive, FMeshSection& Value);
-    static bool SerializeMaterial(FBinArchive& Archive, const FObjMaterialInfo& Value);
-    static bool DeserializeMaterial(FBinArchive& Archive, FObjMaterialInfo& Value);
-    static bool SerializeGroup(FBinArchive& Archive, const FObjGroupInfo& Value);
-    static bool DeserializeGroup(FBinArchive& Archive, FObjGroupInfo& Value);
-    static bool SerializeObjectName(FBinArchive& Archive, const FObjObjectInfo& Value);
-    static bool DeserializeObjectName(FBinArchive& Archive, FObjObjectInfo& Value);
-    static bool SerializeLibraryPath(FBinArchive& Archive, const FString& Path);
-    static bool DeserializeLibraryPath(FBinArchive& Archive, FString& Path);
-    static bool SerializeIndex(FBinArchive& Archive, const uint32& Index);
-    static bool DeserializeIndex(FBinArchive& Archive, uint32& Index);
-
-    template<typename T>
-    static bool SerializeArray(FBinArchive& Archive, const TArray<T>& Values, bool (*SerializeElement)(FBinArchive&, const T&));
-
-    template<typename T>
-    static bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values, bool (*DeserializeElement)(FBinArchive&, T&));
-
-    static bool ValidateObjModel(const FObjModelData& Model);
-    static std::filesystem::path GetAssetDir();
-    static bool IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath);
-    static bool ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath);
-    static FString ReadFileToString(std::string_view FileName);
-    static std::string_view Trim(std::string_view Text);
-    static std::string_view NextWord(std::string_view& Text);
-    static bool StringToFloat(std::string_view Text, float& Value);
-    static bool StringToInt(std::string_view Text, int32& Value);
-    static int32 ReadFloats(std::string_view Line, float* Out, int32 MaxCount);
-    static int32 ToZeroBased(int32 ObjIndex, size_t ListSize);
-    static bool ParseFaceToken(std::string_view Token, int32& V, int32& VT, int32& VN);
-    static std::string_view NextLine(std::string_view& Remaining);
-    static bool IsTextureOptionArg(std::string_view Word);
-    static FString ParseTexturePath(std::string_view Line);
-    static bool IsIndexValid(int32 Index, size_t ListSize);
-    static FVertexData MakeVertex(const FObjInfo& Info, const FCornerKey& Key, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
-    static uint32 GetOrAddVertex(const FObjInfo& Info, const FCornerKey& Key, FVertexMap& Vertices, FObjModelData& Out, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
-    static FCornerKey MakeCornerKey(int32 V, int32 VT, int32 VN, int32 S, int32 Triangle);
-    static void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
+    std::filesystem::path GetAssetDir();
+    bool IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath);
+    bool ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath);
+    FString ReadFileToString(std::string_view FileName);
+    std::string_view Trim(std::string_view Text);
+    std::string_view NextWord(std::string_view& Text);
+    bool StringToFloat(std::string_view Text, float& Value);
+    bool StringToInt(std::string_view Text, int32& Value);
+    int32 ReadFloats(std::string_view Line, float* Out, int32 MaxCount);
+    int32 ToZeroBased(int32 ObjIndex, size_t ListSize);
+    bool ParseFaceToken(std::string_view Token, int32& V, int32& VT, int32& VN);
+    std::string_view NextLine(std::string_view& Remaining);
+    bool IsTextureOptionArg(std::string_view Word);
+    FString ParseTexturePath(std::string_view Line);
+    bool IsIndexValid(int32 Index, size_t ListSize);
+    FVertexData MakeVertex(const FObjInfo& Info, const FCornerKey& Key, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
+    uint32 GetOrAddVertex(const FObjInfo& Info, const FCornerKey& Key, FVertexMap& Vertices, FObjModelData& Out, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
+    FCornerKey MakeCornerKey(int32 V, int32 VT, int32 VN, int32 S, int32 Triangle);
+    void CalculateNormalVector(const FObjInfo& Info, TArray<FVector>& NormalVectorList, FSmoothingMap& SmoothingMap);
     const FObjMaterialInfo* FindCachedMaterial(std::string_view MaterialName) const;
     void ResolveSectionMaterials(FObjModelData& Model) const;
 
@@ -257,13 +224,10 @@ private:
     bool IsPointInTriangle(FVector A, FVector B, FVector C, FVector Q, FVector Normal);
     void StartEarClipping(const TArray<FCorner>& Corners);
 
-    static bool CookStaticMesh(const FObjInfo& Info, FObjModelData& Out);
+    bool CookStaticMesh(const FObjInfo& Info, FObjModelData& Out);
 
 private:
     static constexpr std::string_view Spaces = " \t\r\n";
-    static constexpr uint32 ObjFileSignature = 0x4D4A424F; // "OBJM"
-    static constexpr uint32 MaterialFileSignature = 0x4C54414D; // "MATL"
-    static constexpr uint32 MaxElementCount = 16 * 1024 * 1024;
 
     // Todo: Bin - 이름이 전역적으로 유일한 공유 머티리얼 목록.
     TArray<FObjMaterialInfo> CachedMaterials;

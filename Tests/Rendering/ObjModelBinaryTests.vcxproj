@@ -30,6 +30,9 @@
   <ItemGroup>
     <ClCompile Include="ObjModelBinaryTests.cpp" />
     <ClCompile Include="..\..\Source\Runtime\Rendering\FObjDecoder.cpp" />
+    <ClCompile Include="..\..\Source\Runtime\Rendering\FBinArchive.cpp" />
+    <ClCompile Include="..\..\Source\Runtime\Rendering\FWindowsBinReader.cpp" />
+    <ClCompile Include="..\..\Source\Runtime\Rendering\FWindowsBinWriter.cpp" />
     <ClCompile Include="..\..\Source\Runtime\Core\FName.cpp" />
     <ClCompile Include="..\..\Source\Runtime\Core\FNamePool.cpp" />
     <ClCompile Include="..\..\Source\Runtime\Utility\EngineUtil.cpp" />

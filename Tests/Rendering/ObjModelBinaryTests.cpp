@@ -56,10 +56,10 @@ int main()
         Model.NormalTextureName = FName("normal");
 
         FBinArchive Original;
-        Check(FObjDecoder::SerializeObjModel(Original, Model), "serialize");
+        Check(Original.SerializeObjModel(Model), "serialize");
         Check(Original.GetBytes()[0] == 'O' && Original.GetBytes()[3] == 'M', "file signature");
         FObjModelData Loaded;
-        Check(FObjDecoder::DeserializeObjModel(Original, Loaded), "deserialize");
+        Check(Original.DeserializeObjModel(Loaded), "deserialize");
         Check(Loaded.bIsValid && Loaded.Vertices.size() == 3 && Loaded.Indices == Model.Indices, "geometry");
         Check(Loaded.Vertices[1].u == 0.25f && Loaded.Vertices[2].tz == 0.75f, "vertex attributes");
         Check(Loaded.Sections.size() == 2 && Loaded.Sections[1].FirstIndex == 3
@@ -69,9 +69,9 @@ int main()
         // Todo: Bin - Materials.bin은 경로 Entry 없이 머티리얼 배열을 직접 저장한다.
         TArray<FObjMaterialInfo> MaterialEntries = Model.Materials;
         FBinArchive MaterialArchive;
-        Check(FObjDecoder::SerializeMaterials(MaterialArchive, MaterialEntries), "materials serialize");
+        Check(MaterialArchive.SerializeMaterials(MaterialEntries), "materials serialize");
         TArray<FObjMaterialInfo> RestoredMaterials;
-        Check(FObjDecoder::DeserializeMaterials(MaterialArchive, RestoredMaterials), "materials deserialize");
+        Check(MaterialArchive.DeserializeMaterials(RestoredMaterials), "materials deserialize");
         Check(RestoredMaterials[0].NormalTextureName == "normal.png"
             && RestoredMaterials[1].Opacity == 0.2f
             && RestoredMaterials[1].DecalTexture == "decal.png", "material fields");
@@ -80,10 +80,10 @@ int main()
             FBinArchive Truncated;
             const auto& AllBytes = MaterialArchive.GetBytes();
             Truncated.SetBytes(TArray<uint8>(AllBytes.begin(), AllBytes.begin() + Length));
-            Check(!FObjDecoder::DeserializeMaterials(Truncated, RestoredMaterials), "truncated materials");
+            Check(!Truncated.DeserializeMaterials(RestoredMaterials), "truncated materials");
         }
         FBinArchive Resaved;
-        Check(FObjDecoder::SerializeObjModel(Resaved, Loaded) && Original.GetBytes() == Resaved.GetBytes(), "byte round trip");
+        Check(Resaved.SerializeObjModel(Loaded) && Original.GetBytes() == Resaved.GetBytes(), "byte round trip");
 
         const auto Bytes = Original.GetBytes();
         // 어느 위치에서 파일이 잘리더라도 실패하고 호출자의 모델을 유지해야 한다.
@@ -92,7 +92,7 @@ int main()
             FBinArchive Truncated;
             Truncated.SetBytes(TArray<uint8>(Bytes.begin(), Bytes.begin() + Length));
             Loaded.PathFileName = "unchanged";
-            Check(!FObjDecoder::DeserializeObjModel(Truncated, Loaded) && Loaded.PathFileName == "unchanged", "truncated input");
+            Check(!Truncated.DeserializeObjModel(Loaded) && Loaded.PathFileName == "unchanged", "truncated input");
         }
         // Todo: Bin - 버전 필드 제거 후 시그니처와 문자열 길이 위치를 손상시킨다.
         for (size_t Offset : { size_t(0), size_t(4) })
@@ -101,28 +101,29 @@ int main()
             Corrupt[Offset] = 0xff;
             FBinArchive Invalid;
             Invalid.SetBytes(std::move(Corrupt));
-            Check(!FObjDecoder::DeserializeObjModel(Invalid, Loaded), "invalid header or length");
+            Check(!Invalid.DeserializeObjModel(Loaded), "invalid header or length");
         }
         auto Trailing = Bytes;
         Trailing.push_back(0);
         FBinArchive Extra;
         Extra.SetBytes(std::move(Trailing));
-        Check(!FObjDecoder::DeserializeObjModel(Extra, Loaded), "trailing bytes");
+        Check(!Extra.DeserializeObjModel(Loaded), "trailing bytes");
         Model.Indices[0] = 500;
-        Check(!FObjDecoder::SerializeObjModel(Resaved, Model), "invalid vertex index");
+        Check(!Resaved.SerializeObjModel(Model), "invalid vertex index");
         Model.Indices[0] = 0;
         Model.Sections[0].IndexCount = 900;
-        Check(!FObjDecoder::SerializeObjModel(Resaved, Model), "invalid section range");
+        Check(!Resaved.SerializeObjModel(Model), "invalid section range");
 
         const auto Directory = std::filesystem::path("Intermediate") / "ObjBinaryTests";
         std::filesystem::create_directories(Directory);
         const auto Path = Directory / "roundtrip.bin";
         Check(FWindowsBinWriter::Save(Path, Original), "file save");
         FBinArchive FromFile;
-        Check(FWindowsBinReader::Load(Path, FromFile) && FromFile.GetBytes() == Bytes, "file load");
-        Check(FObjDecoder::LoadObjModelBinary(Path.string(), Loaded), "model file load");
-        Check(FObjDecoder::SaveObjModelBinary((Directory / "resaved.bin").string(), Loaded), "model file save");
-        Check(!FWindowsBinReader::Load(Directory / "missing" / "absent.bin", FromFile)
+        Check(FWindowsBinReader::Load(Path, &FromFile) && FromFile.GetBytes() == Bytes, "file load");
+        Check(FromFile.DeserializeObjModel(Loaded), "model file load");
+        Check(Resaved.SerializeObjModel(Loaded)
+            && FWindowsBinWriter::Save(Directory / "resaved.bin", Resaved), "model file save");
+        Check(!FWindowsBinReader::Load(Directory / "missing" / "absent.bin", &FromFile)
             && FromFile.GetBytes() == Bytes, "missing file preserves archive");
         Check(!FWindowsBinWriter::Save(Directory / "missing" / "absent.bin", Original), "write failure");
 
