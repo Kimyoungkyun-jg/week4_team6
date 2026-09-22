@@ -53,6 +53,8 @@ public:
 	EPrevType prevType = EPrevType::Mesh;
 
 	void SaveAsset();
+
+	TSharedPtr<FMaterial> GetPreviewMaterial() { return PreviewMaterialInstance; }
 private:
 
 	void ProcessViewportInput(FEditor& Editor, const ImVec2& ViewportPos, const ImVec2& ViewportSize, float DeltaTime);

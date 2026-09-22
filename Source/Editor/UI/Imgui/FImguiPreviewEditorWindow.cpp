@@ -305,24 +305,6 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 		const ImVec2 ViewportPos = ImGui::GetCursorScreenPos();
 
-		// 씬 렌더링 호출 (머티리얼 모드일 때 PreviewMaterialInstance 전달)
-		if (NewWidth > 0 && NewHeight > 0 && TargetMesh.IsValid())
-		{
-			if (auto Renderer = FRenderResourceLibrary::Get().GetRenderer())
-			{
-				TSharedPtr<FMaterial> OverrideMat = (prevType == EPrevType::Material) ? PreviewMaterialInstance : nullptr;
-				Renderer->RenderMaterialPreviewScene(
-					RenderTarget,
-					PreviewViewport.ViewportCamera,
-					TargetMesh->GetStaticMeshAsset(),
-					OverrideMat,
-					NewWidth,           // Width
-					NewHeight,          // Height
-					bShowGrid           // bDrawGrid
-				);
-			}
-		}
-
 		if (RenderTarget.IsValid())
 		{
 			ImGui::Image(reinterpret_cast<ImTextureID>(RenderTarget.ShaderResourceView.Get()),
@@ -331,10 +313,9 @@ void FImguiPreviewEditorWindow::Process(FEditor& Editor, float DeltaTime)
 
 		ProcessViewportInput(Editor, ViewportPos, ImVec2(ViewWidth, ViewHeight), DeltaTime);
 
-		ImGui::EndChild();
+		ImGui::EndChild(); 
 
-		ImGui::SameLine();
-
+		ImGui::SameLine(); 
 		// 우측 세부 정보 패널
 		switch (prevType)
 		{

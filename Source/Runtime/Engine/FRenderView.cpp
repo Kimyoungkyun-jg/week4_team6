@@ -414,10 +414,11 @@ void FRenderView::FlushQueue(const FCamera& Camera)
     RenderQueue.Clear();
 }
 
-void FRenderView::RenderPreviewScene( //지금 render를 2군데에서 돌리고 있음...뭐하냐 나?
+void FRenderView::RenderPreviewScene( 
     FPreviewRenderTarget& RenderTarget,
     const FCamera& Camera,
     UStaticMesh* TargetMesh,
+    TSharedPtr<FMaterial> OverrideMaterial,
     uint32 Width,
     uint32 Height,
     bool bDrawGrid,
@@ -429,7 +430,9 @@ void FRenderView::RenderPreviewScene( //지금 render를 2군데에서 돌리고
         Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
         break;
     case EPrevType::Material:
-        //Renderer.RenderMaterialPreviewScene(RenderTarget, Camera, TargetMesh->GetStaticMeshAsset(), ,Width, Height, bDrawGrid) 
+
+
+        Renderer.RenderMaterialPreviewScene(RenderTarget, Camera, TargetMesh->GetStaticMeshAsset(), OverrideMaterial, Width, Height, bDrawGrid);
         break;
     default:
         break;

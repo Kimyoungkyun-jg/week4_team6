@@ -7,6 +7,7 @@
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Rendering/FRenderQueue.h"
 #include "Runtime/Engine/FSceneView.h"
+#include <Editor\UI\Imgui\FImguiPreviewEditorWindow.h>
 
 struct FCamera;
 class FGizmo;
@@ -39,6 +40,7 @@ public:
 		FPreviewRenderTarget& RenderTarget,
 		const FCamera& Camera,
 		UStaticMesh* TargetMesh,
+		TSharedPtr<FMaterial> OverrideMaterial,
 		uint32 Width = 0,
 		uint32 Height = 0,
 		bool bDrawGrid = true,

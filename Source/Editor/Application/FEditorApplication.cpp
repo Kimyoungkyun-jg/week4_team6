@@ -311,7 +311,7 @@ void FEditorApplication::Render() {
         if (Window && Window->IsOpen())
         {
             RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
-                Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid, Window->prevType);
+                Window->GetTargetMesh(), Window->GetPreviewMaterial(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid, Window->prevType);
         }
     }
 
