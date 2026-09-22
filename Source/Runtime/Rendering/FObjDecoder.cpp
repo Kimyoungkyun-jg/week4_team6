@@ -1246,12 +1246,19 @@ bool FObjDecoder::CookStaticMesh(const FObjInfo& Info, FObjModelData& Out)
 bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
 {
 	std::ifstream File(Path);
-	//if (!File) return false;
+	if (!File)
+	{
+		return false;
+	}
 	
 	std::stringstream Buffer;
 	Buffer << File.rdbuf();
-	//if (File.bad()) return false;
+	if (File.bad())
+	{
+		return false;
+	}
 	
+	ObjInfo = FObjInfo{};
 	ParseMtlFile(Buffer.str());
 	OutMaterials = std::move(ObjInfo.Materials);
 	
@@ -1313,88 +1320,56 @@ bool FObjDecoder::LoadObjModelBinary(const FString& Path, FObjModelData& OutMode
 {
     FBinArchive Archive;
 
-    return FWindowsBinReader::Load(Path, &Archive) && Archive.DeserializeObjModel(OutModel);
+    return FWindowsBinReader::Load(Path, &Archive)
+		&& Archive.DeserializeObjModel(OutModel);
 }
 
 bool FObjDecoder::SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials)
 {
     FBinArchive Archive;
-    return Archive.SerializeMaterials(Materials) && FWindowsBinWriter::Save(Path, Archive);
+    return Archive.SerializeMaterials(Materials)
+		&& FWindowsBinWriter::Save(Path, Archive);
 }
 
 bool FObjDecoder::LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials)
 {
     FBinArchive Archive;
-    return FWindowsBinReader::Load(Path, &Archive) && Archive.DeserializeMaterials(OutMaterials);
+    return FWindowsBinReader::Load(Path, &Archive)
+		&& Archive.DeserializeMaterials(OutMaterials);
 }
 
-bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
+bool FObjDecoder::LoadMaterials(
+    const FString& MtlPath,
+    const FString& BinaryPath,
+    TArray<FObjMaterialInfo>& OutMaterials)
 {
-    bMaterialsLoaded = false;
-    CachedMaterials.clear();
-
-    const std::filesystem::path AssetPath(AssetRoot);
-    const auto BinaryPath = AssetPath /  L"Bins" / "Materials.bin";
-
     TArray<FObjMaterialInfo> Loaded;
-	//TMap<FString, FObjMaterialInfo> loadedMaterialInfoMap;
 
-    if (LoadMaterialsBinary(BinaryPath.string(), Loaded))
+    if (LoadMaterialsBinary(BinaryPath, Loaded))
     {
-        UE_LOG("[Material Cache] Hit: %s", BinaryPath.string().c_str());
+        UE_LOG("[Material Cache] Hit: %s", BinaryPath.c_str());
     }
     else
     {
-		// Todo: Fix bug
-        UE_LOG("[Material Cache] Miss: 전체 MTL 파싱");
-        TArray<std::filesystem::path> Files;
-        std::error_code Error;
+        UE_LOG("[Material Cache] Miss: MTL 파싱 %s", MtlPath.c_str());
 
-        if (!std::filesystem::exists(AssetPath, Error)
-            || Error
-            || !std::filesystem::is_directory(AssetPath, Error)
-            || Error)
+        if (DecodeMaterialsFromFile(MtlPath, Loaded) == false)
         {
             return false;
         }
 
-		// Todo: Make as static
-		const char* MTL_EXTENSION = ".mtl";
-
-		for (const auto& Asset : std::filesystem::directory_iterator(AssetPath))
-		{
-			if (Asset.is_regular_file() == false)
-			{
-				continue;
-			}
-
-			if (Asset.path().extension() != MTL_EXTENSION)
-			{
-				continue;
-			}
-
-			TArray<FObjMaterialInfo> Materials;
-
-			// Todo: assert
-			DecodeMaterialsFromFile(Asset.path().string(), Materials);
-
-			for (FObjMaterialInfo& Material : Materials)
-			{
-				// MTL 파일과 속성이 달라도 MaterialName이 같으면
-				// 이미 등록된 전역 머티리얼과 동일한 것으로 취급한다.
-				Loaded.push_back(std::move(Material));
-			}
-		}
-
-		//SaveMaterialsBinary(BinaryPath.string(), Loaded);
-        if (SaveMaterialsBinary(BinaryPath.string(), Loaded) == false)
+        if (SaveMaterialsBinary(BinaryPath, Loaded) == false)
         {
-            UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.string().c_str());
+            UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.c_str());
         }
     }
 
-    // Todo: Bin - Materials.bin의 배열을 그대로 공유 머티리얼 목록으로 사용한다.
-    CachedMaterials = std::move(Loaded);
+    for (const FObjMaterialInfo& Material : Loaded)
+    {
+        CachedMaterials.push_back(Material);
+    }
+
+    OutMaterials = std::move(Loaded);
     bMaterialsLoaded = true;
 
     return true;

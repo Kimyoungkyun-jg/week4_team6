@@ -150,7 +150,10 @@ using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHa
 class FObjDecoder
 {
 public:
-    bool LoadMaterials(const FString& AssetRoot);
+    bool LoadMaterials(
+        const FString& MtlPath,
+        const FString& BinaryPath,
+        TArray<FObjMaterialInfo>& OutMaterials);
     bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
     
     const TArray<FObjMaterialInfo>& GetMaterials() const;
