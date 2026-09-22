@@ -84,6 +84,7 @@ void UPrimitiveComponent::Serialize(FArchive& Archive) const
     Archive.SetVector("Location", RelativeTransform.Location);
     Archive.SetVector("Rotation", RelativeTransform.Rotation.GetEulerXYZ());
     Archive.SetVector("Scale", RelativeTransform.Scale3D);
+    Archive.SetVector("Color", Color);
 }
 
 void UPrimitiveComponent::Deserialize(const FArchive& Archive)
@@ -101,6 +102,7 @@ void UPrimitiveComponent::Deserialize(const FArchive& Archive)
     RelativeTransform.Rotation = FQuaternion::FromEulerXYZDeg(Rotation);
 
     RelativeTransform.Scale3D = Archive.GetVector("Scale");
+    Color = Archive.GetVector("Color");
 }
 
 

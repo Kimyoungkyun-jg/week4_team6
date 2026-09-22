@@ -38,3 +38,13 @@ bool UMeshComponent::SetTextureByName(const FName& InTextureName)
     RenderDatas.at(0).TextureId = InTextureName;
     return true;
 }
+
+void UMeshComponent::Serialize(FArchive& Archive) const
+{
+    Super::Serialize(Archive);
+}
+
+void UMeshComponent::Deserialize(const FArchive& Archive)
+{
+    Super::Deserialize(Archive);
+}

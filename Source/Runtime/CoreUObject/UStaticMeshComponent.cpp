@@ -1,6 +1,11 @@
 #include "UStaticMeshComponent.h"
 #include "Runtime/CoreUObject/UObjectGlobals.h"
+#include "Runtime/Engine/FArchive.h"
+#include "Runtime/Rendering/FRenderResourceLibrary.h"
+#include "Runtime/Core/Log.h"
 #include "UClass.h"
+
+
 
 IMPLEMENT_UCLASS(UStaticMeshComponent, UMeshComponent)
 
@@ -145,3 +150,55 @@ FName UStaticMeshComponent::GetMaterial(int32 Slot) const
 
     return FName("Simple");
 }
+
+void UStaticMeshComponent::Serialize(FArchive& Archive) const
+{
+    Super::Serialize(Archive);
+
+
+    Archive.SetString("StaticMesh", StaticMesh ? StaticMesh->MeshId.ToString() : FString());
+
+    TArray<FString> SerializeMaterials;
+    for (FName Material : OverrideMaterials)
+    {
+        SerializeMaterials.push_back(Material.ToString());
+    }
+    Archive.SetArray("OverrideMaterials", SerializeMaterials);
+    Archive.SetBool("bIsMovingUV", bIsMovingUV);
+
+}
+
+void UStaticMeshComponent::Deserialize(const FArchive& Archive)
+{
+    Super::Deserialize(Archive);
+
+    if (!Archive.IsNull("StaticMesh"))
+    {
+        FString StaticMeshId = Archive.GetString("StaticMesh");
+        if (UStaticMesh* Found = FRenderResourceLibrary::Get().GetUStaticMesh(FName(StaticMeshId)))
+        {
+            SetStaticMesh(Found);
+        }
+        else
+        {
+            UE_LOG_WARN("[UStaticMeshComponent::Deserialize] 메시 %s 를 찾을 수 없습니다.", StaticMeshId.c_str());
+        }
+    }
+
+    if (!Archive.IsNull("OverrideMaterials"))
+    {
+        TArray<FString> DeserializeMaterials;
+        OverrideMaterials.clear();
+        OverrideMaterials.reserve(DeserializeMaterials.size());
+        DeserializeMaterials = Archive.GetArray<FString>("OverrideMaterials");
+        for (const FString& Material : DeserializeMaterials)
+        {
+            OverrideMaterials.push_back(Material);
+        }
+    }
+    if (!Archive.IsNull("bIsMovingUV"))
+    {
+        bIsMovingUV = Archive.GetBool("bIsMovingUV");
+    }
+}
+
