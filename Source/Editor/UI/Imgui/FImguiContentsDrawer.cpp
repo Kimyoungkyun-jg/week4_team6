@@ -197,6 +197,17 @@ void FImguiContentsDrawer::RenderContentView()
 		if (ImGui::SmallButton("Up")) { CurrentPath = CurrentPath.parent_path(); }
 	}
 
+
+	ImGui::SameLine();
+	if (ImGui::SmallButton("Build / Reimport Meshes"))
+	{
+		FRenderResourceLibrary::Get().CreateObjMeshes();
+		FRenderResourceLibrary::Get().CreateMeshThumbnails();
+		FRenderResourceLibrary::Get().CreateMaterialThumbnails();
+		bNeedsRefresh = true; // 완료 후 목록 갱신
+	}
+
+
 	ImGui::Separator();
 
 	if (Entries.empty())

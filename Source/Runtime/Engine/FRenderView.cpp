@@ -113,7 +113,7 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
     }
 
     const bool bShowBounds = (View.ShowFlags & static_cast<uint64>(EEngineShowFlags::SF_BoundBox)) != 0;
-
+    
     if (bShowBounds && EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
 
         UClass* ClassType = EditorCtx.SelectedMeshComp->GetClass();

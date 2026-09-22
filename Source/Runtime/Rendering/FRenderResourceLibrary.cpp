@@ -1839,6 +1839,8 @@ bool FRenderResourceLibrary::CreateMeshThumbnails() {
     for (const auto& [Key, Mesh] : AllUStaticMeshMap) {
         if (!Mesh) continue;
 
+        if (AllMeshThumbnailMap[Key]) continue; // 이미 있으면 건너뜀
+
         auto MeshAsset = Mesh->GetStaticMeshAsset();
         if (!MeshAsset) continue;
 
@@ -1947,6 +1949,8 @@ bool FRenderResourceLibrary::CreateMaterialThumbnails()
     for (const auto& [Key, Mat] : AllMaterialMap)
     {
         if (!Mat) continue;
+
+        if (AllMaterialThumbnailMap[Key]) continue; // 이미 있으면 건너뜀
 
         // 1. 공용 도화지에 구체 렌더링
         Renderer.RenderMaterialPreviewScene(SharedThumbnailRT, Cam, PreviewMesh, Mat, 128, 128, false);
