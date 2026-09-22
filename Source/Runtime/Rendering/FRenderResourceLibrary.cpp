@@ -634,7 +634,7 @@ bool FRenderResourceLibrary::CreateUStaticMeshMap() {
     for (const auto& [Key, Mesh] : AllFStaticMeshMap) {
         if (!Mesh) continue;
 
-        STATS.AddStaticMeshByte(Mesh->GetIndices().size() * sizeof(int32), Mesh->GetVertexCount() * sizeof(FVertexData));
+        STATS.AddStaticMeshByte(static_cast<uint32>(Mesh->GetIndices().size() * sizeof(int32)), static_cast<uint32>(Mesh->GetVertexCount() * sizeof(FVertexData)));
 
         //  이미 OBJ 파싱 단계 등에서 등록된 에셋은 건너뜀
         if (AllUStaticMeshMap.find(Key) != AllUStaticMeshMap.end()) {

@@ -17,6 +17,7 @@
 #include <d3d11.h>
 #include <filesystem>
 #include <wrl/client.h>
+#include <WICTextureLoader.h>
 
 class FTexture;
 struct FTextureDesc;
@@ -89,6 +90,7 @@ private:
     bool InitializeDeviceAndSwapChain(HWND Window);
     bool InitializeBackBufferAndDepthStencil();
     bool InitializeConstantBuffers();
+    bool InitializeTextureLoader();
 
 private:
     FLineBatcher LineBatcher;

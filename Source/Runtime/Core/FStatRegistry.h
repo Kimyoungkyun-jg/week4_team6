@@ -58,15 +58,15 @@ public:
 	{
 		TextureByte = 0;
 		for (auto It : FRenderResourceLibrary::Get().AllTextureMap) {
-			TextureByte += It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333; // dds -> 픽셀 하나당 1바이트, 밉 체인 1.333배
+			TextureByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333); // dds -> 픽셀 하나당 1바이트, 밉 체인 1.333배
 		}
 		EditorTextureByte = 0;
 		for (auto It : FRenderResourceLibrary::Get().AllEditorTextureMap) {
-			EditorTextureByte += It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333;
+			EditorTextureByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333);
 		}
 		MeshThumbnailByte = 0;
 		for (auto It : FRenderResourceLibrary::Get().AllMeshThumbnailMap) {
-			MeshThumbnailByte += It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333;
+			MeshThumbnailByte += static_cast<uint32>(It.second->GetWidth() * It.second->GetHeight() * 1 * 1.333);
 		}
 		FStaticMeshCount = static_cast<uint32>(FRenderResourceLibrary::Get().AllFStaticMeshMap.size());
 		UStaticMeshCount = static_cast<uint32>(FRenderResourceLibrary::Get().AllUStaticMeshMap.size());
@@ -117,7 +117,7 @@ public:
 	uint32 GetStaticIndexBufferSize() { return StaticIndexBufferSize; }
 	uint32 GetStaticVertexBufferSize() { return StaticVertexBufferSize; }
 
-	uint32 GetPipelineNum() { return FRenderResourceLibrary::Get().AllPipelineMap.size(); }
+	uint32 GetPipelineNum() { return static_cast<uint32>(FRenderResourceLibrary::Get().AllPipelineMap.size()); }
 	void UpdateDrawCallCount(uint32 InIndexCount, uint32 InVertexCount) { 
 		DrawCallNum++; 
 		DrawIndexCount += InIndexCount;
