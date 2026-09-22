@@ -17,7 +17,7 @@ void FEditorViewport::UpdateViewAndCtx(FLightConstants GlobalLight, AActor& Sele
         sceneView.ShowFlags = ShowFlags,
         sceneView.LightConstants = GlobalLight;
 
-    // ¿¡µğÅÍ ·»´õ¸µ ÄÁÅØ½ºÆ® ±¸¼º
+    // ì—ë””í„° ë Œë”ë§ ì»¨í…ìŠ¤íŠ¸ êµ¬ì„±
 
     editorCtx.SelectedActor = &SelectedActor;
     editorCtx.SelectedTransform = Transform;
@@ -35,32 +35,32 @@ void FEditorViewport::UpdateFocusedAndHovered(bool bFocused, bool bHovered)
 	return;
 }
 
-#include "Runtime/Input/FInputManager.h" // ÇÁ·ÎÁ§Æ®ÀÇ InputManager Çì´õ À§Ä¡¿¡ ¸Â°Ô Æ÷ÇÔ
+#include "Runtime/Input/FInputManager.h" // í”„ë¡œì íŠ¸ì˜ InputManager í—¤ë” ìœ„ì¹˜ì— ë§ê²Œ í¬í•¨
 
 void FEditorViewport::Process()
 {
-    // 1. ÃÊ±â ÄÚµåÀÇ ¿øº» ÁÂÇ¥ °è»ê½Ä ±×´ë·Î º¹¿ø
+    // 1. ì´ˆê¸° ì½”ë“œì˜ ì›ë³¸ ì¢Œí‘œ ê³„ì‚°ì‹ ê·¸ëŒ€ë¡œ ë³µì›
     const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
     if (!MainViewport) return;
 
     const ImVec2 MainOrigin = MainViewport->Pos;
     const ImVec2 MainSize = MainViewport->Size;
 
-    // ¿ø·¡ Á¤È®Çß´ø ÇÈ¼¿ ¿ÀÇÁ¼Â (12.0f, 32.0f) À¯Áö
+    // ì›ë˜ ì •í™•í–ˆë˜ í”½ì…€ ì˜¤í”„ì…‹ (12.0f, 32.0f) ìœ ì§€
     const float StartX = MainOrigin.x + (TopLeftUV.X * MainSize.x) + 12.0f;
     const float StartY = MainOrigin.y + (TopLeftUV.Y * MainSize.y) + 32.0f;
 
-    // 2. FInputManager ¸¶¿ì½º ÆÇÁ¤
+    // 2. FInputManager ë§ˆìš°ìŠ¤ íŒì •
     const FVector2 EngineMousePos = FInputManager::Get().GetMousePosition();
     const ImVec2 MousePos(EngineMousePos.X, EngineMousePos.Y);
     const bool bLButtonClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
-    // [ÇÙ½É] ForegroundDrawList(ÃÖ»ó´Ü °­Á¦) ´ë½Å WindowDrawList »ç¿ë
-    // ¸ŞÀÎ ºäÆ÷Æ® Ã¢ ÄÁÅØ½ºÆ® ¾È¿¡¼­ ºÒ¸± °æ¿ì ÇØ´ç À©µµ¿ì ·¹ÀÌ¾î·Î ±×·ÁÁö¹Ç·Î
-    // ±× À§¿¡ ¶ß´Â ÇÁ¸®ºä ¸ğ´Ş Ã¢º¸´Ù ³·Àº z-order¸¦ °®°Ô µË´Ï´Ù.
+    // [í•µì‹¬] ForegroundDrawList(ìµœìƒë‹¨ ê°•ì œ) ëŒ€ì‹  WindowDrawList ì‚¬ìš©
+    // ë©”ì¸ ë·°í¬íŠ¸ ì°½ ì»¨í…ìŠ¤íŠ¸ ì•ˆì—ì„œ ë¶ˆë¦´ ê²½ìš° í•´ë‹¹ ìœˆë„ìš° ë ˆì´ì–´ë¡œ ê·¸ë ¤ì§€ë¯€ë¡œ
+    // ê·¸ ìœ„ì— ëœ¨ëŠ” í”„ë¦¬ë·° ëª¨ë‹¬ ì°½ë³´ë‹¤ ë‚®ì€ z-orderë¥¼ ê°–ê²Œ ë©ë‹ˆë‹¤.
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
-    // 3. ¹öÆ° ·»´õ¸µ ¶÷´Ù (±âÁ¸ À¯Áö)
+    // 3. ë²„íŠ¼ ë Œë”ë§ ëŒë‹¤ (ê¸°ì¡´ ìœ ì§€)
     auto DrawOverlayButton = [&](const char* Label, float PosX, float PosY, float Width, float Height, bool& outClicked) -> float
         {
             const ImVec2 Min(PosX, PosY);
@@ -85,7 +85,7 @@ void FEditorViewport::Process()
     const float BtnHeight = 22.0f;
     float CurX = StartX;
 
-    // --- (1) Åõ¿µ ¸ğµå Åä±Û ¹öÆ° ---
+    // --- (1) íˆ¬ì˜ ëª¨ë“œ í† ê¸€ ë²„íŠ¼ ---
     bool bIsPerspective = (ViewportCamera.Projection.ProjectionType == EProjectionType::Perspective);
     const char* ProjLabel = bIsPerspective ? "Perspective" : "Orthographic";
     const float ProjWidth = ImGui::CalcTextSize(ProjLabel).x + 18.0f;
@@ -97,7 +97,7 @@ void FEditorViewport::Process()
         ViewportCamera.Projection.ProjectionType = bIsPerspective ? EProjectionType::Orthographic : EProjectionType::Perspective;
     }
 
-    // --- (2) ºä ¸ğµå Åä±Û ¹öÆ° ---
+    // --- (2) ë·° ëª¨ë“œ í† ê¸€ ë²„íŠ¼ ---
     const char* ViewModeLabel = "Lit";
     if (ViewMode == EViewModeIndex::VMI_Unlit) ViewModeLabel = "Unlit";
     else if (ViewMode == EViewModeIndex::VMI_Wireframe) ViewModeLabel = "Wireframe";
@@ -112,7 +112,7 @@ void FEditorViewport::Process()
         else ViewMode = EViewModeIndex::VMI_Lit;
     }
 
-    // --- (3) Show µå·Ó´Ù¿î ¹öÆ° ---
+    // --- (3) Show ë“œë¡­ë‹¤ìš´ ë²„íŠ¼ ---
     const char* ShowLabel = "Show";
     const float ShowWidth = ImGui::CalcTextSize(ShowLabel).x + 18.0f;
 

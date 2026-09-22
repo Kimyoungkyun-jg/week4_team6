@@ -30,6 +30,9 @@ public:
     // 텍스처 이름으로 머티리얼 텍스처 교체
     bool SetTextureByName(const FName& InTextureName);
 
+    virtual void Serialize(FArchive& Archive) const override;
+    virtual void Deserialize(const FArchive& Archive) override;
+
 protected:
     UMeshComponent() = default;
 

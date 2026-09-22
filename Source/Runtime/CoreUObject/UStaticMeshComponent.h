@@ -3,7 +3,6 @@
 #include "UMeshComponent.h"
 #include "UStaticMesh.h"
 #include <Runtime\Core\TArray.h>
-#include <Runtime\Core\TArray.h>
 
 class UStaticMeshComponent : public UMeshComponent {
     GENERATED_BODY()
@@ -30,6 +29,9 @@ public:
     FName GetMaterial(int32 Slot = 0) const;
 
     bool bIsMovingUV = false;
+
+    virtual void Serialize(FArchive& Archive) const override;
+    virtual void Deserialize(const FArchive& Archive) override;
 
 protected:
     UStaticMeshComponent() = default;

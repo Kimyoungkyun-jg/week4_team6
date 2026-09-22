@@ -58,3 +58,4 @@ float4 MainPS(PS_INPUT Input) : SV_Target
 
     return float4(FinalColor, Sampled.a);
 }
+
