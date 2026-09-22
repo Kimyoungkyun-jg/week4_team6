@@ -69,3 +69,14 @@ void UStaticMesh::SetStaticMeshAsset(FStaticMesh* InStaticMesh)
 {
     SetStaticMeshAsset(TSharedPtr<FStaticMesh>(InStaticMesh));
 }
+
+
+UStaticMesh* UStaticMesh::ClonePreviewMesh() const
+{
+    UStaticMesh* ClonedMesh = NewObject<UStaticMesh>();
+    ClonedMesh->MeshId = this->MeshId;
+    ClonedMesh->StaticMeshAsset = this->StaticMeshAsset; // 버퍼는 그대로 공유
+    ClonedMesh->Materials = this->Materials;             // 슬롯 배열 복제
+    ClonedMesh->LocalBounds = this->LocalBounds;
+    return ClonedMesh;
+}

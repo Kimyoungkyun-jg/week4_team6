@@ -16,7 +16,7 @@ struct FCameraProjection
 	float Aspect = 1.0f; // Perspective 전용. Width / Height
 	float Height = 4.0f; // Orthographic 전용
 	float NearZ = 0.1f;
-	float FarZ = 100.0f;
+	float FarZ = 1000.0f;
 	
 	// TODO: 캐시 가능
 	[[nodiscard]] FMatrix CreateProjectionMatrix() const;

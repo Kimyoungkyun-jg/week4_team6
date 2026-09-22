@@ -21,6 +21,7 @@ public:
     const FName& GetMaterialID() const override;
     FAxisAlignedBoundingBox CalcLocalBounds() override;
 
+
     TArray<FRenderData> GetRenderDatas(const FCamera& Camera) override;
     const FRenderData& GetPureRenderData() const override;
 
@@ -28,9 +29,14 @@ public:
     void SetMaterial(int32 Slot, const FName& InMaterialId);
     FName GetMaterial(int32 Slot = 0) const;
 
+    bool bIsMovingUV = false;
+
 protected:
     UStaticMeshComponent() = default;
 
     UStaticMesh* StaticMesh = nullptr;
     TArray<FName> OverrideMaterials;
+
+    float offset = 0.0f;
+    
 };

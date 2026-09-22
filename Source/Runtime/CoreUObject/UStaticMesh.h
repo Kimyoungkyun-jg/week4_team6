@@ -44,6 +44,8 @@ public:
     void SetStaticMeshAsset(TSharedPtr<FStaticMesh> InStaticMesh);
     void SetStaticMeshAsset(FStaticMesh* InStaticMesh);
 
+    UStaticMesh* ClonePreviewMesh() const;
+
 private:
     void InitializeFromAsset(const FString& InMaterialId);
     static FName DetermineMaterialId(const FName& FallbackMaterialId, const FName& Diffuse, const FName& Normal, const FName& Specular);

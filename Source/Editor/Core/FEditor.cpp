@@ -68,6 +68,7 @@ void FEditor::Process() {
 
   SaveState();
   State.Tick(FTimeManager::Get().GetDeltaTime());
+
 }
 
 void FEditor::SaveState() {
@@ -297,3 +298,32 @@ void FEditor::SpawnInstancingToCurrentScene(int Count)
     SelectActor(TargetActor);
 }
 
+void FEditor::ResetSplitViewportCameras()
+{
+    // 뷰포트가 4개 이상 존재하는지 확인
+    if (EditorViewports.size() < 4) return;
+
+    // 0번: Perspective (필요 시 기본 원근 시점으로 리셋)
+    EditorViewports[0].ViewportCamera.Projection.ProjectionType = EProjectionType::Perspective;
+
+    // 1번: Top Viewport
+    EditorViewports[1].ViewportCamera.Position = { 0.0f, 0.0f, 20.0f };
+    EditorViewports[1].ViewportCamera.Pitch = -89.9f;
+    EditorViewports[1].ViewportCamera.Yaw = 0.0f;
+    EditorViewports[1].ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+    EditorViewports[1].ViewportCamera.Projection.Height = 10.0f;
+
+    // 2번: Front Viewport
+    EditorViewports[2].ViewportCamera.Position = { -20.0f, 0.0f, 0.0f };
+    EditorViewports[2].ViewportCamera.Pitch = 0.0f;
+    EditorViewports[2].ViewportCamera.Yaw = 0.0f;
+    EditorViewports[2].ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+    EditorViewports[2].ViewportCamera.Projection.Height = 10.0f;
+
+    // 3번: Side Viewport
+    EditorViewports[3].ViewportCamera.Position = { 0.0f, -20.0f, 0.0f };
+    EditorViewports[3].ViewportCamera.Pitch = 0.0f;
+    EditorViewports[3].ViewportCamera.Yaw = 90.0f;
+    EditorViewports[3].ViewportCamera.Projection.ProjectionType = EProjectionType::Orthographic;
+    EditorViewports[3].ViewportCamera.Projection.Height = 10.0f;
+}

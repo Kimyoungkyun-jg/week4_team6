@@ -4,6 +4,7 @@
 #include "Runtime/Math/FVector2.h"
 #include "Runtime/Engine/ShowFlags.h"
 #include "Runtime/Rendering/ShaderConstants.h"
+#include "Runtime/CoreUObject/TWeakObjectPtr.h"
 #include "Runtime/Geometry/FTransform.h"
 class AActor;
 class FGizmo;
@@ -15,7 +16,7 @@ class UTextInstanceComponent;
 // 뷰포트 렌더링 명세
 struct FSceneView
 {
-	const FCamera& Camera;
+	const FCamera* Camera;
 	FMatrix  ViewProj;
 	FVector2 TopLeftUV;
 	FVector2 LengthUV;
@@ -27,8 +28,8 @@ struct FSceneView
 // 에디터 렌더링 컨텍스트
 struct FEditorRenderContext
 {
-	const AActor* SelectedActor = nullptr;
-	UMeshComponent* SelectedMeshComp = nullptr;
+	TWeakObjectPtr<AActor> SelectedActor;
+	TWeakObjectPtr<UMeshComponent> SelectedMeshComp;
 	FGrid* Grid = nullptr;
 	FVisualizerRegistry* VisualizerRegistry = nullptr;
 	FTransform SelectedTransform;

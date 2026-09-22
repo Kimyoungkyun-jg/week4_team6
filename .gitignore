@@ -18,3 +18,5 @@ editor.ini
 compile_flags.txt
 compile_commands.json
 .cache/
+# Todo: Bin - Generated OBJ/material binary caches
+/Resources/Assets/*.bin

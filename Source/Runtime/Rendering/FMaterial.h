@@ -15,12 +15,6 @@ class FRenderResourceLibrary;
 
 
 
-
-
-
-
-
-
 // 텍스처 맵 슬롯 구분
 enum class EMaterialTextureSlot : uint32
 {
@@ -37,6 +31,8 @@ public:
   FMaterial() = default;
   
   void SetPipeLine(const TSharedPtr<FRenderPipeline>& InPipeline);
+
+  TSharedPtr<FMaterial> Clone() const;
 
   [[nodiscard]] TSharedPtr<FRenderPipeline> GetPipeline() const { return Pipeline; }
 
@@ -68,16 +64,19 @@ public:
     return Pipeline ? Pipeline->GetPipelineDesc().BlendMode : EBlendMode::Opaque;
   }
 
-  FName MaterialId{"None"};
+  FString MaterialId;
 private:
   void BindResources(ID3D11DeviceContext &Context) const;
 
   TSharedPtr<FRenderPipeline> Pipeline;
   TSharedPtr<FRenderPipeline> WireframePipeline;
 
-  // 슬롯별 텍스처 배열
   TSharedPtr<FTexture> Textures[static_cast<size_t>(EMaterialTextureSlot::Count)];
+
+
 };
+
+
 
 struct FMaterialDesc {
   FWString VertexShaderFileName;

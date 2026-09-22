@@ -7,6 +7,7 @@
 #include "Runtime/Rendering/FRenderer.h"
 #include "Runtime/Rendering/FRenderQueue.h"
 #include "Runtime/Engine/FSceneView.h"
+#include <Editor\UI\Imgui\FImguiPreviewEditorWindow.h>
 #include "Runtime/Core/FStatRegistry.h"
 
 struct FCamera;
@@ -40,9 +41,11 @@ public:
 		FPreviewRenderTarget& RenderTarget,
 		const FCamera& Camera,
 		UStaticMesh* TargetMesh,
+		TSharedPtr<FMaterial> OverrideMaterial,
 		uint32 Width = 0,
 		uint32 Height = 0,
-		bool bDrawGrid = true);
+		bool bDrawGrid = true,
+		EPrevType prevType= EPrevType::Mesh);
 
 	// 뷰포트 패스 파이프라인
 	void BeginView(FVector2 TopLeftUV, FVector2 LengthUV, EViewModeIndex ViewMode, const FLightConstants& LightConstants);

@@ -9,6 +9,7 @@ void UStaticMeshComponent::Initialize()
     Super::Initialize();
 }
 
+
 bool UStaticMeshComponent::SetStaticMesh(UStaticMesh* InStaticMesh)
 {
     StaticMesh = InStaticMesh;
@@ -75,6 +76,13 @@ TArray<FRenderData> UStaticMeshComponent::GetRenderDatas(const FCamera& Camera)
             rdata.startidx = Sections[i].FirstIndex;
             rdata.indicesCount = Sections[i].IndexCount;
 
+            if (bIsMovingUV)
+            {
+                offset = fmodf(offset + 0.1f, 1.0f);
+                rdata.Constants.UVOffset.X = offset;
+            }
+
+
             OutDatas.push_back(std::move(rdata));
         }
     }
@@ -87,8 +95,15 @@ TArray<FRenderData> UStaticMeshComponent::GetRenderDatas(const FCamera& Camera)
         rdata.startidx = 0;
         rdata.indicesCount = -1; 
 
+        if (bIsMovingUV)
+        {
+            offset = fmodf(offset + 0.1f, 1.0f);
+            rdata.Constants.UVOffset.X = offset;
+        }
+
         OutDatas.push_back(std::move(rdata));
     }
+
     return OutDatas;
 }
 

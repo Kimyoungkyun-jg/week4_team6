@@ -59,7 +59,7 @@ public:
 	void OnWindowSize(UINT Width, UINT Height);
 	
 	void CollectGarbage();
-	void OpenPreviewWindow(UStaticMesh* InMesh);
+	void OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type);
 
 	[[nodiscard]] const TArray<TSharedPtr<FImguiPreviewEditorWindow>>& GetPreviewWindows() const { return PreviewWindows; }
 

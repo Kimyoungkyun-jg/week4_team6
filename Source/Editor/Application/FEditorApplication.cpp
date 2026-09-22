@@ -29,10 +29,29 @@
 void FEditorApplication::Initialize_ImguiWin32DX11(
     HWND &Window, ID3D11Device *Device, ID3D11DeviceContext *Context) {
   ImguiManager.Initialize_ImplWin32DX11(Window, Device, Context);
+
+#if IS_OBJ_VIEWER
+  ImGuiIO& io = ImGui::GetIO();
+  io.IniFilename = nullptr; // ini 파일 읽기/쓰기 비활성화
+
+  // DisplaySize 명시적 초기화 (Assert 방지)
+  RECT Rect;
+  if (GetClientRect(Window, &Rect))
+  {
+      io.DisplaySize = ImVec2(static_cast<float>(Rect.right - Rect.left),
+          static_cast<float>(Rect.bottom - Rect.top));
+  }
+  else
+  {
+      io.DisplaySize = ImVec2(1200.0f, 800.0f);
+  }
+#else
+#endif
+
 }
 
-void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
-                                            FRenderView *RenderView) {
+void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager, FRenderView *RenderView) {
+
   this->RenderView = RenderView;
   this->SceneManager = SceneManager;
   this->CurrentScene = SceneManager->CurrentScene;
@@ -41,6 +60,9 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
   STATS.Initialize();
   STATS.Reset();
 
+#if IS_OBJ_VIEWER
+
+#else
   FEditorViewport PerspViewport;
   PerspViewport.TopLeftUV = {0.5f, 0.0f};
   PerspViewport.LengthUV = {0.5f, 0.5f};
@@ -84,6 +106,8 @@ void FEditorApplication::Initialize_Runtime(USceneManager *SceneManager,
   // 원근 뷰포트를 활성화하고 상태 복원
   Editor.SetActiveViewportIndex(0);
   Editor.LoadState();
+
+#endif
 }
 
 void FEditorApplication::Shutdown() { Editor.Shutdown(); }
@@ -96,145 +120,210 @@ void FEditorApplication::Update(float DeltaTime) {
 void FEditorApplication::BeginFrame() { ImguiManager.NewFrame(); }
 
 void FEditorApplication::Tick(float DeltaTime) {
-
-  ToolBar.Process(Editor, ConsoleWindow, ControlPanelWindow, PropertyWindow);
-  EditorViewportWindow.Process(Editor, DeltaTime);
-  WorldOutliner.Process(Editor);
-  ControlPanelWindow.Process(Editor);
-  PropertyWindow.Process(Editor);
-  ConsoleWindow.Process(Editor);
-  ContentsDrawer.Process(Editor);
-  OverlayStat.Process(Editor, DeltaTime);
-  STATS.Reset();
-
-  // 다중 프리뷰 창 UI 실행
-  for (const auto& Window : PreviewWindows)
-  {
-    if (Window && Window->IsOpen())
+#if IS_OBJ_VIEWER
+    static bool bFirstInit = true;
+    if (bFirstInit)
     {
-      Window->Process(Editor, DeltaTime);
+        bFirstInit = false;
+        UStaticMesh* Mesh = FRenderResourceLibrary::Get().GetUStaticMesh("Cube");
+        OpenPreviewWindow(Mesh, EPrevType::Mesh);
     }
-  }
 
-  Editor.Process();
+    for (const auto& Window : PreviewWindows)
+    {
+        if (Window && Window->IsOpen())
+        {
+            // 메인 ImGui 뷰포트 영역(작업 영역) 전체 크기 가져오기
+            const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(MainViewport->WorkPos);
+            ImGui::SetNextWindowSize(MainViewport->WorkSize);
+
+            // 프리뷰 창 UI 처리 (
+            Window->Process(Editor, DeltaTime);
+        }
+    }
+#else
+    ToolBar.Process(Editor, ConsoleWindow, ControlPanelWindow, PropertyWindow);
+    EditorViewportWindow.Process(Editor, DeltaTime);
+    WorldOutliner.Process(Editor);
+    ControlPanelWindow.Process(Editor);
+    PropertyWindow.Process(Editor);
+    ConsoleWindow.Process(Editor);
+    ContentsDrawer.Process(Editor);
+    OverlayStat.Process(Editor, DeltaTime);
+    STATS.Reset();
+
+    for (const auto& Window : PreviewWindows)
+    {
+        if (Window && Window->IsOpen())
+        {
+            Window->Process(Editor, DeltaTime);
+        }
+    }
+#endif
+
+    Editor.Process();
 }
 
 #include "ThirdParty/Imgui/imgui.h"
 #include "ThirdParty/Imgui/imgui_internal.h"
 #include <Runtime\CoreUObject\UMeshComponent.h>
 
-void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh) {
-  if (!InMesh)
-  {
-    return;
-  }
-
-  // 이미 열려있는 창이면 최상단으로 포커스
-  for (const auto& Window : PreviewWindows)
-  {
-    if (Window && Window->GetTargetMesh() == InMesh)
+void FEditorApplication::OpenPreviewWindow(UStaticMesh* InMesh, EPrevType type)
+{
+    if (!InMesh)
     {
-      Window->BringToFront();
-      return;
+        return;
     }
-  }
 
-  ImGuiID TargetDockID = 0;
-  // 기존에 열려 있는 프리뷰 창의 도크 노드 탐색
-  for (const auto& Window : PreviewWindows)
-  {
-    if (Window && Window->IsOpen())
+    // 닫힌 창 정리
+    PreviewWindows.erase(
+        std::remove_if(PreviewWindows.begin(), PreviewWindows.end(),
+            [](const TSharedPtr<FImguiPreviewEditorWindow>& Win) {
+                return !Win || !Win->IsOpen();
+            }),
+        PreviewWindows.end()
+    );
+
+    const FString CurrentMatName = (!InMesh->Materials.empty()) ? InMesh->Materials[0] : "";
+
+    // 이미 열려 있는 창인지 검사
+    for (const auto& Window : PreviewWindows)
     {
-      if (ImGuiWindow* Win = ImGui::FindWindowByName(Window->GetTitleString().c_str()))
-      {
-        if (Win->DockId != 0)
+        if (Window && Window->IsOpen())
         {
-          TargetDockID = Win->DockId;
-          break;
+            if (type == EPrevType::Mesh && Window->prevType == EPrevType::Mesh)
+            {
+                if (Window->GetTargetMesh() == InMesh)
+                {
+                    Window->BringToFront();
+                    return;
+                }
+            }
+            else if (type == EPrevType::Material && Window->prevType == EPrevType::Material)
+            {
+                // TitleString에 머티리얼 이름이 고유하게 들어가 있으므로 이를 기준으로 중복 검사
+                FString ExpectedTitle = CurrentMatName + "###PreviewMaterialEditor_" + CurrentMatName;
+                if (Window->GetTitleString() == ExpectedTitle)
+                {
+                    Window->BringToFront();
+                    return;
+                }
+            }
         }
-      }
-      if (TargetDockID == 0 && Window->GetInitialDockID() != 0)
-      {
-        TargetDockID = Window->GetInitialDockID();
-        break;
-      }
     }
-  }
 
-  // 첫 번째 프리뷰 창일 경우 메인 뷰포트와 분리된 독립 플로팅 도크 노드 생성
-  if (TargetDockID == 0)
-  {
-    TargetDockID = ImGui::DockBuilderAddNode(0, 0);
-    const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
-    const ImVec2 DefaultPos = MainViewport ? ImVec2(MainViewport->WorkPos.x + 150.0f, MainViewport->WorkPos.y + 80.0f) : ImVec2(200.0f, 100.0f);
-    ImGui::DockBuilderSetNodePos(TargetDockID, DefaultPos);
-    ImGui::DockBuilderSetNodeSize(TargetDockID, ImVec2(900.0f, 650.0f));
-    ImGui::DockBuilderFinish(TargetDockID);
-  }
+    ImGuiID TargetDockID = 0;
+#if !IS_OBJ_VIEWER
+    // 기존에 열려 있는 프리뷰 창의 도크 노드 ID 가져오기 (탭 중첩용)
+    for (const auto& Window : PreviewWindows)
+    {
+        if (Window && Window->IsOpen())
+        {
+            if (ImGuiWindow* Win = ImGui::FindWindowByName(Window->GetTitleString().c_str()))
+            {
+                if (Win->DockNode)
+                {
+                    TargetDockID = Win->DockNode->ID;
+                    break;
+                }
+                if (Win->DockId != 0)
+                {
+                    TargetDockID = Win->DockId;
+                    break;
+                }
+            }
+            if (TargetDockID == 0 && Window->GetInitialDockID() != 0)
+            {
+                TargetDockID = Window->GetInitialDockID();
+                break;
+            }
+        }
+    }
 
-  // 새 프리뷰 창 생성 및 프리뷰 전용 도크 노드로 연결
-  auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
-  NewWindow->Open(InMesh, TargetDockID);
-  PreviewWindows.push_back(NewWindow);
+    // 첫 창일 때 독립 도크 노드 생성
+    if (TargetDockID == 0)
+    {
+        TargetDockID = ImGui::DockBuilderAddNode(0, ImGuiDockNodeFlags_None);
+        const ImGuiViewport* MainViewport = ImGui::GetMainViewport();
+        const ImVec2 DefaultPos = MainViewport ? ImVec2(MainViewport->WorkPos.x + 150.0f, MainViewport->WorkPos.y + 80.0f) : ImVec2(200.0f, 100.0f);
+        ImGui::DockBuilderSetNodePos(TargetDockID, DefaultPos);
+        ImGui::DockBuilderSetNodeSize(TargetDockID, ImVec2(900.0f, 650.0f));
+        ImGui::DockBuilderFinish(TargetDockID);
+    }
+#endif
+
+    // 새 프리뷰 창 생성 및 등록
+    auto NewWindow = MakeShared<FImguiPreviewEditorWindow>();
+    NewWindow->OpenPreview(InMesh,TargetDockID, type);
+    PreviewWindows.push_back(NewWindow);
 }
 
 
 
+
+
 void FEditorApplication::Render() {
-  const TArray<FEditorViewport> &EditorViewports = Editor.GetViewports();
-  if (EditorViewports.empty())
-    return;
 
-  const int StartIdx = 0;
-  const int EndIdx =
-      Editor.bIsViewportSplit ? static_cast<int>(EditorViewports.size()) : 1;
-
-  for (int i = StartIdx; i < EndIdx; ++i) {
-    const auto &EditorViewport = EditorViewports[i];
-    // 뷰포트 렌더링 명세 구성
-    FSceneView sceneview{
-        .Camera = EditorViewport.ViewportCamera,
-        .ViewProj = EditorViewport.ViewportCamera.CreateViewProjectionMatrix(),
-        .TopLeftUV = EditorViewport.TopLeftUV,
-        .LengthUV = EditorViewport.LengthUV,
-        .ViewMode = EditorViewport.ViewMode,
-        .ShowFlags = EditorViewport.ShowFlags,
-        .LightConstants = Editor.GlobalLight};
-
-    // 에디터 렌더링 컨텍스트 구성
-    FEditorRenderContext EditorCtx;
-    EditorCtx.SelectedActor = Editor.GetSelectedActor();
-    EditorCtx.SelectedTransform = Editor.SelectedTransform;
-    EditorCtx.Gizmo = Editor.ObjectSelected() ? &Editor.GetGizmo() : nullptr;
-    EditorCtx.TextComp =
-        Editor.ObjectSelected() ? Editor.GetTextcomp() : nullptr;
-    EditorCtx.Grid = &Editor.GetGrid();
-    EditorCtx.VisualizerRegistry = &VisualizerRegistry;
-
-    if (EditorCtx.SelectedActor) {
-      if (USceneComponent *RootComp =
-              EditorCtx.SelectedActor->GetRootComponent()) {
-        EditorCtx.SelectedMeshComp = RootComp->Cast<UMeshComponent>();
-      }
+#if IS_OBJ_VIEWER
+    for (const auto& Window : PreviewWindows)
+    {
+        if (Window && Window->IsOpen())
+        {
+            RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
+                Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
+        }
     }
 
-    // 뷰포트 렌더링 일괄 수행
-    RenderView->RenderView(sceneview, *SceneManager->CurrentScene, EditorCtx);
-  }
+    // 필수: ImGui 렌더링을 닫고 백버퍼에 그려야 다음 프레임 NewFrame이 동작함
+    RenderView->GetRenderer().BindBackBufferWithDepth();
+    ImguiManager.RenderUI();
 
-  // 스태틱 메시 프리뷰 렌더링
-  for (const auto& Window : PreviewWindows)
-  {
-      if (Window && Window->IsOpen())
-      {
-          RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
-              Window->GetTargetMesh(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid);
-      }
-  }
+#else
+    TArray<FEditorViewport>& EditorViewports = Editor.GetViewports();
+    if (EditorViewports.empty())
+        return;
 
-  RenderView->GetRenderer().BindBackBufferWithDepth();
-  
-  ImguiManager.RenderUI();
+    const int StartIdx = 0;
+    const int EndIdx =
+        Editor.bIsViewportSplit ? static_cast<int>(EditorViewports.size()) : 1;
+
+    for (int i = StartIdx; i < EndIdx; ++i) {
+        auto& EditorViewport = EditorViewports[i];
+
+        FGizmo* Gizmo = Editor.ObjectSelected() ? &Editor.GetGizmo() : nullptr;
+        UTextInstanceComponent* Text = Editor.ObjectSelected() ? Editor.GetTextcomp() : nullptr;
+        EditorViewport.UpdateViewAndCtx(Editor.GlobalLight, *Editor.GetSelectedActor(), Editor.SelectedTransform, *Gizmo, *Text, Editor.GetGrid(), &VisualizerRegistry);
+
+        // 뷰포트 렌더링 명세 구성
+        if (EditorViewport.editorCtx.SelectedActor) {
+            if (USceneComponent* RootComp =
+                EditorViewport.editorCtx.SelectedActor->GetRootComponent()) {
+                EditorViewport.editorCtx.SelectedMeshComp = RootComp->Cast<UMeshComponent>();
+            }
+        }
+
+
+
+        // 뷰포트 렌더링 일괄 수행
+        RenderView->RenderView(EditorViewport.sceneView, *SceneManager->CurrentScene, EditorViewport.editorCtx);    
+    }
+
+
+    // 스태틱 메시 프리뷰 렌더링
+    for (const auto& Window : PreviewWindows)
+    {
+        if (Window && Window->IsOpen())
+        {
+            RenderView->RenderPreviewScene(Window->GetRenderTarget(), Window->GetPreviewViewport().ViewportCamera,
+                Window->GetTargetMesh(), Window->GetPreviewMaterial(), Window->PreviewWidth, Window->PreviewHeight, Window->bShowGrid, Window->prevType);
+        }
+    }
+
+    RenderView->GetRenderer().BindBackBufferWithDepth();
+    ImguiManager.RenderUI();
+#endif
+
 }
 
 void FEditorApplication::OnWindowSize(UINT Width, UINT Height) {

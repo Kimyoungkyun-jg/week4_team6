@@ -79,7 +79,7 @@ struct FImguiStatMemory final
 		MemoryList.clear();
 
 		MemoryList.push_back({ FName("Texture Memory Pool [Texture]"), EStatPool::Texture,  ToCapacity(EStatPool::Texture),    &TextureMemoryPool });
-		MemoryList.push_back({ FName("Process Working Set"),      EStatPool::None,     STATS.GetProcessMemory(),          &ProcessMemory });
+		MemoryList.push_back({ FName("Process Working Set"),      EStatPool::Physical,     STATS.GetProcessMemory(),          &ProcessMemory });
 		MemoryList.push_back({ FName("UObject Memory"),           EStatPool::Physical, STATS.GetAllocationBytes(),        &UObjectMemory });
 		MemoryList.push_back({ FName("StaticMesh Total Memory"),  EStatPool::Physical, STATS.GetStaticMeshMemory(),       &StaticMeshMemory });
 		MemoryList.push_back({ FName("StaticMesh Index Buffer"),  EStatPool::Physical, STATS.GetStaticIndexBufferSize(),  &StaticIndexBufferSize });

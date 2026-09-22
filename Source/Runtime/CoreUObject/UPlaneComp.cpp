@@ -12,5 +12,6 @@ UCLASS_META(UPlaneComp, MeshName, "Plane")
 
 void UPlaneComp::Initialize() {
   Super::Initialize();
-  SetStaticMesh(NewObject<UStaticMesh>(FName("Plane"), FName("Simple")));
+  SetStaticMesh(FRenderResourceLibrary::Get().GetUStaticMesh("Plane"));
+  SetMaterial(0, FName("Simple"));
 }

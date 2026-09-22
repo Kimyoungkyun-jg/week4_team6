@@ -38,14 +38,13 @@ LRESULT CALLBACK WindowCallback(HWND Window, UINT Message, WPARAM WParam,
                                 LPARAM LParam);
 } // namespace
 
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,                    _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
+int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
+    _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
   HWND SplashWindow = nullptr;
   HWND Window = CreateWindowHandle(hInstance, SplashWindow);
   if (!Window) {
     return -1;
   }
-
-  
 
   ShowWindow(Window, nShowCmd);
 
@@ -66,6 +65,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
   UClass::ResolveTypeBitsets();
   // 새씬 생성
   USceneManager SceneManager;
+
+
   SceneManager.SetScene(NewObject<UScene>());
 
   FEditorApplication &EditorApp = FEditorApplication::Get();
@@ -75,6 +76,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     Renderer.GetDeviceAndContext_ImplDX11(Device, Context);
     EditorApp.Initialize_ImguiWin32DX11(Window, Device, Context);
   }
+
   EditorApp.Initialize_Runtime(&SceneManager, &RenderView);
 
   // 초기화가 끝났으니 로딩 화면을 닫고 메인 창을 띄운다
@@ -122,8 +124,42 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 namespace {
 
+struct FWindowLayout { int X, Y, Width, Height; };  // Width/Height = 클라이언트 영역 기준
 
-HWND ShowLoadingWindow(HINSTANCE& hInstance)
+FWindowLayout GetWindowLayout() {
+    constexpr int DesiredWidth = 1600;
+    constexpr int DesiredHeight = 900;
+
+    RECT Work{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &Work, 0);
+
+    // 메인 창의 캡션/테두리가 작업영역 밖으로 나가지 않도록 그만큼 안쪽으로 줄인다
+    RECT Frame{ 0, 0, 0, 0 };
+    AdjustWindowRectEx(&Frame, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    Work.left -= Frame.left;
+    Work.top -= Frame.top;
+    Work.right -= Frame.right;
+    Work.bottom -= Frame.bottom;
+
+    // 작업영역보다 크게 요청하면 작업영역에 맞춰 자른다
+    const int MaxW = Work.right - Work.left;
+    const int MaxH = Work.bottom - Work.top;
+    const int W = (DesiredWidth < MaxW) ? DesiredWidth : MaxW;
+    const int H = (DesiredHeight < MaxH) ? DesiredHeight : MaxH;
+
+    // 남는 공간의 절반씩 → 중앙 배치
+    return { Work.left + (MaxW - W) / 2, Work.top + (MaxH - H) / 2, W, H };
+}
+
+RECT ToWindowRect(const FWindowLayout& Layout, DWORD Style, DWORD ExStyle) {
+    RECT R{ Layout.X, Layout.Y, Layout.X + Layout.Width, Layout.Y + Layout.Height };
+    AdjustWindowRectEx(&R, Style, FALSE, ExStyle);   // 클라이언트 → 바깥 크기
+    return R;
+}
+
+
+
+HWND ShowLoadingWindow(HINSTANCE hInstance)
 {
     int ImageW = 0, ImageH = 0, Channels = 0;
     stbi_uc* Pixels = stbi_load("./Resources/Textures/LoadingImage.png",
@@ -134,41 +170,46 @@ HWND ShowLoadingWindow(HINSTANCE& hInstance)
     }
 
     // stb 는 RGBA 순서, Windows DIB 는 BGRA 순서라 R/B 를 맞바꾼다.
-    // 알파가 있는 PNG 는 흰 배경 위에 미리 합성해 둔다.
     for (int i = 0; i < ImageW * ImageH; ++i)
     {
         stbi_uc* P = Pixels + i * 4;
         const int A = P[3];
-        const stbi_uc R = static_cast<stbi_uc>((P[0] * A + 255 * (255 - A)) / 255);
-        const stbi_uc G = static_cast<stbi_uc>((P[1] * A + 255 * (255 - A)) / 255);
-        const stbi_uc B = static_cast<stbi_uc>((P[2] * A + 255 * (255 - A)) / 255);
+        const stbi_uc R = static_cast<stbi_uc>(P[0] * A / 255);
+        const stbi_uc G = static_cast<stbi_uc>(P[1] * A / 255);
+        const stbi_uc B = static_cast<stbi_uc>(P[2] * A / 255);
         P[0] = B; P[1] = G; P[2] = R; P[3] = 255;
     }
 
-    const int w = GetSystemMetrics(SM_CXSCREEN);   // 화면 전체
-    const int h = GetSystemMetrics(SM_CYSCREEN);
+    const FWindowLayout WindowLayout = GetWindowLayout();
 
+    constexpr DWORD SplashStyle = WS_POPUP | WS_VISIBLE;
+    constexpr DWORD SplashExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+   
     WNDCLASSW splashClass = { 0, DefWindowProcW, 0, 0, 0, 0, 0, 0, 0, L"JungleSplash" };
     RegisterClassW(&splashClass);
-    HWND splashWnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, L"JungleSplash", L"",
-        WS_POPUP | WS_VISIBLE, 0, 0, w, h, nullptr, nullptr, hInstance, nullptr);
+
+    const RECT WindowRect = ToWindowRect(WindowLayout, SplashStyle, SplashExStyle);
+
+    HWND splashWnd = CreateWindowExW(SplashExStyle, L"JungleSplash", L"", SplashStyle,
+        WindowRect.left, WindowRect.top, WindowRect.right - WindowRect.left, 
+        WindowRect.bottom - WindowRect.top, nullptr, nullptr, hInstance, nullptr);
 
     HDC dc = GetDC(splashWnd);
 
-    // 1) 흰 배경
-    RECT full = { 0, 0, w, h };
-    FillRect(dc, &full, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    // 검은 배경
+    RECT full = { 0, 0, WindowLayout.Width, WindowLayout.Height};
+    FillRect(dc, &full, (HBRUSH)GetStockObject(BLACK_BRUSH));
 
-    // 2) 로딩이미지를 비율 유지해서 가운데. 화면 높이의 60% 로 맞춘다
-    const int drawH = static_cast<int>(h * 0.6f);
+    // 로딩이미지를 비율 유지해서 가운데. 화면 높이의 30% 로 맞춘다
+    const int drawH = static_cast<int>(WindowLayout.Height * 0.3f);
     const int drawW = drawH * ImageW / ImageH;
-    const int drawX = (w - drawW) / 2;
-    const int drawY = (h - drawH) / 2;
+    const int drawX = (WindowLayout.Width - drawW) / 2;
+    const int drawY = (WindowLayout.Height - drawH) / 2;
 
     BITMAPINFO Info{};
     Info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     Info.bmiHeader.biWidth = ImageW;
-    Info.bmiHeader.biHeight = -ImageH;   // 음수 = 위에서 아래로 저장된 이미지
+    Info.bmiHeader.biHeight = -ImageH; // 음수 = 위에서 아래로 저장된 이미지
     Info.bmiHeader.biPlanes = 1;
     Info.bmiHeader.biBitCount = 32;
     Info.bmiHeader.biCompression = BI_RGB;
@@ -199,11 +240,18 @@ HWND CreateWindowHandle(HINSTANCE Instance, HWND& OutSplashWnd) {
     return nullptr;
   }
 
-  OutSplashWnd = ShowLoadingWindow(Instance);
+  //OutSplashWnd = ShowLoadingWindow(Instance);
+
+  const FWindowLayout WindowLayout = GetWindowLayout();
+  constexpr DWORD MainStyle = WS_OVERLAPPEDWINDOW;
+  const RECT WindowRect = ToWindowRect(WindowLayout, MainStyle, 0);
+
+
   HWND Window = CreateWindowExW(0, WindowClass.lpszClassName, WindowName,
-                                WS_POPUP | WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
-                                CW_USEDEFAULT, 1920, 1080, nullptr, nullptr,
-                                Instance, nullptr);
+                                MainStyle, WindowRect.left, WindowRect.top,
+                                WindowRect.right - WindowRect.left, 
+                                WindowRect.bottom - WindowRect.top, 
+                                nullptr, nullptr, Instance, nullptr);
 
   return Window;
 }

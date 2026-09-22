@@ -5,6 +5,7 @@
 #include "Editor/Visualizer/FVisualizerRegistry.h"
 #include "Editor/Visualizer/IVisualizer.h"
 #include "Runtime/Actors/AActor.h"
+#include "Editor/UI/Imgui/FImguiPreviewEditorWindow.h"
 #include "Runtime/CoreUObject/UBillBoardComp.h"
 #include "Runtime/CoreUObject/UClass.h"
 #include "Runtime/Engine/FCamera.h"
@@ -16,6 +17,7 @@
 #include "Runtime/Rendering/FPreviewRenderTarget.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include "Runtime/Engine/UScene.h"
+
 #include <fstream>
 
 FRenderView::FRenderView(FRenderer &Renderer) : Renderer(Renderer) {}
@@ -41,10 +43,10 @@ void FRenderView::CollectScenePrimitives(const UScene& Scene, const FSceneView& 
         }
 
 
-        const auto& RenderDatas = MeshComponent->GetRenderDatas(View.Camera);
+        const auto& RenderDatas = MeshComponent->GetRenderDatas(*View.Camera);
 
         // 공통 Matrix 및 Color 계산 (루프 밖 1회 수행)
-        const FMatrix World = MeshComponent->GetRenderMatrix(View.Camera);
+        const FMatrix World = MeshComponent->GetRenderMatrix(*View.Camera);
         const FMatrix MVP = World * View.ViewProj;
 
         FVector FinalColorOverride = MeshComponent->GetColor();
@@ -103,11 +105,11 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
     CollectScenePrimitives(Scene, View, EditorCtx.SelectedActor);
 
     // 기본 씬 오브젝트 패스
-    FlushBasePass(View.Camera);
+    FlushBasePass(*View.Camera);
 
     // 에디터 라인 패스
     if (EditorCtx.Grid) {
-        DrawGrid(View.Camera, *EditorCtx.Grid);
+        DrawGrid(*View.Camera, *EditorCtx.Grid);
     }
 
     if (EditorCtx.SelectedMeshComp && EditorCtx.VisualizerRegistry) {
@@ -122,21 +124,21 @@ void FRenderView::RenderView(const FSceneView& View, const UScene& Scene, const 
             Visualizer->Draw(
                 *EditorCtx.SelectedMeshComp,
                 *this,
-                View.Camera,
+                *View.Camera,
                 FVector4{0.0f, 1.0f, 0.0f, 1.0f}
             );
         }
     }
     
-    FlushLinePass(View.Camera);
+    FlushLinePass(*View.Camera);
 
     // 후처리 외곽선 패스
-    RenderPostProcessPass(View.Camera, EditorCtx.SelectedActor, View.TopLeftUV, View.LengthUV);
+    RenderPostProcessPass(*View.Camera, EditorCtx.SelectedActor, View.TopLeftUV, View.LengthUV);
 
     // 오버레이 패스
     if (EditorCtx.Gizmo && EditorCtx.SelectedActor)
     {
-        RenderOverlayPass(View.Camera, View, EditorCtx.SelectedTransform, *EditorCtx.Gizmo, EditorCtx.TextComp);
+        RenderOverlayPass(*View.Camera, View, EditorCtx.SelectedTransform, *EditorCtx.Gizmo, EditorCtx.TextComp);
     }
 }
 
@@ -414,15 +416,30 @@ void FRenderView::FlushQueue(const FCamera& Camera)
     RenderQueue.Clear();
 }
 
-void FRenderView::RenderPreviewScene(
+void FRenderView::RenderPreviewScene( 
     FPreviewRenderTarget& RenderTarget,
     const FCamera& Camera,
     UStaticMesh* TargetMesh,
+    TSharedPtr<FMaterial> OverrideMaterial,
     uint32 Width,
     uint32 Height,
-    bool bDrawGrid)
+    bool bDrawGrid,
+    EPrevType prevType)
 {
-    Renderer.RenderPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+    switch (prevType)
+    {
+    case EPrevType::Mesh:
+        Renderer.RenderMeshPreviewScene(RenderTarget, Camera, TargetMesh, Width, Height, bDrawGrid);
+        break;
+    case EPrevType::Material:
+
+
+        Renderer.RenderMaterialPreviewScene(RenderTarget, Camera, TargetMesh->GetStaticMeshAsset(), OverrideMaterial, Width, Height, bDrawGrid);
+        break;
+    default:
+        break;
+    }
+    
 }
 
 

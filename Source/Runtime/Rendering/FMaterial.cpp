@@ -10,6 +10,21 @@ void FMaterial::SetPipeLine(const TSharedPtr<FRenderPipeline>& InPipeline)
     Pipeline = InPipeline;
 }
 
+TSharedPtr<FMaterial> FMaterial::Clone() const
+{
+    auto NewMat = MakeShared<FMaterial>();
+    NewMat->MaterialId = this->MaterialId;
+    NewMat->Pipeline = this->Pipeline;
+    NewMat->WireframePipeline = this->WireframePipeline;
+
+    // 슬롯 텍스처 복사
+    for (size_t i = 0; i < static_cast<size_t>(EMaterialTextureSlot::Count); ++i)
+    {
+        NewMat->Textures[i] = this->Textures[i];
+    }
+    return NewMat;
+}
+
 
 void FMaterial::SetTexture(EMaterialTextureSlot Slot, const TSharedPtr<FTexture>& InTexture)
 {

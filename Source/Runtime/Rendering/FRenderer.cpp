@@ -900,7 +900,8 @@ void FRenderer::RenderOutline(FVector2 TopLeftUV, FVector2 LengthUV) {
   BindBackBufferWithDepth();
 }
 
-void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid)
+void FRenderer::RenderMeshPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, 
+    UStaticMesh* TargetMesh, uint32 Width, uint32 Height, bool bDrawGrid, TSharedPtr<FMaterial> OverrideMaterial)
 {
   if (!TargetMesh)
   {
@@ -957,7 +958,7 @@ void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCa
   SetRenderMode(EViewModeIndex::VMI_Lit);
   UpdateLightConstants(LightConstants, EViewModeIndex::VMI_Lit);
 
-  TSharedPtr<FMaterial> Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[0]);
+  
   auto& Sections = MeshAsset->GetSections();
 
   FObjectConstants ObjConstants = {};
@@ -971,35 +972,41 @@ void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCa
   {
       for (int i = 0; i < TargetMesh->Materials.size(); i++)
       {
-          // 머티리얼 조회 및 폴백
-          auto Material = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[i]);
-          if (!Material)
+          // OverrideMaterial이 넘어왔다면(머티리얼 프리뷰 창일 때) 최우선 바인딩, 없으면 라이브러리에서 조회
+          TSharedPtr<FMaterial> MaterialToDraw = OverrideMaterial;
+          if (!MaterialToDraw)
           {
-              Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+              MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(TargetMesh->Materials[i]);
+              if (!MaterialToDraw)
+              {
+                  MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+              }
           }
 
-          if (Material && i < static_cast<int>(Sections.size()))
+          if (MaterialToDraw && i < static_cast<int>(Sections.size()))
           {
-              Draw(*MeshAsset, *Material, ObjConstants, Sections.at(i).FirstIndex, Sections.at(i).IndexCount, 0, false);
+              Draw(*MeshAsset, *MaterialToDraw, ObjConstants, Sections.at(i).FirstIndex, Sections.at(i).IndexCount, 0, false);
           }
       }
   }
   else
   {
-      // 기본 도형(Cube, Sphere 등)은 0번 슬롯 머티리얼 또는 메시 이름으로 조회
-      FName MatKey = (!TargetMesh->Materials.empty()) ? TargetMesh->Materials[0] : TargetMesh->MeshId;
-      auto Material = FRenderResourceLibrary::Get().GetMaterial(MatKey);
-
-      // 없으면 기본 Simple 머티리얼로 폴백
-      if (!Material)
+      // 기본 구체/큐브 등 섹션이 없는 단일 메시의 경우
+      TSharedPtr<FMaterial> MaterialToDraw = OverrideMaterial;
+      if (!MaterialToDraw)
       {
-          Material = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+          FName MatKey = (!TargetMesh->Materials.empty()) ? TargetMesh->Materials[0] : TargetMesh->MeshId;
+          MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(MatKey);
+
+          if (!MaterialToDraw)
+          {
+              MaterialToDraw = FRenderResourceLibrary::Get().GetMaterial(FName("Simple"));
+          }
       }
 
-      if (Material)
+      if (MaterialToDraw)
       {
-          // 전체 인덱스 드로우 (-1 또는 전체 인덱스 수)
-          Draw(*MeshAsset, *Material, ObjConstants, 0, -1, 0, false);
+          Draw(*MeshAsset, *MaterialToDraw, ObjConstants, 0, -1, 0, false);
       }
   }
 
@@ -1018,3 +1025,83 @@ void FRenderer::RenderPreviewScene(FPreviewRenderTarget& RenderTarget, const FCa
     FlushLineBatch(GridConstants, FName("Grid"));
   }
 }
+
+void FRenderer::RenderMaterialPreviewScene(FPreviewRenderTarget& RenderTarget, const FCamera& Camera, TSharedPtr<FStaticMesh> Meshasset, 
+    TSharedPtr<FMaterial> Material, uint32 Width, uint32 Height, bool bDrawGrid)
+{
+    if (!Meshasset || !Material)
+    {
+        return;
+    }
+
+    if (!Device || !Context)
+    {
+        return;
+    }
+
+    // 렌더타겟 크기 맞춤
+    if (Width > 0 && Height > 0)
+    {
+        RenderTarget.Resize(Device.Get(), Width, Height);
+    }
+    if (!RenderTarget.IsValid() || RenderTarget.Width == 0 || RenderTarget.Height == 0)
+    {
+        return;
+    }
+
+    // 프리뷰 렌더타겟 바인딩
+    ID3D11RenderTargetView* RTV = RenderTarget.RenderTargetView.Get();
+    ID3D11DepthStencilView* DSV = RenderTarget.DepthStencilView.Get();
+    Context->OMSetRenderTargets(1, &RTV, DSV);
+
+    // 배경 및 깊이 버퍼 클리어
+    const float ClearColor[4] = { 0.12f, 0.13f, 0.16f, 1.0f };
+    Context->ClearRenderTargetView(RTV, ClearColor);
+    Context->ClearDepthStencilView(DSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+    // 뷰포트 설정
+    D3D11_VIEWPORT D3DVP = {};
+    D3DVP.TopLeftX = 0.0f;
+    D3DVP.TopLeftY = 0.0f;
+    D3DVP.Width = static_cast<float>(RenderTarget.Width);
+    D3DVP.Height = static_cast<float>(RenderTarget.Height);
+    D3DVP.MinDepth = 0.0f;
+    D3DVP.MaxDepth = 1.0f;
+    Context->RSSetViewports(1, &D3DVP);
+
+    // 조명 상수 버퍼 설정 및 바인딩
+    FLightConstants LightConstants;
+    LightConstants.LightDirection = FVector(-0.577f, -0.577f, -0.577f);
+    LightConstants.Intensity = 1.2f;
+    LightConstants.LightColor = FVector(1.0f, 1.0f, 1.0f);
+    LightConstants.AmbientIntensity = 0.4f;
+    SetRenderMode(EViewModeIndex::VMI_Lit);
+    UpdateLightConstants(LightConstants, EViewModeIndex::VMI_Lit);
+
+
+    FObjectConstants ObjConstants = {};
+    ObjConstants.World = FMatrix::GetIdentity();
+    ObjConstants.MVP = ObjConstants.World * Camera.CreateViewProjectionMatrix();
+    ObjConstants.UVScale = FVector2(1.0f, 1.0f);
+    ObjConstants.ColorOverride = FVector(1.0f, 1.0f, 1.0f);
+    ObjConstants.ColorOverrideAmount = 0.0f;
+
+    Draw(*Meshasset, *Material, ObjConstants, 0, -1, 0, false);
+
+    // 그리드 렌더링
+    if (bDrawGrid)
+    {
+        FGrid Grid;
+        Grid.DrawLine(*this, Camera);
+
+        const float Extent = (Meshasset->GetLocalBounds().Max - Meshasset->GetLocalBounds().Min).Size();
+        FGridLineConstants GridConstants = {};
+        GridConstants.MVP = Camera.CreateViewProjectionMatrix();
+        GridConstants.CameraPosition = Camera.Position;
+        GridConstants.FadeStartDistance = std::max(5.0f, Extent * 0.5f);
+        GridConstants.FadeEndDistance = std::max(100.0f, Extent * 10.0f);
+        FlushLineBatch(GridConstants, FName("Grid"));
+    }
+
+}
+

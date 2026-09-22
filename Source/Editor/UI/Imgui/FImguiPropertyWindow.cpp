@@ -16,6 +16,8 @@
 #include "Runtime/CoreUObject/UStaticMeshComponent.h"
 #include "Runtime/CoreUObject/UStaticMesh.h"
 #include <algorithm>
+#include "Runtime/Core/FObjectIterator.h"
+#include "Runtime/Core/TObjectIterator.h"
 
 void FImguiPropertyWindow::Process(FEditor& Editor)
 {
@@ -129,57 +131,269 @@ void FImguiPropertyWindow::ShowComponentDetails(FEditor& Editor, AActor& Actor,
 		ShowPrimitiveSettings(Actor, static_cast<UMeshComponent&>(Comp), bIsRoot);
 	}
 }
-
-void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const
-{
+void FImguiPropertyWindow::ShowStaticMeshSettings(UStaticMeshComponent& StaticMeshComp) const {
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.6f, 1.0f), "Static Mesh Settings");
 
+	// 드래그 앤 드롭은 이름(Key) 기반이라 등록 맵이 그대로 필요하다.
 	const auto& AllUStaticMeshMap = FRenderResourceLibrary::Get().GetAllUStaticMeshMap();
-	if (AllUStaticMeshMap.empty())
+
+	FObjectIterator AnyMesh(UStaticMesh::StaticClass());
+	if (!AnyMesh)
 	{
 		ImGui::TextDisabled("No Static Meshes available");
 		return;
 	}
 
-	// 현재 선택된 정적 메시 키값
 	UStaticMesh* CurrentStaticMesh = StaticMeshComp.GetStaticMesh();
-	std::string CurrentMeshName = CurrentStaticMesh ? CurrentStaticMesh->MeshId.ToString() : "None";
+	FString CurrentMeshName = CurrentStaticMesh ? CurrentStaticMesh->MeshId.ToString() : "None";
 
-	if (ImGui::BeginCombo("Static Mesh", CurrentMeshName.c_str()))
+	// 1. 스태틱 메시 썸네일 SRV 조회
+	ID3D11ShaderResourceView* MeshThumbnailSRV = nullptr;
+	if (CurrentStaticMesh)
 	{
-		// 키 목록 정렬
-		TArray<FName> SortedKeys;
-		SortedKeys.reserve(AllUStaticMeshMap.size());
-		for (const auto& [MeshKey, _] : AllUStaticMeshMap)
+		if (auto MeshTex = FRenderResourceLibrary::Get().GetMeshThumbnail(CurrentStaticMesh->MeshId))
 		{
-			SortedKeys.push_back(MeshKey);
+			MeshThumbnailSRV = MeshTex->GetSRV();
 		}
-		std::sort(SortedKeys.begin(), SortedKeys.end(), [](const FName& A, const FName& B) {
-			return A.ToString() < B.ToString();
-		});
+	}
 
-		for (const FName& MeshKey : SortedKeys)
+	// 2. 썸네일 이미지 버튼 (72x72)
+	constexpr float ThumbWidth = 72.0f;
+	constexpr float ThumbHeight = 72.0f;
+	const ImTextureID TexId = reinterpret_cast<ImTextureID>(MeshThumbnailSRV);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f));
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+	ImGui::ImageButton("##StaticMeshThumb", TexId, ImVec2(ThumbWidth, ThumbHeight), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar();
+
+	// 3. [드래그 앤 드롭 수신] 썸네일 위에 스태틱 메시 놓았을 때 교체
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
 		{
-			std::string ItemName = MeshKey.ToString();
-			bool bIsSelected = (CurrentStaticMesh && CurrentStaticMesh->MeshId == MeshKey);
-
-			if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+			const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
+			if (DragData && DragData->Kind == FContentDragPayload::EKind::Mesh)
 			{
-				auto it = AllUStaticMeshMap.find(MeshKey.ToString());
+				auto it = AllUStaticMeshMap.find(DragData->Key);
 				if (it != AllUStaticMeshMap.end())
 				{
 					StaticMeshComp.SetStaticMesh(it->second);
+					CurrentStaticMesh = it->second;
+					CurrentMeshName = CurrentStaticMesh->MeshId.ToString();
 				}
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
+
+	// 썸네일 하단 스태틱 메시 인디케이터 (하늘색/파란색 바)
+	const ImVec2 Min = ImGui::GetItemRectMin();
+	const ImVec2 Max = ImGui::GetItemRectMax();
+	constexpr float LineHeight = 3.5f;
+
+	ImGui::GetWindowDrawList()->AddRectFilled(
+		ImVec2(Min.x + 2.0f, Max.y - LineHeight - 2.0f),
+		ImVec2(Max.x - 2.0f, Max.y - 2.0f),
+		IM_COL32(52, 152, 219, 255)
+	);
+
+	// 4. 우측 콤보박스 배치 및 세로 중앙 정렬
+	ImGui::SameLine();
+	const float YOffset = (ThumbHeight - ImGui::GetFrameHeight()) * 0.5f;
+	if (YOffset > 0.0f)
+	{
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + YOffset);
+	}
+
+	// 콤보박스가 남은 우측 가로폭을 꽉 채우도록 설정 (-1.0f)
+	ImGui::SetNextItemWidth(-1.0f);
+	if (ImGui::BeginCombo("##StaticMeshCombo", CurrentMeshName.c_str()))
+	{
+		// BeginCombo 는 열려 있을 때만 true 다. 수집/정렬은 평소 프레임에 실행되지 않는다.
+		TArray<UStaticMesh*> Meshes;
+		for (TObjectIterator<UStaticMesh> It; It; ++It)
+		{
+			if (UStaticMesh* Mesh = *It)
+				Meshes.push_back(Mesh);
+		}
+
+		// FName::Compare 는 대소문자를 구분하지 않는다.
+		std::sort(Meshes.begin(), Meshes.end(),
+			[](const UStaticMesh* A, const UStaticMesh* B)
+			{
+				return A->MeshId.Compare(B->MeshId) < 0;
+			});
+
+		for (UStaticMesh* Mesh : Meshes)
+		{
+			// 표시 이름과 ImGui 내부 ID 를 분리해 둔다.
+			// 같은 MeshId 를 가진 객체가 생겨도 클릭이 엉뚱한 줄에 먹지 않는다.
+			ImGui::PushID(static_cast<int>(Mesh->GetUUID()));
+
+			const FString ItemName = Mesh->MeshId.ToString();
+			const bool bIsSelected = (Mesh == CurrentStaticMesh);
+
+			if (ImGui::Selectable(ItemName.c_str(), bIsSelected))
+			{
+				StaticMeshComp.SetStaticMesh(Mesh);
+				CurrentStaticMesh = Mesh;
+				CurrentMeshName = ItemName;
 			}
 
 			if (bIsSelected)
 			{
 				ImGui::SetItemDefaultFocus();
 			}
+
+			ImGui::PopID();
 		}
 		ImGui::EndCombo();
 	}
+
+	// 콤보박스 영역 위에 놓았을 때도 교체 허용
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
+		{
+			const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
+			if (DragData && DragData->Kind == FContentDragPayload::EKind::Mesh)
+			{
+				auto it = AllUStaticMeshMap.find(DragData->Key);
+				if (it != AllUStaticMeshMap.end())
+				{
+					StaticMeshComp.SetStaticMesh(it->second);
+					CurrentStaticMesh = it->second;
+					CurrentMeshName = CurrentStaticMesh->MeshId.ToString();
+				}
+			}
+		}
+		ImGui::EndDragDropTarget();
+	}
+
+	// 머티리얼 슬롯 리스트 및 변경 콤보 박스
+	if (CurrentStaticMesh)
+	{
+		ImGui::Spacing();
+		ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Materials");
+
+		const auto& AllMaterialMap = FRenderResourceLibrary::Get().GetAllMaterials();
+
+		// 사용 가능한 전체 머티리얼 키 목록 미리 정렬
+		TArray<FString> AvailableMaterials;
+		AvailableMaterials.reserve(AllMaterialMap.size());
+		for (const auto& [MatKey, _] : AllMaterialMap)
+		{
+			AvailableMaterials.push_back(MatKey);
+		}
+		std::sort(AvailableMaterials.begin(), AvailableMaterials.end());
+
+		// UStaticMesh가 가지고 있는 머티리얼 슬롯 순회
+		const int32 SlotCount = static_cast<int32>(CurrentStaticMesh->Materials.size());
+		for (int32 SlotIdx = 0; SlotIdx < SlotCount; ++SlotIdx)
+		{
+			ImGui::PushID(SlotIdx);
+
+			// 메시를 여러 컴포넌트가 공유하므로 에셋의 Materials 를 직접 고치면 안 된다.
+			// 읽기도 쓰기도 컴포넌트의 OverrideMaterials 를 거친다.
+			const FString CurrentSlotMat = StaticMeshComp.GetMaterial(SlotIdx).ToString();
+
+			// 슬롯 번호를 위에 깔끔하게 먼저 표시
+			ImGui::TextDisabled("Slot [%d]", SlotIdx);
+
+			// 머티리얼 썸네일 SRV 조회
+			ID3D11ShaderResourceView* ThumbnailSRV = nullptr;
+			if (auto MatTex = FRenderResourceLibrary::Get().GetMaterialThumbnail(CurrentSlotMat))
+			{
+				ThumbnailSRV = MatTex->GetSRV();
+			}
+
+			constexpr float ThumbSize = 85.0f;
+			const ImTextureID MatTexId = reinterpret_cast<ImTextureID>(ThumbnailSRV);
+
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+			ImGui::ImageButton("##MatThumb", MatTexId, ImVec2(ThumbSize, ThumbSize), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PopStyleColor();
+
+			// 썸네일에 드래그 앤 드롭
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
+				{
+					const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
+					if (DragData && DragData->Kind == FContentDragPayload::EKind::Material)
+					{
+						StaticMeshComp.SetMaterial(SlotIdx, FName(DragData->Key));
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
+			// 썸네일 하단 초록색 컬러 바
+			const ImGuiStyle& Style = ImGui::GetStyle();
+			const ImVec2 MatMin = ImGui::GetItemRectMin();
+			const ImVec2 MatMax = ImGui::GetItemRectMax();
+			constexpr float MatLineHeight = 3.0f;
+
+			ImGui::GetWindowDrawList()->AddRectFilled(
+				ImVec2(MatMin.x + Style.FramePadding.x, MatMax.y - Style.FramePadding.y - MatLineHeight),
+				ImVec2(MatMax.x - Style.FramePadding.x, MatMax.y - Style.FramePadding.y),
+				IM_COL32(46, 204, 113, 255)
+			);
+
+			ImGui::SameLine();
+
+			// 콤보박스가 썸네일 높이의 중앙에 오도록 세로 위치 살짝 조정 후 가로폭 꽉 채우기
+			const float MatYOffset = (ThumbSize - ImGui::GetFrameHeight()) * 0.5f;
+			if (MatYOffset > 0.0f)
+			{
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + MatYOffset);
+			}
+
+			// 우측 패널 끝까지 콤보박스 가로폭 자동 확장 (-1.0f)
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::BeginCombo("##MatCombo", CurrentSlotMat.c_str()))
+			{
+				for (const FString& MatName : AvailableMaterials)
+				{
+					const bool bMatSelected = (CurrentSlotMat == MatName);
+					if (ImGui::Selectable(MatName.c_str(), bMatSelected))
+					{
+						StaticMeshComp.SetMaterial(SlotIdx, FName(MatName));
+					}
+
+					if (bMatSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			// 콤보박스에도 드롭 허용
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* Payload = ImGui::AcceptDragDropPayload(ContentDragPayloadType))
+				{
+					const auto* DragData = static_cast<const FContentDragPayload*>(Payload->Data);
+					if (DragData && DragData->Kind == FContentDragPayload::EKind::Material)
+					{
+						StaticMeshComp.SetMaterial(SlotIdx, FName(DragData->Key));
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
+			ImGui::Spacing();
+			ImGui::PopID();
+		}
+	}
+
+	// UV 애니메이션 토글
+	ImGui::Spacing();
+	ImGui::Checkbox("Animate UV (bIsMovingUV)", &StaticMeshComp.bIsMovingUV);
 }
 
 void FImguiPropertyWindow::ShowTransform(FEditor& Editor, USceneComponent& Comp, bool bIsRoot) const
