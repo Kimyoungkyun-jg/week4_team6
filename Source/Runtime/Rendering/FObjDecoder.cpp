@@ -19,20 +19,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-// Todo: Bin - 실제 파일이 없어도 캐시에 저장된 라이브러리 경로를 조회할 수 있다.
-FString FObjDecoder::NormalizeMaterialPath(const std::filesystem::path& Path)
-{
-    std::error_code Error;
-    // Todo: Bin - 캐시만 남아 있어도 조회 가능해야 하므로 원본 파일 상태를 검사하지 않는다.
-    FString Key = std::filesystem::absolute(Path, Error).lexically_normal().generic_string();
-	//if (Error) return {};
-
-    std::transform(Key.begin(), Key.end(), Key.begin(),
-        [](unsigned char C) { return static_cast<char>(std::tolower(C)); });
-
-    return Key;
-}
-
 	// 에셋 폴더는 실행 파일 기준으로 잡는다.
 std::filesystem::path FObjDecoder::GetAssetDir()
 {
@@ -582,11 +568,9 @@ bool FObjDecoder::ImportMaterialLibrary(const FString& Path)
 {
     if (Path.empty()) return false;
 
-    const FString NormalizedPath = NormalizeMaterialPath(Path);
-    if (std::find(ObjInfo.MaterialLibs.begin(), ObjInfo.MaterialLibs.end(), NormalizedPath)
-        == ObjInfo.MaterialLibs.end())
+    if (std::find(ObjInfo.MaterialLibs.begin(), ObjInfo.MaterialLibs.end(), Path) == ObjInfo.MaterialLibs.end())
     {
-        ObjInfo.MaterialLibs.push_back(NormalizedPath);
+        ObjInfo.MaterialLibs.push_back(Path);
     }
     return true;
 }
@@ -1268,9 +1252,8 @@ bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMateri
 	Buffer << File.rdbuf();
 	//if (File.bad()) return false;
 	
-	FObjDecoder Decoder;
-	Decoder.ParseMtlFile(Buffer.str());
-	OutMaterials = std::move(Decoder.ObjInfo.Materials);
+	ParseMtlFile(Buffer.str());
+	OutMaterials = std::move(ObjInfo.Materials);
 	
 	return true;
 }
@@ -1278,11 +1261,6 @@ bool FObjDecoder::DecodeMaterialsFromFile(const FString& Path, TArray<FObjMateri
 // Todo: Bin - 이 함수는 OBJ 텍스트 파싱만 수행하며 Materials.bin을 만들지 않는다.
 bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out)
 {
-	//if (auto It = ObjStaticMeshMap.find(AbsolutePath); It != ObjStaticMeshMap.end())
-	//{
-	//	return It->second;
-	//}
-
 	// Todo: Bin - 현재 디코더가 가진 CachedMaterials를 사용해 직접 OBJ를 파싱한다.
 	const FObjInfo Info = StartObjFileParser(AbsolutePath);
 	Out.PathFileName = AbsolutePath;
@@ -1301,21 +1279,25 @@ bool FObjDecoder::DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out
 		{
 			FString TextureKey = std::filesystem::path(Out.Materials.front().DiffuseTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			
 			Out.TextureName = FName(TextureKey);
 		}
 		if (!Out.Materials.front().NormalTextureName.empty())
 		{
 			FString TextureKey = std::filesystem::path(Out.Materials.front().NormalTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			
 			Out.NormalTextureName = FName(TextureKey);
 		}
 		if (!Out.Materials.front().SpecularTextureName.empty())
 		{
 			FString TextureKey = std::filesystem::path(Out.Materials.front().SpecularTextureName).stem().string();
 			std::transform(TextureKey.begin(), TextureKey.end(), TextureKey.begin(), ::tolower);
+			
 			Out.SpecularTextureName = FName(TextureKey);
 		}
 	}
+
 	// ObjStaticMeshMap.emplace(AbsolutePath, Out);
 	return true;
 }
@@ -1669,7 +1651,6 @@ bool FObjDecoder::LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialIn
     return FWindowsBinReader::Load(Path, &Archive) && DeserializeMaterials(Archive, OutMaterials);
 }
 
-// Todo: Bin - 먼저 한 번 호출한다. 캐시 성공 시 MTL 탐색/파싱을 건너뛴다.
 bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
 {
     bMaterialsLoaded = false;
@@ -1688,11 +1669,10 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
     else
     {
 		// Todo: Fix bug
-
         UE_LOG("[Material Cache] Miss: 전체 MTL 파싱");
         TArray<std::filesystem::path> Files;
         std::error_code Error;
-		/*
+
         if (!std::filesystem::exists(AssetPath, Error)
             || Error
             || !std::filesystem::is_directory(AssetPath, Error)
@@ -1700,12 +1680,15 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
         {
             return false;
         }
-		*/
 
         // Todo: Bin - Resources/Assets 하나만 순회해 모든 MTL을 찾는다.
         std::filesystem::recursive_directory_iterator AssetIter(AssetPath, Error), End;
-        //if (Error) return false;
+		if (Error)
+		{
+			return false;
+		}
 
+		// Todo: Make as static
 		const char* MTL_EXTENSION = ".mtl";
 
 		for (const auto& Asset : std::filesystem::directory_iterator(AssetPath))
@@ -1727,21 +1710,17 @@ bool FObjDecoder::LoadMaterials(const FString& AssetRoot)
 
 			for (FObjMaterialInfo& Material : Materials)
 			{
-				// Todo: Bin
 				// MTL 파일과 속성이 달라도 MaterialName이 같으면
 				// 이미 등록된 전역 머티리얼과 동일한 것으로 취급한다.
 				Loaded.push_back(std::move(Material));
 			}
 		}
 
-		SaveMaterialsBinary(BinaryPath.string(), Loaded);
-
-		/*
-        if (!SaveMaterialsBinary(BinaryPath.string(), Loaded))
+		//SaveMaterialsBinary(BinaryPath.string(), Loaded);
+        if (SaveMaterialsBinary(BinaryPath.string(), Loaded) == false)
         {
             UE_LOG_WARN("[Material Cache] 저장 실패, 파싱 결과로 계속 진행: %s", BinaryPath.string().c_str());
         }
-		*/
     }
 
     // Todo: Bin - Materials.bin의 배열을 그대로 공유 머티리얼 목록으로 사용한다.
@@ -1817,11 +1796,12 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
     if (!bMaterialsLoaded)
     {
         UE_LOG_WARN("[OBJ Cache] LoadMaterials를 먼저 호출해야 합니다.");
+
         return false;
     }
 
     FObjModelData Loaded;
-    if (LoadObjModelBinary(BinaryPath, Loaded) && NormalizeMaterialPath(Loaded.PathFileName) == NormalizeMaterialPath(ObjPath))
+    if (LoadObjModelBinary(BinaryPath, Loaded) && Loaded.PathFileName == ObjPath)
     {
         UE_LOG("[OBJ Cache] Hit: %s", BinaryPath.c_str());
     }
@@ -1846,4 +1826,9 @@ bool FObjDecoder::LoadObj(const FString& ObjPath, const FString& BinaryPath, FOb
     OutModel = std::move(Loaded);
 
     return true;
+}
+
+const TArray<FObjMaterialInfo>& FObjDecoder::GetMaterials() const
+{
+	return CachedMaterials;
 }

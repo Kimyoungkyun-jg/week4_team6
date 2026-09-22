@@ -150,24 +150,27 @@ struct FSmoothingKeyHash
 class FObjDecoder
 {
 public:
-    // Todo: Bin - Materials.bin을 만들 때만 독립적으로 MTL을 파싱한다.
-    static bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
-    static bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
-    static bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
-    static bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
-    static bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
-    static bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
-    static bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
-    static bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
-    static bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
-
     // Todo: Bin - 파싱/직렬화/역직렬화와 파일 로딩은 모두 FObjDecoder가 담당한다.
-    bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
     bool LoadMaterials(const FString& AssetRoot);
     bool LoadObj(const FString& ObjPath, const FString& BinaryPath, FObjModelData& OutModel);
-    const TArray<FObjMaterialInfo>& GetMaterials() const { return CachedMaterials; }
+    
+    const TArray<FObjMaterialInfo>& GetMaterials() const;
 
 private:
+    bool DecodeMaterialsFromFile(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
+    bool SerializeObjModel(FBinArchive& Archive, const FObjModelData& Model);
+    bool DeserializeObjModel(FBinArchive& Archive, FObjModelData& OutModel);
+
+    bool SerializeMaterials(FBinArchive& Archive, const TArray<FObjMaterialInfo>& Materials);
+    bool DeserializeMaterials(FBinArchive& Archive, TArray<FObjMaterialInfo>& OutMaterials);
+
+    bool SaveMaterialsBinary(const FString& Path, const TArray<FObjMaterialInfo>& Materials);
+    bool LoadMaterialsBinary(const FString& Path, TArray<FObjMaterialInfo>& OutMaterials);
+
+    bool DecodeFromFile(const FString& AbsolutePath, FObjModelData& Out);
+    bool SaveObjModelBinary(const FString& Path, const FObjModelData& Model);
+    bool LoadObjModelBinary(const FString& Path, FObjModelData& OutModel);
+
     using FVertexMap = std::unordered_map<FCornerKey, uint32, FCornerKeyHash>;
     using FSmoothingMap = std::unordered_map<FSmoothingKey, FVector, FSmoothingKeyHash>;
 
@@ -195,7 +198,6 @@ private:
     static bool DeserializeArray(FBinArchive& Archive, TArray<T>& Values, bool (*DeserializeElement)(FBinArchive&, T&));
 
     static bool ValidateObjModel(const FObjModelData& Model);
-    static FString NormalizeMaterialPath(const std::filesystem::path& Path);
     static std::filesystem::path GetAssetDir();
     static bool IsUnder(const std::filesystem::path& TargetPath, const std::filesystem::path& BasePath);
     static bool ResolveExistingFile(std::string_view FileName, std::filesystem::path& OutPath);
